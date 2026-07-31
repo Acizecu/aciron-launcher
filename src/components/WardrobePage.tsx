@@ -9,6 +9,7 @@ import { useToast } from "../ToastContext";
 import { cardInDelay } from "../anim";
 import {
   ACIRON_ID_API,
+  cachePeek,
   activeCapeUrl,
   activeSkinUrl,
   capeCatalog,
@@ -44,9 +45,9 @@ import {
 type Tab = "skins" | "outfits" | "capes";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "skins", label: "Мои скины" },
-
+  { id: "skins", label: "Скины" },
   { id: "capes", label: "Плащи" },
+  { id: "outfits", label: "Образы" },
 ];
 
 function human(e: unknown): string {
@@ -128,9 +129,11 @@ type Instant = {
 
 export default function WardrobePage() {
   const [tab, setTab] = useState<Tab>("skins");
-  const [data, setData] = useState<WardrobeData | null>(null);
+  // Мгновенный первый рендер из кэша при повторном заходе, ревалидация в load()
+  const [data, setData] = useState<WardrobeData | null>(() => cachePeek<WardrobeData>("wardrobe") ?? null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !cachePeek<WardrobeData>("wardrobe"));
+  const [stale, setStale] = useState(false);
   const [nick, setNick] = useState("");
   const [signIn, setSignIn] = useState(false);
   const [busy, setBusy] = useState("");
@@ -153,19 +156,30 @@ export default function WardrobePage() {
   } | null>(null);
   const [instant, setInstant] = useState<Instant | null>(null);
 
-  const [stock, setStock] = useState<CatalogSkin[] | null>(null);
-  const [catalog, setCatalog] = useState<CatalogCape[] | null>(null);
-  const [lic, setLic] = useState<LicenseCapes | null>(null);
+  const [stock, setStock] = useState<CatalogSkin[] | null>(() => cachePeek<CatalogSkin[]>("skin-catalog") ?? null);
+  const [catalog, setCatalog] = useState<CatalogCape[] | null>(() => cachePeek<CatalogCape[]>("cape-catalog") ?? null);
+  const [lic, setLic] = useState<LicenseCapes | null>(() => cachePeek<LicenseCapes>("license-capes") ?? null);
 
   const [licError, setLicError] = useState("");
   const toast = useToast();
 
   const load = useCallback(async () => {
     try {
-      setData(await wardrobeList());
+      const d = await wardrobeList();
+      // Защита от кривого ответа сервера: модель должна быть задана (SC-4)
+      if (!d.active.model) d.active.model = "classic";
+      setData(d);
       setError("");
+      setStale(false);
     } catch (e) {
-      setError(String(e).replace(/^Error:\s*/, ""));
+      const msg = String(e).replace(/^Error:\s*/, "");
+      // Экран входа — только для NO_ACIRON/SESSION_EXPIRED или когда данных нет вовсе.
+      // Иначе НЕ стираем сохранённое: показываем баннер «не удалось обновить».
+      if (msg === "NO_ACIRON" || msg === "SESSION_EXPIRED" || !cachePeek<WardrobeData>("wardrobe")) {
+        setError(msg);
+      } else {
+        setStale(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -216,23 +230,42 @@ export default function WardrobePage() {
     }
   };
 
-  const seq = useRef(0);
-  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  // Клик по скину/плащу/модели только СТАВИТ выбор (превью), применение — по
+  // кнопке «Сохранить». pending хранит, что применить; dirty — есть ли что сохранять.
+  const pending = useRef<{ skin?: () => Promise<unknown>; cape?: () => Promise<unknown> }>({});
+  const [dirty, setDirty] = useState(false);
 
-  const send = (fn: () => Promise<unknown>) => {
-    const mine = ++seq.current;
-    queue.current = queue.current.then(async () => {
-      if (mine !== seq.current) return;
-      try {
-        await fn();
-        if (mine === seq.current) await load();
-      } catch (e) {
-        if (mine !== seq.current) return;
-        setInstant(null);
-        setBust(Date.now());
-        toast(human(e), "error");
+  const save = async () => {
+    const p = pending.current;
+    if (!p.skin && !p.cape) return;
+    pending.current = {};
+    setBusy("save");
+    try {
+      if (p.skin) {
+        const r = (await p.skin()) as ApplyResult | undefined;
+        if (r && r.error) toast(`На лицензию не применилось: ${r.error}`, "warning");
       }
-    });
+      if (p.cape) await p.cape();
+      await load();
+      setBust(Date.now());
+      setDirty(false);
+      toast("Сохранено", "success");
+    } catch (e) {
+      setInstant(null);
+      setBust(Date.now());
+      toast(human(e), "error");
+      void load();
+    } finally {
+      setBusy("");
+    }
+  };
+
+  // Оптимистичное изменение данных гардероба: применяем сразу, возвращаем токен отката.
+  const patchData = (mut: (d: WardrobeData) => WardrobeData): WardrobeData | null => {
+    if (!data) return null;
+    const prev = data;
+    setData(mut(structuredClone(data)));
+    return prev;
   };
 
   const pickSkinFile = async () => {
@@ -270,15 +303,14 @@ export default function WardrobePage() {
 
   const wearSkin = (key: string, url: string, model: SkinModelId, apply: () => Promise<ApplyResult>) => {
     setInstant((s) => ({ ...s, skinKey: key, skinUrl: url, model }));
-    send(async () => {
-      const r = await apply();
-      if (r.error) toast(`На лицензию не применилось: ${r.error}`, "warning");
-    });
+    pending.current.skin = apply;
+    setDirty(true);
   };
 
   const wearCape = (key: string, url: string | null, apply: () => Promise<unknown>) => {
     setInstant((s) => ({ ...s, capeKey: key, capeUrl: url }));
-    send(apply);
+    pending.current.cape = apply;
+    setDirty(true);
   };
 
   const setModel = (model: SkinModelId) => {
@@ -287,20 +319,32 @@ export default function WardrobePage() {
     const item = data.skins.find((s) => s.id === id);
     if (!item) return;
     setInstant((s) => ({ ...s, model }));
-    void send(async () => {
+    pending.current.skin = async () => {
       await wardrobeRename(item.id, item.name, model);
       await wardrobeApply(item.id);
-    });
+    };
+    setDirty(true);
   };
 
   const saveEdit = () => {
     if (!edit) return;
     const { item, name, model } = edit;
-    void act(item.id, async () => {
-      await wardrobeRename(item.id, name.trim() || item.name, model);
+    const newName = name.trim() || item.name;
+    // Оптимистично: имя/модель меняются сразу, запрос — в фоне, откат через load().
+    patchData((d) => ({
+      ...d,
+      skins: d.skins.map((s) => (s.id === item.id ? { ...s, name: newName, model } : s)),
+      capes: d.capes.map((c) => (c.id === item.id ? { ...c, name: newName } : c)),
+    }));
+    setEdit(null);
+    void (async () => {
+      await wardrobeRename(item.id, newName, model);
       if (item.kind === "skin" && data?.active.skinId === item.id && model !== item.model)
         await wardrobeApply(item.id);
-    }).then(() => setEdit(null));
+    })().catch((e) => {
+      toast(human(e), "error");
+      void load();
+    });
   };
 
   const saveOutfit = () =>
@@ -374,7 +418,8 @@ export default function WardrobePage() {
       capeKey: cape ? `own:${cape.id}` : "off",
       capeUrl: cape ? textureUrl(cape) : null,
     });
-    send(() => outfitApply(o.id));
+    pending.current = { skin: () => outfitApply(o.id) };
+    setDirty(true);
   };
 
   const capeOff = () =>
@@ -482,6 +527,34 @@ export default function WardrobePage() {
               </button>
             ))}
           </div>
+
+          {}
+          <button
+            onClick={() => void save()}
+            disabled={!dirty || busy === "save"}
+            className={`mt-3 w-full rounded-3xl py-3 text-sm font-bold transition-colors ${
+              dirty && busy !== "save"
+                ? "bg-accent text-bg hover:bg-accent-hover"
+                : "cursor-default bg-card text-muted"
+            }`}
+          >
+            {busy === "save" ? (
+              <>
+                <i className="fa-solid fa-spinner fa-spin mr-2" />
+                Сохранение…
+              </>
+            ) : dirty ? (
+              <>
+                <i className="fa-solid fa-floppy-disk mr-2" />
+                Сохранить
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-check mr-2" />
+                Сохранено
+              </>
+            )}
+          </button>
         </section>
 
         {}
@@ -509,8 +582,13 @@ export default function WardrobePage() {
               <div className="rounded-xl bg-card p-4 text-center text-sm text-muted">{error}</div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4 pb-2">
+                {stale && (
+                  <Notice text="Не удалось обновить данные — показаны сохранённые. Проверьте соединение с Aciron ID." />
+                )}
                 {tab === "skins" && (
                   <>
+                    <Notice text="Скины видны только игрокам, зашедшим в игру через лаунчер Aciron." />
+                    {(stock?.length ?? 0) > 0 && <SectionHeader label="Каталог Aciron" />}
                     {(stock ?? []).map((s, i) => (
                       <SkinCard
                         key={`stock:${s.id}`}
@@ -526,6 +604,7 @@ export default function WardrobePage() {
                         }
                       />
                     ))}
+                    <SectionHeader label="Мои скины" />
                     {(data?.skins ?? []).map((it, i) => (
                       <SkinCard
                         key={it.id}
@@ -556,6 +635,37 @@ export default function WardrobePage() {
 
                 {tab === "capes" && (
                   <>
+                    {/* Плащи с лицензии Minecraft — их видят ВСЕ игроки (это настоящий плащ аккаунта) */}
+                    <SectionHeader label="С лицензии Minecraft" />
+                    {lic && (licError || !lic.linked) && (
+                      <Notice
+                        text={
+                          licError
+                            ? `Плащи с аккаунта Minecraft не загрузились: ${licError}`
+                            : data?.licensed
+                            ? "Плащи с аккаунта Minecraft не видны: лицензия привязана без доступа к профилю — переподключите её в меню аккаунта."
+                            : "Плащей с аккаунта Minecraft нет: лицензия не привязана к Aciron ID. Привязать можно в меню аккаунта."
+                        }
+                      />
+                    )}
+                    {capes
+                      .filter((c) => c.origin === "license")
+                      .map((c, i) => (
+                        <CapeCard
+                          key={c.key}
+                          entry={c}
+                          active={capeActive(c)}
+                          index={i}
+                          onApply={() => wearCape(c.key, c.url, c.apply)}
+                        />
+                      ))}
+                    {lic?.linked && !licError && !capes.some((c) => c.origin === "license") && (
+                      <Notice text="На аккаунте Minecraft нет плащей." />
+                    )}
+
+                    {/* Кастомные плащи — видны только игрокам, зашедшим через лаунчер Aciron */}
+                    <SectionHeader label="Кастом (Aciron)" />
+                    <Notice text="Кастомные плащи видят только игроки, зашедшие в игру через лаунчер Aciron." />
                     <TileButton
                       icon="fa-solid fa-ban"
                       label="Без плаща"
@@ -569,26 +679,17 @@ export default function WardrobePage() {
                       index={1}
                       onClick={() => void uploadCape()}
                     />
-                    {lic && (licError || !lic.linked) && (
-                      <Notice
-                        text={
-                          licError
-                            ? `Плащи с аккаунта Minecraft не загрузились: ${licError}`
-                            : data?.licensed
-                            ? "Плащи с аккаунта Minecraft не видны: лицензия привязана без доступа к профилю — переподключите её в меню аккаунта."
-                            : "Плащей с аккаунта Minecraft нет: лицензия не привязана к Aciron ID. Привязать можно в меню аккаунта."
-                        }
-                      />
-                    )}
-                    {capes.map((c, i) => (
-                      <CapeCard
-                        key={c.key}
-                        entry={c}
-                        active={capeActive(c)}
-                        index={i + 2}
-                        onApply={() => wearCape(c.key, c.url, c.apply)}
-                      />
-                    ))}
+                    {capes
+                      .filter((c) => c.origin !== "license")
+                      .map((c, i) => (
+                        <CapeCard
+                          key={c.key}
+                          entry={c}
+                          active={capeActive(c)}
+                          index={i + 2}
+                          onApply={() => wearCape(c.key, c.url, c.apply)}
+                        />
+                      ))}
                     {catalog === null && <Loading />}
                   </>
                 )}
@@ -625,12 +726,21 @@ export default function WardrobePage() {
           title={confirm.kind === "outfit" ? "Удалить образ" : "Удалить из гардероба"}
           message={`Удалить «${confirm.name}»? Файл текстуры будет стёрт с сервера.`}
           onConfirm={() => {
-
             if (instant?.skinKey === confirm.id || instant?.capeKey === `own:${confirm.id}`)
               setInstant(null);
-            void act(confirm.id, () =>
-              confirm.kind === "outfit" ? outfitDelete(confirm.id) : wardrobeDelete(confirm.id)
-            );
+            const { kind, id } = confirm;
+            // Оптимистично убираем карточку, удаляем в фоне, откат при ошибке.
+            const prev = patchData((d) => ({
+              ...d,
+              skins: d.skins.filter((s) => s.id !== id),
+              capes: d.capes.filter((c) => c.id !== id),
+              outfits: d.outfits.filter((o) => o.id !== id),
+            }));
+            setConfirm(null);
+            (kind === "outfit" ? outfitDelete(id) : wardrobeDelete(id)).catch((e) => {
+              if (prev) setData(prev);
+              toast(human(e), "error");
+            });
           }}
           onClose={() => setConfirm(null)}
         />
@@ -837,6 +947,14 @@ function Notice({ text }: { text: string }) {
     <div className="col-span-full flex items-start gap-2.5 rounded-xl bg-card px-4 py-3 text-xs leading-relaxed text-muted">
       <i className="fa-solid fa-circle-info mt-0.5 shrink-0 text-accent/80" />
       <span>{text}</span>
+    </div>
+  );
+}
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="col-span-full mt-2 text-[11px] font-semibold uppercase tracking-wide text-muted first:mt-0">
+      {label}
     </div>
   );
 }

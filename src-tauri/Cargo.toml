@@ -35,3 +35,14 @@ hmac = "0.12"
 rand = "0.8"
 discord-rich-presence = "0.2"
 rusqlite = { version = "0.32", features = ["bundled"] }
+# Декодирование PNG для авто-детекта модели скина (slim/classic).
+image = { version = "0.25", default-features = false, features = ["png"] }
+# SHA1 для сверки целостности загрузок с манифестом Mojang.
+sha1 = "0.10"
+
+# DPAPI для шифрования токенов на диске (CryptProtectData/CryptUnprotectData).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Security_Cryptography",
+    "Win32_Foundation",
+] }

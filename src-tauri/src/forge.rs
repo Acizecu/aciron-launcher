@@ -3,6 +3,7 @@
 use crate::launcher::{artifact_key, download_file, emit, get_json, maven_path};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tauri::AppHandle;
 
 pub struct LoaderProfile {
@@ -50,9 +51,24 @@ pub async fn install(
 
     let installer = root.join("cache").join(format!("{kind}-{version}-installer.jar"));
     emit(app, "forge", "Загрузка установщика Forge", 0, 1);
-    download_file(client, &url, &installer)
+    // Установщик — крупный файл: отдельный клиент только с таймаутом соединения
+    // (без общего лимита, чтобы медленная закачка не оборвалась) — HNS-02.
+    let installer_client = reqwest::Client::builder()
+        .user_agent("AcironLauncher/0.1 (aciron.pro)")
+        .connect_timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+    download_file(&installer_client, &url, &installer)
         .await
         .map_err(|e| format!("Не удалось скачать установщик {kind} {version}: {e}"))?;
+
+    // SEC-06: перед запуском проверяем целостность установщика. Промоушны/metadata,
+    // которые лаунчер уже забирает (promotions_slim.json / maven-metadata.xml), НЕ
+    // содержат хеша конкретного installer.jar — это известный пробел «доверие TLS»:
+    // мы полагаемся на HTTPS до maven-репозиториев Forge/NeoForged. Поэтому как
+    // минимум убеждаемся, что скачан непустой валидный zip (jar начинается с "PK"),
+    // чтобы не запускать java -jar на мусоре/HTML-заглушке прокси.
+    verify_installer_zip(&installer)?;
 
     // id версии, которую создаст установщик (из version.json внутри jar).
     let embedded = read_json_from_jar(&installer, "version.json")?;
@@ -184,6 +200,26 @@ fn read_json_from_jar(jar: &Path, name: &str) -> Result<Value, String> {
     serde_json::from_str(&s).map_err(|e| e.to_string())
 }
 
+/// SEC-06: базовая проверка целостности скачанного установщика Forge/NeoForge.
+/// Хеша установщика в metadata нет (известный пробел «доверие TLS»), поэтому
+/// проверяем, что файл непустой и является валидным zip — jar обязан начинаться
+/// с сигнатуры локального заголовка zip "PK\x03\x04". Так мы не отдадим java -jar
+/// html-заглушку прокси или обрезанный файл.
+fn verify_installer_zip(installer: &Path) -> Result<(), String> {
+    let meta = std::fs::metadata(installer).map_err(|e| e.to_string())?;
+    if meta.len() == 0 {
+        return Err("Скачанный установщик Forge пуст".to_string());
+    }
+    let mut f = std::fs::File::open(installer).map_err(|e| e.to_string())?;
+    let mut sig = [0u8; 4];
+    std::io::Read::read_exact(&mut f, &mut sig).map_err(|e| e.to_string())?;
+    // "PK\x03\x04" — сигнатура zip/jar.
+    if sig != [0x50, 0x4B, 0x03, 0x04] {
+        return Err("Установщик Forge повреждён или это не jar-архив".to_string());
+    }
+    Ok(())
+}
+
 /// Запускает установщик Forge в режиме клиента.
 async fn run_installer(
     java: &Path,
@@ -283,7 +319,16 @@ async fn build_profile(
     if let Some(jvm) = vjson["arguments"]["jvm"].as_array() {
         for a in jvm {
             if let Some(s) = a.as_str() {
-                jvm_args.push(subst(s));
+                let s = subst(s);
+                // SEC-06: version.json Forge/NeoForge приходит по сети. Отбрасываем
+                // потенциально внедрённые опасные JVM-аргументы: -javaagent: (загрузка
+                // произвольного агента в JVM) и -cp/-classpath (подмена classpath) —
+                // classpath задаёт только сам лаунчер. Обычные флаги Forge
+                // (-D..., --add-opens, --add-modules, -p и прочее) пропускаем.
+                if s.starts_with("-javaagent:") || s == "-cp" || s == "-classpath" {
+                    continue;
+                }
+                jvm_args.push(s);
             }
         }
     }

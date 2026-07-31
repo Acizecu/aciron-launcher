@@ -32,6 +32,9 @@ const CLIENT_KEY: &str = match option_env!("ACIRON_CLIENT_KEY") {
 pub(crate) fn http() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent("AcironLauncher")
+        // Таймауты: не зависаем на медленном/мёртвом соединении.
+        .connect_timeout(std::time::Duration::from_secs(8))
+        .timeout(std::time::Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())
 }

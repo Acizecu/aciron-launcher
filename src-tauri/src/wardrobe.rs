@@ -4,6 +4,48 @@ use crate::aciron::{active_token, delete, get, patch, post, OFFLINE};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+/// Значение по умолчанию для поля модели, если сервер его не прислал.
+/// Так пропущенное поле не роняет разбор всего WardrobeData.
+fn default_model() -> String {
+    "classic".to_string()
+}
+
+/// Единая проверка загружаемой текстуры: ограничение размера и магическая
+/// сигнатура PNG. Используется и при чтении превью, и при загрузке в гардероб.
+fn validate_png(bytes: &[u8]) -> Result<(), String> {
+    if bytes.len() > 512 * 1024 {
+        return Err("Файл слишком большой для текстуры".into());
+    }
+    const SIG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+    if bytes.len() < 8 || bytes[..8] != SIG {
+        return Err("Файл не является PNG".into());
+    }
+    Ok(())
+}
+
+/// Автоопределение модели скина по пикселям. Возвращает Some(true) для slim,
+/// Some(false) для classic и None, если решение неоднозначно (оставляем выбор
+/// вызывающего). Логика: 4-й столбец руки — у classic он непрозрачный, у slim
+/// прозрачный. Легаси-скины 64x32 всегда classic.
+fn detect_slim(bytes: &[u8]) -> Option<bool> {
+    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+    if img.height() < 64 {
+        return Some(false);
+    } // легаси 64x32 => classic
+    if img.width() < 64 {
+        return None;
+    }
+    let mut opaque = 0u32; // 4-й столбец руки: classic непрозрачный, slim прозрачный
+    for x in 54..56 {
+        for y in 20..32 {
+            if img.get_pixel(x, y)[3] != 0 {
+                opaque += 1;
+            }
+        }
+    }
+    Some(opaque == 0)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WardrobeItem {
@@ -12,6 +54,7 @@ pub struct WardrobeItem {
     pub kind: String,
     pub name: String,
 
+    #[serde(default = "default_model")]
     pub model: String,
 
     pub url: String,
@@ -25,6 +68,7 @@ pub struct Outfit {
     pub name: String,
     pub skin_id: Option<String>,
     pub cape_id: Option<String>,
+    #[serde(default = "default_model")]
     pub model: String,
     pub created_at: i64,
 }
@@ -40,8 +84,11 @@ pub struct ActiveLook {
 
     #[serde(default)]
     pub cape_catalog_id: Option<String>,
+    #[serde(default = "default_model")]
     pub model: String,
+    #[serde(default)]
     pub has_skin: bool,
+    #[serde(default)]
     pub has_cape: bool,
 }
 
@@ -112,6 +159,20 @@ pub async fn wardrobe_add(
         .await
         .map_err(|e| format!("Не удалось прочитать файл: {e}"))?;
 
+    // Валидация текстуры до отправки на сервер.
+    validate_png(&bytes)?;
+
+    // Автоопределение модели по пикселям только для скинов (у плащей нет модели руки).
+    let model = if kind == "skin" {
+        match detect_slim(&bytes) {
+            Some(true) => "slim".to_string(),
+            Some(false) => "classic".to_string(),
+            None => model,
+        }
+    } else {
+        model
+    };
+
     let part = reqwest::multipart::Part::bytes(bytes)
         .file_name("texture.png")
         .mime_str("image/png")
@@ -135,12 +196,7 @@ pub async fn read_texture(path: String) -> Result<String, String> {
     let bytes = tokio::fs::read(&path)
         .await
         .map_err(|e| format!("Не удалось прочитать файл: {e}"))?;
-    if bytes.len() > 512 * 1024 {
-        return Err("Файл слишком большой для текстуры".into());
-    }
-    if bytes.len() < 8 || &bytes[1..4] != b"PNG" {
-        return Err("Файл не является PNG".into());
-    }
+    validate_png(&bytes)?;
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     Ok(format!("data:image/png;base64,{b64}"))
@@ -215,6 +271,7 @@ pub struct CatalogSkin {
     pub name: String,
     pub url: String,
 
+    #[serde(default = "default_model")]
     pub model: String,
 }
 

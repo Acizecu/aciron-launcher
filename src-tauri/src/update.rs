@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::time::Duration;
 
 pub const APP_VERSION: &str = "0.7.7";
 
@@ -48,6 +49,9 @@ pub async fn check_update() -> UpdateInfo {
     let url = format!("https://api.github.com/repos/{GITHUB_REPO}/releases/latest");
     let client = match reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1 (aciron.pro)")
+        // Таймауты: проверка обновлений не должна зависать при недоступном GitHub (HNS-02).
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(20))
         .build()
     {
         Ok(c) => c,

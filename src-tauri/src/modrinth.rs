@@ -3,15 +3,31 @@ use crate::launcher::emit;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha512};
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 use tauri::AppHandle;
 
 const API: &str = "https://api.modrinth.com/v2";
+
+// Безопасное соединение относительного пути с базовой директорией: отклоняем
+// любые компоненты, выходящие за пределы базы (защита от zip-slip / path traversal).
+fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
+    let mut p = base.to_path_buf();
+    for c in Path::new(rel).components() {
+        match c {
+            Component::Normal(s) => p.push(s),
+            _ => return None,
+        }
+    }
+    Some(p)
+}
 
 fn http() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
 
         .user_agent("AcironLauncher/0.1 (aciron.pro)")
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())
 }
@@ -271,7 +287,11 @@ async fn build_from_mrpack(
                 .strip_prefix("overrides/")
                 .or_else(|| ename.strip_prefix("client-overrides/"));
             if let Some(rel) = rel {
-                let dest = dir.join(rel);
+                // Защита от zip-slip: пропускаем записи, выходящие за пределы сборки.
+                let dest = match safe_join(&dir, rel) {
+                    Some(d) => d,
+                    None => continue,
+                };
                 if let Some(p) = dest.parent() {
                     let _ = std::fs::create_dir_all(p);
                 }
@@ -307,7 +327,11 @@ async fn build_from_mrpack(
             .and_then(|a| a.first())
             .and_then(|u| u.as_str());
         if let Some(dl) = dl {
-            let dest = build_dir.join(path);
+            // Защита от path traversal: путь из манифеста не должен выходить за сборку.
+            let dest = match safe_join(&build_dir, path) {
+                Some(d) => d,
+                None => continue,
+            };
             if download_cancelable(cl, dl, &dest, ckey).await.is_err()
                 && crate::cancel::is_cancelled(ckey)
             {

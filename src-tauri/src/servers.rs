@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use std::time::Duration;
 
 const MCSTATUS: &str = "https://api.mcstatus.io/v2/status/java";
 
@@ -6,6 +7,9 @@ const MCSTATUS: &str = "https://api.mcstatus.io/v2/status/java";
 pub async fn server_status(address: String) -> Result<Value, String> {
     let cl = reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1 (aciron.pro)")
+        // Таймауты, чтобы висящий mcstatus не блокировал запрос навсегда (HNS-02).
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
     let resp = cl

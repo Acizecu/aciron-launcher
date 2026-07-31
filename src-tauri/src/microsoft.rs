@@ -20,6 +20,9 @@ const SCOPE: &str = "XboxLive.signin offline_access";
 fn http() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1")
+        // HNS-02: тайм-ауты, чтобы запросы не висели бесконечно
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())
 }
@@ -85,17 +88,25 @@ pub async fn interactive_login(app: AppHandle) -> Result<Account, String> {
     let verifier = URL_SAFE_NO_PAD.encode(raw);
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
 
+    // SEC-04: случайный state-nonce для защиты от CSRF в OAuth-редиректе
+    let state: String = rand::Rng::gen::<[u8; 16]>(&mut rand::thread_rng())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+
     let auth_url = format!(
         "{AUTH_URL}?client_id={cid}&response_type=code&redirect_uri={ru}&response_mode=query\
-         &scope={sc}&code_challenge={ch}&code_challenge_method=S256&prompt=select_account",
+         &scope={sc}&code_challenge={ch}&code_challenge_method=S256&state={st}&prompt=select_account",
         cid = CLIENT_ID,
         ru = urlencode(&redirect),
         sc = urlencode(SCOPE),
         ch = challenge,
+        st = state,
     );
     let _ = app.emit("ms-auth-open", json!({ "url": auth_url }));
 
-    let code = wait_for_code(&listener, Duration::from_secs(300)).await?;
+    // HNS-06: уменьшенное время ожидания интерактивного входа (120 с)
+    let code = wait_for_code(&listener, Duration::from_secs(120), &state).await?;
 
     let cl = http()?;
     let tok: Value = cl
@@ -128,7 +139,11 @@ pub async fn interactive_login(app: AppHandle) -> Result<Account, String> {
     finish_login(&cl, &ms_access, &refresh).await
 }
 
-async fn wait_for_code(listener: &TcpListener, timeout: Duration) -> Result<String, String> {
+async fn wait_for_code(
+    listener: &TcpListener,
+    timeout: Duration,
+    expected_state: &str,
+) -> Result<String, String> {
     let accept = async {
         loop {
             let (mut stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
@@ -154,6 +169,14 @@ async fn wait_for_code(listener: &TcpListener, timeout: Duration) -> Result<Stri
                 return Err(format!("Microsoft: {}", urldecode(err)));
             }
             if let Some(code) = params.get("code") {
+                // SEC-04: принимаем код только при совпадении state-nonce (защита от CSRF)
+                let got_state = params.get("state").map(|s| urldecode(s)).unwrap_or_default();
+                if got_state != expected_state {
+                    eprintln!("[microsoft] OAuth: несовпадение state — запрос отклонён");
+                    let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n").await;
+                    let _ = stream.flush().await;
+                    continue;
+                }
                 reply(&mut stream, "Готово! Вернитесь в Aciron Launcher — вкладку можно закрыть.").await;
                 return Ok(urldecode(code));
             }

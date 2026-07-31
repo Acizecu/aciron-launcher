@@ -7,6 +7,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc, Mutex, OnceLock,
 };
+use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 struct RunningGame {
@@ -244,11 +245,10 @@ pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Valu
         .map_err(|e| e.to_string())
 }
 
-/// Скачивает файл, если его ещё нет.
-pub(crate) async fn download_file(client: &reqwest::Client, url: &str, path: &Path) -> Result<(), String> {
-    if path.exists() {
-        return Ok(());
-    }
+/// Скачивает файл во временный <path>.part и атомарно переименовывает в итоговый
+/// путь, чтобы прерванная загрузка не оставляла битый финальный файл.
+/// Возвращает скачанные байты (для проверки хэша в download_file_checked).
+async fn download_to(client: &reqwest::Client, url: &str, path: &Path) -> Result<Vec<u8>, String> {
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
@@ -262,10 +262,101 @@ pub(crate) async fn download_file(client: &reqwest::Client, url: &str, path: &Pa
         .bytes()
         .await
         .map_err(|e| e.to_string())?;
-    tokio::fs::write(path, &bytes)
+    // Временный файл рядом с целевым, затем атомарный rename.
+    let tmp = path.with_extension(match path.extension().and_then(|e| e.to_str()) {
+        Some(ext) => format!("{ext}.part"),
+        None => "part".to_string(),
+    });
+    tokio::fs::write(&tmp, &bytes)
         .await
         .map_err(|e| e.to_string())?;
+    tokio::fs::rename(&tmp, path)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(bytes.to_vec())
+}
+
+/// Скачивает файл, если его ещё нет. Пишет через <path>.part + rename (атомарно).
+pub(crate) async fn download_file(client: &reqwest::Client, url: &str, path: &Path) -> Result<(), String> {
+    if path.exists() {
+        return Ok(());
+    }
+    download_to(client, url, path).await.map(|_| ())
+}
+
+/// Скачивает файл с проверкой целостности: сверяет размер и SHA1 (если заданы).
+/// Существующий файл переиспользуется, только если его размер/хэш совпадают,
+/// иначе — перекачивается. При несовпадении после загрузки файл удаляется.
+pub(crate) async fn download_file_checked(
+    client: &reqwest::Client,
+    url: &str,
+    path: &Path,
+    sha1: Option<&str>,
+    size: Option<u64>,
+) -> Result<(), String> {
+    // Если файл уже есть — проверяем его целостность, чтобы не качать зря.
+    if path.exists() {
+        if file_matches(path, sha1, size) {
+            return Ok(());
+        }
+        // Битый/устаревший файл — удаляем и качаем заново.
+        let _ = tokio::fs::remove_file(path).await;
+    }
+    let bytes = download_to(client, url, path).await?;
+    // Проверка размера.
+    if let Some(expected) = size {
+        if bytes.len() as u64 != expected {
+            let _ = tokio::fs::remove_file(path).await;
+            return Err(format!(
+                "Размер файла не совпал: ожидалось {expected}, получено {}",
+                bytes.len()
+            ));
+        }
+    }
+    // Проверка SHA1.
+    if let Some(expected) = sha1 {
+        let actual = sha1_hex(&bytes);
+        if !actual.eq_ignore_ascii_case(expected) {
+            let _ = tokio::fs::remove_file(path).await;
+            return Err(format!(
+                "Хэш SHA1 не совпал: ожидалось {expected}, получено {actual}"
+            ));
+        }
+    }
     Ok(())
+}
+
+/// SHA1 байтов в hex-строке нижнего регистра.
+fn sha1_hex(data: &[u8]) -> String {
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.update(data);
+    let digest = hasher.finalize();
+    let mut s = String::with_capacity(digest.len() * 2);
+    for b in digest.iter() {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
+}
+
+/// Проверяет, что файл на диске соответствует ожидаемым размеру/SHA1.
+/// Если ожидаемые значения не заданы — считаем существующий файл валидным.
+fn file_matches(path: &Path, sha1: Option<&str>, size: Option<u64>) -> bool {
+    let data = match std::fs::read(path) {
+        Ok(d) => d,
+        Err(_) => return false,
+    };
+    if let Some(expected) = size {
+        if data.len() as u64 != expected {
+            return false;
+        }
+    }
+    if let Some(expected) = sha1 {
+        if !sha1_hex(&data).eq_ignore_ascii_case(expected) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Распаковывает натив-jar в папку natives (только библиотеки, без META-INF).
@@ -371,8 +462,18 @@ async fn prepare_and_launch(
     build_id: Option<String>,
     build_name: Option<&str>,
 ) -> Result<(), String> {
+    // Таймауты для сетевых запросов (метаданные/манифесты): не зависаем навсегда.
     let client = reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1")
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+    // Отдельный клиент для загрузки игровых файлов: без общего timeout,
+    // т.к. крупные потоковые загрузки могут идти долго; только connect_timeout.
+    let dl_client = reqwest::Client::builder()
+        .user_agent("AcironLauncher/0.1")
+        .connect_timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -425,12 +526,16 @@ async fn prepare_and_launch(
     emit(app, "version", "Описание версии загружено", 1, 1);
 
     // 3) client.jar
-    let client_url = version_json["downloads"]["client"]["url"]
+    let client_download = &version_json["downloads"]["client"];
+    let client_url = client_download["url"]
         .as_str()
         .ok_or("Нет ссылки на client.jar")?;
     let client_jar = version_dir.join(format!("{version}.jar"));
+    // Хэш/размер client.jar из манифеста — для проверки целостности.
+    let client_sha1 = client_download["sha1"].as_str();
+    let client_size = client_download["size"].as_u64();
     emit(app, "client", "Загрузка клиента", 0, 1);
-    download_file(&client, client_url, &client_jar).await?;
+    download_file_checked(&dl_client, client_url, &client_jar, client_sha1, client_size).await?;
     emit(app, "client", "Клиент загружен", 1, 1);
 
     // 4) Библиотеки + нативы
@@ -456,7 +561,10 @@ async fn prepare_and_launch(
                 artifact["url"].as_str().filter(|u| !u.is_empty()),
             ) {
                 let dest = libraries_dir.join(path);
-                download_file(&client, url, &dest).await?;
+                // Хэш/размер из манифеста — для проверки целостности библиотеки.
+                let sha1 = artifact["sha1"].as_str();
+                let size = artifact["size"].as_u64();
+                download_file_checked(&dl_client, url, &dest, sha1, size).await?;
                 // натив-классификаторы не участвуют в дедупликации по ключу
                 let is_native = path.contains("natives-");
                 let key = if is_native {
@@ -479,7 +587,10 @@ async fn prepare_and_launch(
                         (classifier["path"].as_str(), classifier["url"].as_str())
                     {
                         let dest = libraries_dir.join(path);
-                        download_file(&client, url, &dest).await?;
+                        // Хэш/размер из манифеста — для проверки целостности натива.
+                        let sha1 = classifier["sha1"].as_str();
+                        let size = classifier["size"].as_u64();
+                        download_file_checked(&dl_client, url, &dest, sha1, size).await?;
                         native_jars.push(dest);
                     }
                 }
@@ -498,7 +609,8 @@ async fn prepare_and_launch(
         .as_str()
         .unwrap_or("jre-legacy")
         .to_string();
-    let java = match ensure_java_runtime(app, &client, &component, &root).await {
+    // Клиент загрузки (без общего timeout): java-runtime содержит крупные файлы.
+    let java = match ensure_java_runtime(app, &dl_client, &component, &root).await {
         Some(j) => j,
         None => {
             let p = PathBuf::from(&settings.java_path);
@@ -529,7 +641,8 @@ async fn prepare_and_launch(
                             if let Some(path) = maven_path(name) {
                                 let full_url = format!("{}/{}", url.trim_end_matches('/'), path);
                                 let dest = libraries_dir.join(&path);
-                                download_file(&client, &full_url, &dest).await?;
+                                // Клиент загрузки (без общего timeout) — jar может быть крупным.
+                                download_file(&dl_client, &full_url, &dest).await?;
                                 let key = artifact_key(name);
                                 classpath.retain(|(k, _)| k.is_empty() || k != &key);
                                 classpath.push((key, dest));
@@ -548,8 +661,9 @@ async fn prepare_and_launch(
                 }
             }
             "forge" | "neoforge" => {
+                // Клиент загрузки (без общего timeout): установщик Forge крупный.
                 let profile = crate::forge::install(
-                    &client,
+                    &dl_client,
                     loader,
                     version,
                     &root,
@@ -586,16 +700,21 @@ async fn prepare_and_launch(
             .map_err(|e| e.to_string())?;
 
     let objects = index_json["objects"].as_object().cloned().unwrap_or_default();
-    let hashes: Vec<String> = objects
+    // Для ассетов hash — это SHA1 объекта; size — его размер. Проверяем целостность.
+    let entries: Vec<(String, Option<u64>)> = objects
         .values()
-        .filter_map(|o| o["hash"].as_str().map(|s| s.to_string()))
+        .filter_map(|o| {
+            o["hash"]
+                .as_str()
+                .map(|s| (s.to_string(), o["size"].as_u64()))
+        })
         .collect();
-    let total = hashes.len() as u64;
+    let total = entries.len() as u64;
     let done = Arc::new(AtomicU64::new(0));
     let objects_dir = assets_dir.join("objects");
 
-    stream::iter(hashes.into_iter().map(|hash| {
-        let client = client.clone();
+    stream::iter(entries.into_iter().map(|(hash, size)| {
+        let client = dl_client.clone();
         let done = done.clone();
         let app = app.clone();
         let objects_dir = objects_dir.clone();
@@ -603,7 +722,7 @@ async fn prepare_and_launch(
             let sub = &hash[0..2];
             let path = objects_dir.join(sub).join(&hash);
             let url = format!("{RESOURCES}/{sub}/{hash}");
-            let _ = download_file(&client, &url, &path).await;
+            let _ = download_file_checked(&client, &url, &path, Some(&hash), size).await;
             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
             if n % 25 == 0 || n == total {
                 emit(&app, "assets", "Загрузка ресурсов", n, total);
@@ -633,16 +752,39 @@ async fn prepare_and_launch(
     let ram = settings.ram_mb.max(512);
 
     // Идентичность игрока из активного аккаунта (Microsoft / Ely.by / оффлайн).
+    // Перед этим шагом возможен повторный вход Microsoft — сообщаем UI, чтобы не молчал.
+    emit(app, "identity", "Проверка входа", 0, 1);
     let id = resolve_identity(app, settings).await?;
 
+    // -Xms = -Xmx: сразу резервируем всю кучу, меньше пауз на расширение.
     let mut args: Vec<String> = vec![
         format!("-Xmx{ram}M"),
-        format!("-Xms{}M", (ram / 2).max(512)),
+        format!("-Xms{ram}M"),
         format!("-Djava.library.path={}", natives_dir.to_string_lossy()),
     ];
     // Пользовательские JVM-аргументы из настроек (через пробел).
     for a in settings.jvm_args.split_whitespace() {
         args.push(a.to_string());
+    }
+    // G1GC-тюнинг по умолчанию — только если пользователь сам не задал GC/размер
+    // нового поколения (-XX:+Use...GC или -Xmn). Дубли уже присутствующих флагов
+    // не добавляем.
+    let user_jvm = &settings.jvm_args;
+    let user_sets_gc = (user_jvm.contains("-XX:+Use") && user_jvm.contains("GC"))
+        || user_jvm.contains("-Xmn");
+    if !user_sets_gc {
+        for flag in [
+            "-XX:+UseG1GC",
+            "-XX:+UnlockExperimentalVMOptions",
+            "-XX:G1NewSizePercent=20",
+            "-XX:G1ReservePercent=20",
+            "-XX:MaxGCPauseMillis=50",
+            "-XX:G1HeapRegionSize=16M",
+        ] {
+            if !args.iter().any(|a| a == flag) {
+                args.push(flag.to_string());
+            }
+        }
     }
     // Aciron Skins: свой java-агент. Показывает в игре скин и плащ из гардероба
     // Aciron ID (аргумент — адрес сервиса), а если их нет — скин лицензионного
@@ -971,8 +1113,11 @@ const ACIRON_SKINS_JAR: &[u8] = include_bytes!("../resources/aciron-skins.jar");
 
 fn ensure_aciron_skins(root: &Path) -> Option<PathBuf> {
     let jar = root.join("aciron-skins.jar");
-    let fresh = std::fs::metadata(&jar)
-        .map(|m| m.len() == ACIRON_SKINS_JAR.len() as u64)
+    // Свежесть определяем сравнением SHA-256 встроенного jar и файла на диске:
+    // совпадение размеров ненадёжно (битый/подменённый файл той же длины).
+    let want = sha256_hex(ACIRON_SKINS_JAR);
+    let fresh = std::fs::read(&jar)
+        .map(|data| sha256_hex(&data) == want)
         .unwrap_or(false);
     if !fresh {
         if let Err(e) = std::fs::write(&jar, ACIRON_SKINS_JAR) {
@@ -981,6 +1126,19 @@ fn ensure_aciron_skins(root: &Path) -> Option<PathBuf> {
         }
     }
     Some(jar)
+}
+
+/// SHA-256 байтов в hex-строке нижнего регистра.
+fn sha256_hex(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let digest = hasher.finalize();
+    let mut s = String::with_capacity(digest.len() * 2);
+    for b in digest.iter() {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -1030,10 +1188,17 @@ pub fn get_installed_versions() -> Vec<InstalledVersion> {
             if !json.exists() || list.iter().any(|v| v.id == id) {
                 continue;
             }
+            // Достаём только поле "type", не разбирая весь JSON версии целиком.
+            #[derive(Deserialize)]
+            struct VersionType {
+                #[serde(default)]
+                r#type: String,
+            }
             let kind = std::fs::read_to_string(&json)
                 .ok()
-                .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-                .and_then(|v| v["type"].as_str().map(|s| s.to_string()))
+                .and_then(|t| serde_json::from_str::<VersionType>(&t).ok())
+                .map(|v| v.r#type)
+                .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "release".into());
             list.push(InstalledVersion { id, kind });
         }
@@ -1078,8 +1243,11 @@ pub struct VersionInfo {
 
 #[tauri::command]
 pub async fn list_versions() -> Result<Vec<VersionInfo>, String> {
+    // Таймауты для сетевого запроса манифеста: не зависаем навсегда.
     let client = reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1")
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
     let manifest = get_json(&client, MANIFEST).await?;

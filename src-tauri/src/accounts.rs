@@ -33,7 +33,7 @@ pub struct Account {
     pub token_expires: u64,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 struct Store {
     #[serde(default)]
     accounts: Vec<Account>,
@@ -45,9 +45,23 @@ fn store_file() -> PathBuf {
     data_root().join("accounts.json")
 }
 
+/// Поля-токены, которые шифруются на диске (DPAPI). В памяти всегда в открытом
+/// виде — шифрование/расшифровка происходят ровно на границе load/save.
+fn map_token_fields(store: &mut Store, f: impl Fn(&str) -> String) {
+    for a in &mut store.accounts {
+        a.access_token = f(&a.access_token);
+        a.refresh_token = f(&a.refresh_token);
+        a.aciron_token = f(&a.aciron_token);
+    }
+}
+
 fn load() -> Store {
     match std::fs::read_to_string(store_file()) {
-        Ok(txt) => serde_json::from_str(&txt).unwrap_or_default(),
+        Ok(txt) => {
+            let mut store: Store = serde_json::from_str(&txt).unwrap_or_default();
+            map_token_fields(&mut store, crate::secret::decrypt);
+            store
+        }
         Err(_) => Store::default(),
     }
 }
@@ -57,7 +71,10 @@ fn save(store: &Store) -> Result<(), String> {
     if let Some(p) = file.parent() {
         std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
     }
-    let txt = serde_json::to_string_pretty(store).map_err(|e| e.to_string())?;
+    // Шифруем токены перед сериализацией; в памяти store остаётся открытым.
+    let mut enc = store.clone();
+    map_token_fields(&mut enc, crate::secret::encrypt);
+    let txt = serde_json::to_string_pretty(&enc).map_err(|e| e.to_string())?;
     std::fs::write(file, txt).map_err(|e| e.to_string())
 }
 

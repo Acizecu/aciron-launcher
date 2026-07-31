@@ -16,9 +16,18 @@ import {
   friendSkinUrl,
   setPresencePrivacy,
   type Friend,
+  type FriendsData,
   type PendingUser,
 } from "../api";
-import { PRESENCE_COLOR, presenceText, refreshFriends, sortFriends, useFriends } from "../friends";
+import {
+  patchFriends,
+  PRESENCE_COLOR,
+  presenceText,
+  refreshFriends,
+  restoreFriends,
+  sortFriends,
+  useFriends,
+} from "../friends";
 
 const NICK_RE = /^[A-Za-z0-9_]{3,16}$/;
 
@@ -148,12 +157,19 @@ export default function FriendsPanel() {
   const canInvite =
     NICK_RE.test(nick) && !friends.some((f) => f.username.toLowerCase() === nick.toLowerCase());
 
-  const act = async (fn: () => Promise<unknown>, ok?: string) => {
+  // Оптимистично: строка исчезает/меняется сразу, запрос — в фоне, откат при ошибке.
+  const actOpt = async (
+    mutate: (d: FriendsData) => FriendsData,
+    fn: () => Promise<unknown>,
+    ok?: string
+  ) => {
+    const prev = patchFriends(mutate);
     try {
       await fn();
       if (ok) toast(ok, "success");
       refreshFriends();
     } catch (e) {
+      restoreFriends(prev);
       toast(human(e), "error");
     }
   };
@@ -273,9 +289,18 @@ export default function FriendsPanel() {
                   u={u}
                   incoming
                   onAccept={() =>
-                    act(() => friendRespond(u.id, true), `${u.username} теперь у вас в друзьях`)
+                    actOpt(
+                      (d) => ({ ...d, incoming: d.incoming.filter((x) => x.id !== u.id) }),
+                      () => friendRespond(u.id, true),
+                      `${u.username} теперь у вас в друзьях`
+                    )
                   }
-                  onDecline={() => act(() => friendRespond(u.id, false))}
+                  onDecline={() =>
+                    actOpt(
+                      (d) => ({ ...d, incoming: d.incoming.filter((x) => x.id !== u.id) }),
+                      () => friendRespond(u.id, false)
+                    )
+                  }
                 />
               ))}
               {outgoing.map((u) => (
@@ -284,7 +309,12 @@ export default function FriendsPanel() {
                   u={u}
                   incoming={false}
                   onAccept={() => {}}
-                  onDecline={() => act(() => friendCancel(u.id))}
+                  onDecline={() =>
+                    actOpt(
+                      (d) => ({ ...d, outgoing: d.outgoing.filter((x) => x.id !== u.id) }),
+                      () => friendCancel(u.id)
+                    )
+                  }
                 />
               ))}
             </>
@@ -333,7 +363,13 @@ export default function FriendsPanel() {
           message={`Удалить ${confirm.username} из друзей? Вернуться можно будет только новой заявкой.`}
           confirmLabel="Удалить"
           confirmIcon="fa-user-minus"
-          onConfirm={() => act(() => friendRemove(confirm.id), `${confirm.username} удалён из друзей`)}
+          onConfirm={() =>
+            actOpt(
+              (d) => ({ ...d, friends: d.friends.filter((x) => x.id !== confirm.id) }),
+              () => friendRemove(confirm.id),
+              `${confirm.username} удалён из друзей`
+            )
+          }
           onClose={() => setConfirm(null)}
         />
       )}

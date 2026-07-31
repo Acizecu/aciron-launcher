@@ -44,6 +44,15 @@ fn now() -> i64 {
         .unwrap_or(0)
 }
 
+/// Стабильная метка старта сессии лаунчера: задаётся один раз и используется для
+/// ВСЕХ состояний (idle/версия/сборка). Благодаря этому таймер в Discord не
+/// сбрасывается при смене статуса (вход/выход из игры, скрытие окна) — меняется
+/// только текст, а отсчёт продолжается в фоне.
+fn session_start() -> i64 {
+    static S: OnceLock<i64> = OnceLock::new();
+    *S.get_or_init(now)
+}
+
 pub fn init() {
 
     ENABLED.store(crate::settings::load_settings().discord_rpc, Ordering::Relaxed);
@@ -120,6 +129,7 @@ pub fn set_idle() {
             .details("В лаунчере")
             .state("Отдыхает")
             .assets(Assets::new().large_image("logo").large_text("Aciron Launcher"))
+            .timestamps(Timestamps::new().start(session_start()))
             .buttons(download_button()),
     );
 }
@@ -143,7 +153,7 @@ pub fn set_version(version: &str) {
                     .small_image("grass")
                     .small_text(version),
             )
-            .timestamps(Timestamps::new().start(now()))
+            .timestamps(Timestamps::new().start(session_start()))
             .buttons(download_button()),
     );
 }
@@ -167,7 +177,7 @@ pub fn set_build(name: &str) {
                     .small_image("grass")
                     .small_text(name),
             )
-            .timestamps(Timestamps::new().start(now()))
+            .timestamps(Timestamps::new().start(session_start()))
             .buttons(download_button()),
     );
 }

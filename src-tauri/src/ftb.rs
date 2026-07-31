@@ -1,7 +1,8 @@
 use crate::builds::{self, Build, InstalledMod};
 use crate::launcher::emit;
 use serde_json::{json, Value};
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 use tauri::AppHandle;
 
 const API: &str = "https://api.modpacks.ch/public";
@@ -10,11 +11,26 @@ fn cf_proxy() -> String {
     crate::curseforge::proxy_base()
 }
 
+// Безопасное соединение относительного пути с базовой директорией: отклоняем
+// любые компоненты, выходящие за пределы базы (защита от path traversal).
+fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
+    let mut p = base.to_path_buf();
+    for c in Path::new(rel).components() {
+        match c {
+            Component::Normal(s) => p.push(s),
+            _ => return None,
+        }
+    }
+    Some(p)
+}
+
 fn http() -> Result<reqwest::Client, String> {
 
     reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1 (aciron.pro)")
         .default_headers(crate::curseforge::proxy_headers())
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())
 }
@@ -267,7 +283,15 @@ pub async fn ftb_install_modpack(
 
         let rel = f["path"].as_str().unwrap_or("./");
         let rel = rel.trim_start_matches("./").trim_start_matches('/');
-        let dest = build_dir.join(rel).join(&fname);
+        // Защита от path traversal: путь и имя файла из манифеста не должны
+        // выходить за пределы сборки — иначе пропускаем запись.
+        let dest = match safe_join(&build_dir, rel).and_then(|d| safe_join(&d, &fname)) {
+            Some(d) => d,
+            None => {
+                emit(&app, "modpack", "Загрузка модпака", (i + 1) as u64, total);
+                continue;
+            }
+        };
 
         if let Some(url) = resolve_url(&cl, f).await {
             if download_to(&cl, &url, &dest).await.is_ok() {

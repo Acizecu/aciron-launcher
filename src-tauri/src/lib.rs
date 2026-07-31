@@ -12,6 +12,7 @@ mod microsoft;
 mod modrinth;
 mod presence;
 mod recents;
+mod secret;
 mod servers;
 mod settings;
 mod social;

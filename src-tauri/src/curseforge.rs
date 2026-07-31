@@ -3,7 +3,8 @@ use crate::launcher::emit;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 use tauri::AppHandle;
 
 const DEFAULT_PROXY: &str = match option_env!("ACIRON_CF_PROXY_URL") {
@@ -20,10 +21,25 @@ pub(crate) fn proxy_base() -> String {
     base()
 }
 
+// Безопасное соединение относительного пути с базовой директорией: отклоняем
+// любые компоненты, выходящие за пределы базы (защита от zip-slip / path traversal).
+fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
+    let mut p = base.to_path_buf();
+    for c in Path::new(rel).components() {
+        match c {
+            Component::Normal(s) => p.push(s),
+            _ => return None,
+        }
+    }
+    Some(p)
+}
+
 fn http() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1 (aciron.pro)")
         .default_headers(proxy_headers())
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())
 }
@@ -653,7 +669,11 @@ pub async fn curseforge_install_modpack(
             }
             let ename = entry.name().to_string();
             if let Some(rel) = ename.strip_prefix(&prefix) {
-                let dest = dir.join(rel);
+                // Защита от zip-slip: пропускаем записи, выходящие за пределы сборки.
+                let dest = match safe_join(&dir, rel) {
+                    Some(d) => d,
+                    None => continue,
+                };
                 if let Some(p) = dest.parent() {
                     let _ = std::fs::create_dir_all(p);
                 }

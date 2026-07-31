@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ACIRON_ID_API, friendRespond, type PendingUser } from "../api";
-import { refreshFriends } from "../friends";
+import { patchFriends, refreshFriends, restoreFriends } from "../friends";
+import { useToast } from "../ToastContext";
 
 const LIFE_MS = 5000;
 
@@ -17,6 +18,7 @@ export default function FriendRequestToast({
   const [busy, setBusy] = useState(false);
   const timer = useRef<number | null>(null);
   const closing = useRef(false);
+  const toast = useToast();
 
   const close = () => {
     if (closing.current) return;
@@ -47,13 +49,19 @@ export default function FriendRequestToast({
   const respond = async (accept: boolean) => {
     if (busy) return;
     setBusy(true);
+    // Оптимистично убираем заявку и сразу закрываем тост; при ошибке возвращаем
+    // её обратно и показываем сообщение (раньше ошибка молча проглатывалась).
+    const prev = patchFriends((d) => ({
+      ...d,
+      incoming: d.incoming.filter((u) => u.id !== user.id),
+    }));
+    close();
     try {
       await friendRespond(user.id, accept);
       refreshFriends();
-    } catch {
-
-    } finally {
-      close();
+    } catch (e) {
+      restoreFriends(prev);
+      toast(String(e).replace(/^Error:\s*/, ""), "error");
     }
   };
 
