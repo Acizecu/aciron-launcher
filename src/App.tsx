@@ -19,6 +19,7 @@ import { DEV } from "./config";
 import { LauncherProvider } from "./LauncherContext";
 import { ToastProvider } from "./ToastContext";
 import FriendRequestToasts from "./components/FriendRequestToasts";
+import ChatToasts from "./components/ChatToasts";
 import { ThemeProvider } from "./ThemeContext";
 import {
   getSettings,
@@ -61,11 +62,17 @@ function AppInner() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notifySound, setNotifySound] = useState(true);
 
-  const showBottomBar = active !== "builds" && active !== "servers" && active !== "wardrobe";
+  const showBottomBar =
+    active !== "builds" && active !== "servers" && active !== "wardrobe" && active !== "friends";
 
   const requestNav = (id: NavId) => {
-    if (id === "settings") setSettingsOpen(true);
-    else setActive(id);
+    if (id === "settings") {
+      setSettingsOpen(true);
+      return;
+    }
+
+    if (id === active) window.dispatchEvent(new CustomEvent("aciron-nav-reset", { detail: id }));
+    setActive(id);
   };
 
   useEffect(() => {
@@ -82,6 +89,12 @@ function AppInner() {
 
       }
     })();
+  }, []);
+
+  useEffect(() => {
+    const open = () => setActive("friends");
+    window.addEventListener("aciron-open-chat", open);
+    return () => window.removeEventListener("aciron-open-chat", open);
   }, []);
 
   useEffect(() => {
@@ -151,6 +164,13 @@ function AppInner() {
       <ResizeHandles />
       {}
       <FriendRequestToasts sound={notifySound} />
+      {}
+      <ChatToasts
+        sound={notifySound}
+        onOpen={(userId) =>
+          window.dispatchEvent(new CustomEvent("aciron-open-chat", { detail: userId }))
+        }
+      />
       {}
       <div
         className="absolute left-0 top-0 origin-top-left"

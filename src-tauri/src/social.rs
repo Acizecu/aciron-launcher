@@ -66,7 +66,7 @@ pub struct FriendsData {
     pub outgoing: Vec<PendingUser>,
 }
 
-async fn check(resp: reqwest::Response) -> Result<reqwest::Response, String> {
+pub(crate) async fn check(resp: reqwest::Response) -> Result<reqwest::Response, String> {
     if resp.status().is_success() {
         return Ok(resp);
     }
@@ -80,7 +80,7 @@ async fn check(resp: reqwest::Response) -> Result<reqwest::Response, String> {
         .unwrap_or_else(|| "Aciron ID: не удалось выполнить запрос".into()))
 }
 
-async fn get(path: &str) -> Result<reqwest::Response, String> {
+pub(crate) async fn get(path: &str) -> Result<reqwest::Response, String> {
     let resp = crate::aciron::get(path)?
         .header("Authorization", format!("Bearer {}", active_token()?))
         .send()
@@ -89,7 +89,7 @@ async fn get(path: &str) -> Result<reqwest::Response, String> {
     check(resp).await
 }
 
-async fn post(path: &str, body: serde_json::Value) -> Result<reqwest::Response, String> {
+pub(crate) async fn post(path: &str, body: serde_json::Value) -> Result<reqwest::Response, String> {
     let resp = crate::aciron::post(path)?
         .header("Authorization", format!("Bearer {}", active_token()?))
         .json(&body)

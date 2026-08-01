@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ProfileModal from "./ProfileModal";
 import Head from "./Head";
 import ConfirmModal from "./ConfirmModal";
 import AddAccountModal from "./AddAccountModal";
@@ -28,6 +29,7 @@ import {
   sortFriends,
   useFriends,
 } from "../friends";
+import { useChat } from "../chat";
 
 const NICK_RE = /^[A-Za-z0-9_]{3,16}$/;
 
@@ -61,32 +63,61 @@ function IconBtn({
   );
 }
 
-function FriendRow({ f, onRemove }: { f: Friend; onRemove: () => void }) {
+function FriendRow({
+  f,
+  unread,
+  onChat,
+  onProfile,
+  onRemove,
+}: {
+  f: Friend;
+  unread: number;
+  onChat: () => void;
+  onProfile: () => void;
+  onRemove: () => void;
+}) {
   const color = PRESENCE_COLOR[f.presence.state];
   const playing = f.presence.inGame;
   return (
     <div className="group flex items-center gap-3 rounded-xl bg-card p-2.5">
-      <Head
-        skin={friendSkinUrl(f)}
-        name={f.username}
-        size={40}
-        className={`shrink-0 rounded-lg ${f.presence.state === "offline" ? "opacity-50" : ""}`}
-      />
-      <div className="min-w-0 flex-1 leading-tight">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-semibold text-text">{f.username}</span>
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
-        </div>
-        <div
-          className="truncate text-[11px]"
-          style={{ color: playing ? PRESENCE_COLOR.online : "var(--color-muted)" }}
-          title={presenceText(f.presence)}
-        >
-          {presenceText(f.presence)}
-        </div>
-      </div>
       {}
-      <div className="hidden group-hover:block">
+      <button
+        onClick={onProfile}
+        title="Открыть профиль"
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+      >
+        <Head
+          skin={friendSkinUrl(f)}
+          name={f.username}
+          size={40}
+          className={`shrink-0 rounded-lg ${f.presence.state === "offline" ? "opacity-50" : ""}`}
+        />
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-semibold text-text group-hover:text-accent">
+              {f.username}
+            </span>
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+          </div>
+          <div
+            className="truncate text-[11px]"
+            style={{ color: playing ? PRESENCE_COLOR.online : "var(--color-muted)" }}
+            title={presenceText(f.presence)}
+          >
+            {presenceText(f.presence)}
+          </div>
+        </div>
+      </button>
+
+      {}
+      {unread > 0 && (
+        <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-bg">
+          {unread > 99 ? "99+" : unread}
+        </span>
+      )}
+      {}
+      <div className="hidden shrink-0 gap-1 group-hover:flex">
+        <IconBtn icon="fa-comment" title="Написать" onClick={onChat} />
         <IconBtn icon="fa-user-minus" title="Удалить из друзей" onClick={onRemove} />
       </div>
     </div>
@@ -135,6 +166,12 @@ function Empty({ text }: { text: string }) {
 
 export default function FriendsPanel() {
   const [tab, setTab] = useState<"friends" | "requests">("friends");
+  const { unread } = useChat();
+
+  const [profile, setProfile] = useState<Friend | null>(null);
+
+  const openChat = (userId: string) =>
+    window.dispatchEvent(new CustomEvent("aciron-open-chat", { detail: userId }));
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState(false);
   const [signIn, setSignIn] = useState(false);
@@ -321,7 +358,14 @@ export default function FriendsPanel() {
         ) : (
           <>
             {list.map((f) => (
-              <FriendRow key={f.id} f={f} onRemove={() => setConfirm(f)} />
+              <FriendRow
+                key={f.id}
+                f={f}
+                unread={unread[f.id] ?? 0}
+                onChat={() => openChat(f.id)}
+                onProfile={() => setProfile(f)}
+                onRemove={() => setConfirm(f)}
+              />
             ))}
             {list.length === 0 && !canInvite && (
               <Empty text={nick ? "Никого не нашлось" : "Пока никого — найдите друзей по нику"} />
@@ -345,6 +389,14 @@ export default function FriendsPanel() {
           </>
         )}
       </div>
+
+      {profile && (
+        <ProfileModal
+          userId={profile.id}
+          username={profile.username}
+          onClose={() => setProfile(null)}
+        />
+      )}
 
       {settings && (
         <FriendSettingsModal

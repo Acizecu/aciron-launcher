@@ -54,26 +54,30 @@ fn map_token_fields(store: &mut Store, f: impl Fn(&str) -> String) {
 }
 
 fn load() -> Store {
-    match std::fs::read_to_string(store_file()) {
-        Ok(txt) => {
-            let mut store: Store = serde_json::from_str(&txt).unwrap_or_default();
+    let txt = match std::fs::read_to_string(store_file()) {
+        Ok(t) => t,
+        Err(_) => return Store::default(),
+    };
+    match serde_json::from_str::<Store>(&txt) {
+        Ok(mut store) => {
             map_token_fields(&mut store, crate::secret::decrypt);
             store
         }
-        Err(_) => Store::default(),
+        Err(e) => {
+
+            eprintln!("[accounts] не удалось разобрать accounts.json: {e}");
+            Store::default()
+        }
     }
 }
 
 fn save(store: &Store) -> Result<(), String> {
-    let file = store_file();
-    if let Some(p) = file.parent() {
-        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
-    }
 
     let mut enc = store.clone();
     map_token_fields(&mut enc, crate::secret::encrypt);
     let txt = serde_json::to_string_pretty(&enc).map_err(|e| e.to_string())?;
-    std::fs::write(file, txt).map_err(|e| e.to_string())
+
+    crate::atomic::write(&store_file(), &txt)
 }
 
 pub fn gen_id() -> String {

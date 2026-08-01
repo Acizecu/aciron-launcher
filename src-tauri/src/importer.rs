@@ -301,6 +301,10 @@ fn setup_marker() -> PathBuf {
 
 #[tauri::command]
 pub fn first_run_pending() -> bool {
+
+    if crate::instance::slot() > 1 {
+        return false;
+    }
     if setup_marker().exists() {
         return false;
     }

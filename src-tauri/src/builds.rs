@@ -171,12 +171,10 @@ pub fn load_builds() -> Vec<Build> {
 }
 
 fn save_builds(list: &[Build]) -> Result<(), String> {
-    let file = store_file();
-    if let Some(p) = file.parent() {
-        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
-    }
     let txt = serde_json::to_string_pretty(list).map_err(|e| e.to_string())?;
-    std::fs::write(file, txt).map_err(|e| e.to_string())
+    // Атомарно: список сборок читается на каждом экране, обрезанный файл
+    // выглядел бы как «сборок нет».
+    crate::atomic::write(&store_file(), &txt)
 }
 
 /// Папка данных конкретной сборки: <builds_dir>/<dir|id>.

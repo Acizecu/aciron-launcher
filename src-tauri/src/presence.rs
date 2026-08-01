@@ -132,10 +132,11 @@ async fn beat() {
     let act = snapshot();
     let priv_ = privacy().lock().map(|p| p.clone()).unwrap_or_default();
 
-    let raw_server = if act.in_game { server_from_log(&act.log_path) } else { None };
-    crate::realtime::set_server(raw_server.as_deref());
-
-    let server = if priv_.show_server { raw_server } else { None };
+    let server = if act.in_game && priv_.show_server {
+        server_from_log(&act.log_path)
+    } else {
+        None
+    };
     let opt = |s: String| -> Value {
         if s.is_empty() {
             Value::Null

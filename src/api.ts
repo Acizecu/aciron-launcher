@@ -20,8 +20,6 @@ export type Settings = {
   ui_scale: number;
 
   notify_sound: boolean;
-
-  launcher_badges: boolean;
 };
 
 export const isTauri =
@@ -38,7 +36,8 @@ type CacheBox<T> = { at: number; data: T; inflight?: Promise<T> };
 const _cache = new Map<string, CacheBox<unknown>>();
 const _subs = new Map<string, Set<() => void>>();
 
-const PERSIST = /^(wardrobe|skin-catalog|cape-catalog|license-capes|mc-versions|cats:|builds|friends)/;
+const PERSIST =
+  /^(wardrobe|skin-catalog|cape-catalog|license-capes|mc-versions|cats:|builds|friends|chat:)/;
 const LS_PREFIX = "acache:";
 
 function _loadLS<T>(key: string): CacheBox<T> | undefined {
@@ -59,6 +58,12 @@ function _saveLS(key: string, box: CacheBox<unknown>): void {
   } catch {
 
   }
+}
+
+export function cacheSet<T>(key: string, data: T): void {
+  const box = { at: Date.now(), data };
+  _cache.set(key, box);
+  _saveLS(key, box);
 }
 
 export function cachePeek<T>(key: string): T | undefined {
@@ -160,7 +165,6 @@ const mockSettings: Settings = {
   fullscreen: false,
   ui_scale: 100,
   notify_sound: true,
-  launcher_badges: true,
 };
 
 export async function getSettings(): Promise<Settings> {
@@ -509,6 +513,73 @@ export async function friendRemove(user_id: string): Promise<void> {
   if (!isTauri) return;
   await invoke("friend_remove", { userId: user_id });
   cacheBust("friends");
+}
+
+export type ChatMessage = {
+  id: string;
+  from: string;
+  to: string;
+  body: string;
+
+  at: number;
+  read: boolean;
+};
+
+export const MAX_MESSAGE = 2000;
+
+export async function chatHistory(user_id: string, before?: string): Promise<ChatMessage[]> {
+  if (!isTauri) return [];
+  return invoke<ChatMessage[]>("chat_history", { userId: user_id, before: before ?? null });
+}
+
+export async function chatSend(user_id: string, body: string): Promise<ChatMessage> {
+  if (!isTauri) throw new Error("Недоступно в браузерном превью");
+  return invoke<ChatMessage>("chat_send", { userId: user_id, body });
+}
+
+export type ChatOverview = {
+
+  unread: Record<string, number>;
+
+  last: Record<string, number>;
+};
+
+export async function chatOverview(): Promise<ChatOverview> {
+  if (!isTauri) return { unread: {}, last: {} };
+  return invoke<ChatOverview>("chat_overview");
+}
+
+export async function chatMarkRead(user_id: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("chat_mark_read", { userId: user_id });
+}
+
+export async function gameLogTail(game: string): Promise<string[]> {
+  if (!isTauri) return [];
+  return invoke<string[]>("game_log_tail", { game });
+}
+
+export async function chatDelete(ids: string[]): Promise<string[]> {
+  if (!isTauri) return [];
+  return invoke<string[]>("chat_delete", { ids });
+}
+
+export type FriendProfile = {
+  id: string;
+  username: string;
+  hasSkin: boolean;
+  hasCape: boolean;
+  skinModel: SkinModelId;
+  totalPlaytimeSecs: number;
+  createdAt: number;
+  presence: FriendPresence;
+};
+
+export async function friendProfile(user_id: string): Promise<FriendProfile> {
+  if (!isTauri) throw new Error("Недоступно в браузерном превью");
+  return cached(`profile:${user_id}`, 30_000, () =>
+    invoke<FriendProfile>("friend_profile", { userId: user_id })
+  );
 }
 
 export async function setPresenceStatus(status: PresenceStatus): Promise<void> {

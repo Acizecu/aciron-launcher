@@ -538,32 +538,6 @@ async fn prepare_and_launch(
     download_file_checked(&dl_client, client_url, &client_jar, client_sha1, client_size).await?;
     emit(app, "client", "Клиент загружен", 1, 1);
 
-    // 3.1) Официальные маппинги обфускации.
-    //
-    // Mojang публикует их начиная с 1.14.4 — по ним агент находит классы игры по
-    // настоящим именам. Без этого пришлось бы возить свою таблицу под каждую
-    // версию и чинить её после каждого обновления игры.
-    //
-    // Отсутствие маппингов НЕ ошибка: в 1.13.2 и старее их просто нет, и всё
-    // остальное обязано работать как раньше. По той же причине падение загрузки
-    // здесь не роняет запуск — потеряются только значки.
-    if let Some(m) = version_json["downloads"].get("client_mappings") {
-        if let Some(url) = m["url"].as_str().filter(|u| !u.is_empty()) {
-            let path = version_dir.join(format!("{version}-mappings.txt"));
-            if let Err(e) = download_file_checked(
-                &dl_client,
-                url,
-                &path,
-                m["sha1"].as_str(),
-                m["size"].as_u64(),
-            )
-            .await
-            {
-                eprintln!("[mappings] не загрузились ({e}) — значки в игре работать не будут");
-            }
-        }
-    }
-
     // 4) Библиотеки + нативы
     let empty = vec![];
     let libs = version_json["libraries"].as_array().unwrap_or(&empty);
@@ -816,26 +790,11 @@ async fn prepare_and_launch(
     // Aciron ID (аргумент — адрес сервиса), а если их нет — скин лицензионного
     // аккаунта Mojang по нику. Работает и на пиратке, свой сервер не нужен.
     if let Some(jar) = ensure_aciron_skins(&root) {
-        // Аргумент агента: адрес сервиса, а за ним — необязательные пары через '|'.
-        // Первым полем по-прежнему голый адрес, чтобы старый агент (у него в
-        // сборках на диске может лежать прошлая версия) продолжал понимать строку.
-        let mut arg = crate::aciron::base().to_string();
-        if settings.launcher_badges {
-            // Пак со значком кладём только когда значки включены: выключил —
-            // ничего лишнего в папку игры не попадает.
-            crate::resourcepack::ensure(&game_dir, version);
-            if let Some(bridge) = crate::bridge::endpoint() {
-                arg.push_str(&format!("|bridge={bridge}"));
-            }
-            arg.push_str(&format!("|badge={}", crate::resourcepack::BADGE_CODEPOINT));
-            // Маппинги есть не у всякой версии (1.13.2 и старее их не публикуют).
-            // Нет файла — агент просто не найдёт классы и значков не покажет.
-            let maps = version_dir.join(format!("{version}-mappings.txt"));
-            if maps.exists() {
-                arg.push_str(&format!("|mappings={}", maps.to_string_lossy()));
-            }
-        }
-        args.push(format!("-javaagent:{}={}", jar.to_string_lossy(), arg));
+        args.push(format!(
+            "-javaagent:{}={}",
+            jar.to_string_lossy(),
+            crate::aciron::base()
+        ));
     }
     // JVM-аргументы загрузчика модов (например -DFabricMcEmu) — до -cp и main class.
     args.extend(loader_jvm_args);
@@ -895,18 +854,17 @@ async fn prepare_and_launch(
 
     let mut cmd = std::process::Command::new(&java);
     cmd.args(&args).current_dir(&game_dir);
-    if let Some(f) = &log_file {
-        if let (Ok(o), Ok(e)) = (f.try_clone(), f.try_clone()) {
-            cmd.stdout(std::process::Stdio::from(o));
-            cmd.stderr(std::process::Stdio::from(e));
-        }
-    }
+    // Вывод забираем себе, а в файл пишем сами: так он попадает ещё и в живую
+    // консоль. Файл при этом остаётся прежним — на нём держатся показ причины
+    // краха и определение сервера для присутствия.
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    let child = cmd
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("Не удалось запустить Java: {e}"))?;
     let pid = child.id();
@@ -916,6 +874,16 @@ async fn prepare_and_launch(
         Some(b) => format!("build:{b}"),
         None => version.to_string(),
     };
+
+    // Оба потока пишут в один файл, поэтому он под мьютексом: иначе строки
+    // налезали бы друг на друга посреди записи.
+    let shared_log = std::sync::Arc::new(std::sync::Mutex::new(log_file));
+    if let Some(out) = child.stdout.take() {
+        crate::gamelog::pump(app.clone(), game_id.clone(), out, shared_log.clone());
+    }
+    if let Some(err) = child.stderr.take() {
+        crate::gamelog::pump(app.clone(), game_id.clone(), err, shared_log.clone());
+    }
     register_game(&game_id, pid);
     // Последние запуски (карточки на главной странице).
     crate::recents::touch(
@@ -977,6 +945,9 @@ async fn prepare_and_launch(
                 crate::presence::set_stopped();
             }
             let _ = app2.emit("game-exited", serde_json::json!({ "id": game_id2 }));
+            // Хвост лога больше не нужен: игра закрыта, а держать десятки
+            // тысяч строк на каждую запущенную за сессию сборку незачем.
+            crate::gamelog::clear(&game_id2);
             break;
         }
     });
@@ -1209,12 +1180,8 @@ fn read_installed() -> Vec<InstalledVersion> {
 }
 
 fn write_installed(list: &[InstalledVersion]) -> Result<(), String> {
-    let file = installed_file();
-    if let Some(p) = file.parent() {
-        std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
-    }
     let txt = serde_json::to_string_pretty(list).map_err(|e| e.to_string())?;
-    std::fs::write(file, txt).map_err(|e| e.to_string())
+    crate::atomic::write(&installed_file(), &txt)
 }
 
 #[tauri::command]

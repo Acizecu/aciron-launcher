@@ -144,6 +144,11 @@ type IdleAct = {
   leftArmX: number;
   rightArmZ: number;
   leftArmZ: number;
+
+  rightLegX: number;
+  leftLegX: number;
+
+  lift: number;
 };
 
 const REST: IdleAct = {
@@ -156,6 +161,9 @@ const REST: IdleAct = {
   leftArmX: 0,
   rightArmZ: 0,
   leftArmZ: 0,
+  rightLegX: 0,
+  leftLegX: 0,
+  lift: 0,
 };
 
 function idleAct(t: number): IdleAct {
@@ -167,12 +175,12 @@ function idleAct(t: number): IdleAct {
   const dir = noise(seg + 0.5) < 0.5 ? -1 : 1;
   const r = noise(seg + 1.5);
 
-  if (pick < 0.58) {
+  if (pick < 0.50) {
 
     const k = envelope(local, 0.75, 1.6);
     return { ...REST, headYaw: dir * (0.35 + r * 0.5) * k, headPitch: (r - 0.5) * 0.16 * k };
   }
-  if (pick < 0.72) {
+  if (pick < 0.62) {
 
     const k = envelope(local, 1.1, 2.4);
     return {
@@ -180,15 +188,17 @@ function idleAct(t: number): IdleAct {
       bodyRoll: dir * 0.06 * k,
       bodyYaw: dir * 0.05 * k,
       headRoll: -dir * 0.05 * k,
+      rightLegX: dir > 0 ? 0.1 * k : 0,
+      leftLegX: dir > 0 ? 0 : 0.1 * k,
     };
   }
-  if (pick < 0.82) {
+  if (pick < 0.70) {
 
     const k = envelope(local, 0.28, 0.12);
     const k2 = envelope(Math.max(0, local - 0.75), 0.28, 0.12);
     return { ...REST, headPitch: 0.22 * (k + k2 * 0.7) };
   }
-  if (pick < 0.92) {
+  if (pick < 0.76) {
 
     const k = envelope(local, 0.85, 1.9);
     const side = dir > 0 ? "right" : "left";
@@ -202,16 +212,57 @@ function idleAct(t: number): IdleAct {
       leftArmZ: side === "left" ? -0.3 * k : 0,
     };
   }
+  if (pick < 0.82) {
 
-  const k = envelope(local, 0.9, 1.2);
-  return {
-    ...REST,
-    rightArmX: 0.5 * k,
-    leftArmX: 0.5 * k,
-    rightArmZ: -0.22 * k,
-    leftArmZ: 0.22 * k,
-    headPitch: -0.16 * k,
-  };
+    const k = envelope(local, 0.9, 1.2);
+    return {
+      ...REST,
+      rightArmX: 0.5 * k,
+      leftArmX: 0.5 * k,
+      rightArmZ: -0.22 * k,
+      leftArmZ: 0.22 * k,
+      headPitch: -0.16 * k,
+    };
+  }
+  if (pick < 0.87) {
+
+    const k = envelope(local, 0.6, 1.0);
+    return { ...REST, lift: 0.9 * k, headPitch: -0.05 * k, rightLegX: -0.05 * k, leftLegX: -0.05 * k };
+  }
+  if (pick < 0.91) {
+
+    const k = envelope(local, 0.22, 0.18);
+    const k2 = envelope(Math.max(0, local - 0.45), 0.22, 0.18);
+    const swing = (k + k2) * 0.45;
+    return dir > 0
+      ? { ...REST, rightArmX: -swing, rightArmZ: 0.12 * swing }
+      : { ...REST, leftArmX: -swing, leftArmZ: -0.12 * swing };
+  }
+  if (pick < 0.95) {
+
+    const k = envelope(local, 1.0, 2.2);
+    return {
+      ...REST,
+      headYaw: dir * 1.05 * k,
+      headPitch: 0.06 * k,
+      bodyYaw: dir * 0.22 * k,
+      bodyRoll: -dir * 0.03 * k,
+    };
+  }
+  if (pick < 0.98) {
+
+    const k = envelope(local, 0.5, 0.9);
+    return {
+      ...REST,
+      rightLegX: dir > 0 ? -0.34 * k : 0.12 * k,
+      leftLegX: dir > 0 ? 0.12 * k : -0.34 * k,
+      bodyRoll: -dir * 0.03 * k,
+      lift: 0.3 * k,
+    };
+  }
+
+  const k = envelope(local, 1.2, 2.6);
+  return { ...REST, headRoll: dir * 0.34 * k, headYaw: dir * 0.12 * k, bodyRoll: dir * 0.02 * k };
 }
 
 export function idlePose(rig: PlayerRig, time: number) {
@@ -222,6 +273,8 @@ export function idlePose(rig: PlayerRig, time: number) {
   rig.bones.Body.position.y = rig.bones.Body.userData.baseY + breathe * 0.12;
   rig.bones.Body.rotation.z = act.bodyRoll;
   rig.bones.Body.rotation.y = act.bodyYaw;
+
+  rig.bones.Main.position.y = rig.bones.Main.userData.baseY + act.lift;
 
   rig.bones.Head.rotation.y = Math.sin(t * 0.5) * 0.06 + act.headYaw;
   rig.bones.Head.rotation.x = Math.sin(t * 0.7) * 0.04 + act.headPitch;
@@ -235,5 +288,8 @@ export function idlePose(rig: PlayerRig, time: number) {
   rig.bones.RightArm.rotation.x = -sway + act.rightArmX;
   rig.bones.LeftArm.rotation.x = sway + act.leftArmX;
 
-  rig.bones.Cape.rotation.x = 0.18 + Math.sin(t * 1.1) * 0.05;
+  rig.bones.RightLeg.rotation.x = sway * 0.5 + act.rightLegX;
+  rig.bones.LeftLeg.rotation.x = -sway * 0.5 + act.leftLegX;
+
+  rig.bones.Cape.rotation.x = 0.18 + Math.sin(t * 1.1) * 0.05 + act.lift * 0.06;
 }

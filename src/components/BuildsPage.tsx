@@ -29,6 +29,7 @@ import BuildCover from "./BuildCover";
 import BuildBanner from "./BuildBanner";
 import BuildSettingsModal from "./BuildSettingsModal";
 import ModpackBrowser from "./ModpackBrowser";
+import GameConsole from "./builds/GameConsole";
 import Pagination from "./Pagination";
 import { useToast } from "../ToastContext";
 import { useLauncherCtx } from "../LauncherContext";
@@ -72,6 +73,8 @@ function modPageTarget(
   return { hit, source, kind: m.kind };
 }
 
+type DetailTab = ContentKind | "console";
+
 const CONTENT_TABS: { id: ContentKind; label: string; icon: string; empty: string }[] = [
   { id: "mod", label: "Моды", icon: "fa-puzzle-piece", empty: "Список пока пуст.." },
   { id: "resourcepack", label: "Ресурспаки", icon: "fa-palette", empty: "Список пока пуст.." },
@@ -110,7 +113,7 @@ export default function BuildsPage() {
     null
   );
   const [tab, setTab] = useState<"mine" | "popular">("mine");
-  const [contentTab, setContentTab] = useState<ContentKind>("mod");
+  const [contentTab, setContentTab] = useState<DetailTab>("mod");
   const [modFilter, setModFilter] = useState<ModFilter>("all");
 
   const [updates, setUpdates] = useState<string[]>([]);
@@ -156,6 +159,18 @@ export default function BuildsPage() {
 
   useEffect(() => {
     refresh();
+  }, []);
+
+  useEffect(() => {
+    const reset = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== "builds") return;
+      setView("list");
+      setSelectedId(null);
+      void refresh();
+    };
+    window.addEventListener("aciron-nav-reset", reset);
+    return () => window.removeEventListener("aciron-nav-reset", reset);
+
   }, []);
 
   useFlip(gridRef, builds.map((b) => b.id).join());
@@ -459,9 +474,31 @@ export default function BuildsPage() {
               </button>
             );
           })}
+
+          {}
+          <button
+            onClick={() => setContentTab("console")}
+            className={`flex items-baseline gap-1.5 text-[20px] font-light leading-none transition-colors ${
+              contentTab === "console" ? "text-text" : "text-muted hover:text-text"
+            }`}
+          >
+            <span className="flex items-center gap-[6px]">
+              Консоль
+              {isRunning(`build:${selected.id}`) && (
+                <span className="h-2 w-2 rounded-full bg-[#4ade80]" title="Игра запущена" />
+              )}
+            </span>
+          </button>
         </div>
 
-        {(() => {
+        {contentTab === "console" && (
+          <GameConsole
+            gameId={`build:${selected.id}`}
+            running={isRunning(`build:${selected.id}`)}
+          />
+        )}
+
+        {contentTab !== "console" && (() => {
           const meta = CONTENT_TABS.find((t) => t.id === contentTab)!;
           const all = selected.mods.filter((m) => m.kind === contentTab);
           const on = all.filter((m) => m.enabled).length;

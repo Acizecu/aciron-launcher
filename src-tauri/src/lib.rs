@@ -1,20 +1,22 @@
 mod accounts;
 mod aciron;
-mod bridge;
+mod atomic;
 mod builds;
 mod cancel;
+mod chat;
 mod curseforge;
 mod discord;
 mod forge;
 mod ftb;
+mod gamelog;
 mod importer;
+mod instance;
 mod launcher;
 mod microsoft;
 mod modrinth;
 mod presence;
 mod realtime;
 mod recents;
-mod resourcepack;
 mod secret;
 mod servers;
 mod settings;
@@ -24,16 +26,19 @@ mod wardrobe;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
 
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            use tauri::Manager;
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.unminimize();
-                let _ = w.show();
-                let _ = w.set_focus();
-            }
-        }))
+    let Some(slot) = instance::acquire() else {
+        eprintln!(
+            "[instance] уже открыто {} окна лаунчера — больше не запускаем",
+            instance::MAX_INSTANCES
+        );
+        return;
+    };
+    if slot > 1 {
+        eprintln!("[instance] второе окно: свой профиль в {:?}", settings::data_root());
+    }
+
+    tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -45,8 +50,6 @@ pub fn run() {
             tauri::async_runtime::spawn(presence::heartbeat_loop());
 
             tauri::async_runtime::spawn(realtime::connect_loop(app.handle().clone()));
-
-            tauri::async_runtime::spawn(bridge::serve());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -63,6 +66,7 @@ pub fn run() {
             launcher::launch_game,
             launcher::launch_build,
             launcher::stop_game,
+            gamelog::game_log_tail,
             launcher::list_versions,
             launcher::get_installed_versions,
             recents::get_recents,
@@ -87,6 +91,12 @@ pub fn run() {
             social::set_presence_status,
             social::set_accept_requests,
             realtime::realtime_connected,
+            chat::chat_history,
+            chat::chat_send,
+            chat::chat_overview,
+            chat::chat_mark_read,
+            chat::chat_delete,
+            chat::friend_profile,
             wardrobe::wardrobe_list,
             wardrobe::wardrobe_add,
             wardrobe::read_texture,

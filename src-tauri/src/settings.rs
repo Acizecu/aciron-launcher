@@ -10,6 +10,18 @@ pub fn launcher_root() -> PathBuf {
 }
 
 pub fn data_root() -> PathBuf {
+    let base = base_data_root();
+    match crate::instance::data_suffix() {
+        Some(sub) => {
+            let dir = base.join(sub);
+            let _ = std::fs::create_dir_all(&dir);
+            dir
+        }
+        None => base,
+    }
+}
+
+fn base_data_root() -> PathBuf {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             if is_writable(dir) {
@@ -41,6 +53,10 @@ const DATA_FILES: [&str; 5] = [
 
 #[tauri::command]
 pub fn data_migration_pending() -> bool {
+
+    if crate::instance::slot() > 1 {
+        return false;
+    }
     let old = launcher_root();
     let new = data_root();
     if old == new {
@@ -133,9 +149,6 @@ pub struct Settings {
 
     #[serde(default = "default_true")]
     pub notify_sound: bool,
-
-    #[serde(default = "default_true")]
-    pub launcher_badges: bool,
 }
 
 fn default_ui_scale() -> u32 {
@@ -167,7 +180,6 @@ impl Default for Settings {
             fullscreen: false,
             ui_scale: 100,
             notify_sound: true,
-            launcher_badges: true,
         }
     }
 }
@@ -251,12 +263,8 @@ pub fn get_settings() -> Settings {
 #[tauri::command]
 pub fn save_settings(settings: Settings) -> Result<(), String> {
     ensure_dirs(&settings);
-    let file = settings_file();
-    if let Some(parent) = file.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
     let txt = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    std::fs::write(&file, txt).map_err(|e| e.to_string())?;
+    crate::atomic::write(&settings_file(), &txt)?;
 
     crate::discord::set_enabled(settings.discord_rpc);
     Ok(())
