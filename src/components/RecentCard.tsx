@@ -10,6 +10,15 @@ function playtime(secs: number): string {
   return `${Math.floor(secs / 3600)}ч.`;
 }
 
+/** Переход к сборке из карточки последнего запуска. id рекента у сборок = "build:<id>";
+ *  кладём чистый id в window (BuildsPage читает его при монтировании — она размонтирована,
+ *  пока мы на главной) и просим App переключиться на вкладку «Сборки». */
+function goToBuild(recentId: string) {
+  const id = recentId.startsWith("build:") ? recentId.slice("build:".length) : recentId;
+  (window as unknown as { __acironOpenBuild?: string }).__acironOpenBuild = id;
+  window.dispatchEvent(new CustomEvent("aciron-open-build", { detail: id }));
+}
+
 export default function RecentCard({
   recent,
   index = 0,
@@ -64,6 +73,15 @@ export default function RecentCard({
           </div>
           <div className="text-[10px] text-[#818181]">Вы играли {playtime(recent.playtime_secs)}</div>
         </div>
+        {recent.kind === "build" && (
+          <button
+            onClick={() => goToBuild(recent.id)}
+            title="Перейти к сборке"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-white/10 text-white/80 transition-colors hover:bg-white/20"
+          >
+            <i className="fa-solid fa-arrow-up-right-from-square text-xs" />
+          </button>
+        )}
         {running ? (
           <button
             onClick={() => stop(recent.id)}

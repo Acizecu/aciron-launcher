@@ -97,6 +97,15 @@ function AppInner() {
     return () => window.removeEventListener("aciron-open-chat", open);
   }, []);
 
+  // Переход к сборке из «Последних запусков»: RecentCard кладёт id в window и шлёт
+  // событие; мы переключаемся на вкладку «Сборки», а BuildsPage при монтировании
+  // прочитает window.__acironOpenBuild и откроет нужную сборку.
+  useEffect(() => {
+    const open = () => setActive("builds");
+    window.addEventListener("aciron-open-build", open);
+    return () => window.removeEventListener("aciron-open-build", open);
+  }, []);
+
   useEffect(() => {
     const onScale = (e: Event) => setUiScale((e as CustomEvent).detail || 100);
     window.addEventListener("aciron-ui-scale", onScale);
