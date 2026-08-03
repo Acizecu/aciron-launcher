@@ -221,16 +221,6 @@ const ModRow = memo(function ModRow({
   );
 });
 
-function verTag(type: string): string {
-  return type === "snapshot"
-    ? "Snapshot"
-    : type === "old_beta"
-    ? "Beta"
-    : type === "old_alpha"
-    ? "Alpha"
-    : "Release";
-}
-
 export default function BuildsPage() {
   const [builds, setBuilds] = useState<Build[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
