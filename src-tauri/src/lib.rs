@@ -91,6 +91,7 @@ pub fn run() {
             social::set_presence_status,
             social::set_accept_requests,
             realtime::realtime_connected,
+            realtime::realtime_send_typing,
             chat::chat_history,
             chat::chat_send,
             chat::chat_overview,

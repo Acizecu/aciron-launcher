@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "./Head";
 import { friendSkinUrl, type ChatMessage, type Friend } from "../api";
-import { onMessage } from "../chat";
+import { onMessage, parseForward } from "../chat";
 import { useFriends } from "../friends";
 import { playNotification } from "../sound";
 import { cardInDelay } from "../anim";
@@ -62,7 +62,9 @@ function Toast({
           {friend?.username ?? "Новое сообщение"}
         </div>
         {}
-        <div className="mt-0.5 line-clamp-2 text-[11px] text-muted">{item.msg.body}</div>
+        <div className="mt-0.5 line-clamp-2 text-[11px] text-muted">
+          {parseForward(item.msg.body).text}
+        </div>
       </div>
     </button>
   );
@@ -77,6 +79,8 @@ export default function ChatToasts({
 }) {
   const [queue, setQueue] = useState<Item[]>([]);
   const { data } = useFriends();
+  // «Не беспокоить»: собственный статус присутствия dnd глушит всплывашки и звук.
+  const dnd = data?.me?.status === "dnd";
 
   // Один раз строим индекс id→friend вместо линейного .find() в каждом тосте.
   const byId = useMemo(() => {
@@ -88,10 +92,12 @@ export default function ChatToasts({
   useEffect(() => {
     let n = 0;
     return onMessage((msg, from) => {
+      // «Не беспокоить»: не показываем всплывашку и не пищим.
+      if (dnd) return;
       setQueue((q) => [...q, { key: ++n, msg, from }]);
       playNotification(sound);
     });
-  }, [sound]);
+  }, [sound, dnd]);
 
   if (queue.length === 0) return null;
 

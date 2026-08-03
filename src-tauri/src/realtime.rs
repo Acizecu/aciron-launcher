@@ -3,8 +3,9 @@
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 
 #[derive(Default)]
 struct State {
@@ -14,6 +15,33 @@ struct State {
 fn state() -> &'static Mutex<State> {
     static S: OnceLock<Mutex<State>> = OnceLock::new();
     S.get_or_init(|| Mutex::new(State::default()))
+}
+
+/// Исходящая очередь в активный сокет. Раньше write-половина сокета отбрасывалась
+/// (клиент был read-only). Теперь при подключении отдельная задача-писатель владеет
+/// write-половиной и читает JSON-кадры из этого канала; команды (typing и т.п.) шлют
+/// строки сюда, не деля сложный SplitSink и не конкурируя с обработкой ping. При
+/// обрыве соединения sender обнуляется, и отправка становится no-op.
+fn outbox() -> &'static Mutex<Option<UnboundedSender<String>>> {
+    static O: OnceLock<Mutex<Option<UnboundedSender<String>>>> = OnceLock::new();
+    O.get_or_init(|| Mutex::new(None))
+}
+
+/// Шлёт JSON-кадр в сокет, если соединение живо (best-effort).
+fn ws_send(frame: String) {
+    if let Ok(o) = outbox().lock() {
+        if let Some(tx) = o.as_ref() {
+            let _ = tx.send(frame);
+        }
+    }
+}
+
+/// Сообщить собеседнику, что мы печатаем. Best-effort: если сокет не подключён —
+/// молча ничего не делаем (typing не критичен). Сервер должен ретранслировать
+/// кадр {t:"typing", to} адресату как {t:"typing", from:<наш id>} (см. спеку).
+#[tauri::command]
+pub fn realtime_send_typing(user_id: String) {
+    ws_send(serde_json::json!({ "t": "typing", "to": user_id }).to_string());
 }
 
 /// Живо ли соединение. Панель друзей по этому решает, нужен ли запасной опрос.
@@ -63,6 +91,11 @@ fn apply_message(app: &AppHandle, text: &str) {
         "chat-read" => {
             let _ = app.emit("chat-read", v["by"].clone());
         }
+        // Собеседник печатает. Сервер шлёт {t:"typing", from:<id отправителя>};
+        // фронт ключует индикатор по `with` (id собеседника), как и chat-message.
+        "typing" => {
+            let _ = app.emit("chat-typing", serde_json::json!({ "with": v["from"].clone() }));
+        }
         // Сообщения удалены — идентификаторы без указания переписки: клиент
         // убирает их везде, где найдёт, и одним событием закрываются удаления
         // сразу из нескольких разговоров.
@@ -86,7 +119,20 @@ async fn run_once(app: &AppHandle, token: &str) -> Result<(), String> {
     let (stream, _) = tokio_tungstenite::connect_async(req)
         .await
         .map_err(|e| e.to_string())?;
-    let (_write, mut read) = stream.split();
+    let (mut write, mut read) = stream.split();
+
+    // Задача-писатель владеет write-половиной и шлёт кадры из канала outbox.
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    if let Ok(mut o) = outbox().lock() {
+        *o = Some(tx);
+    }
+    let writer = tokio::spawn(async move {
+        while let Some(frame) = rx.recv().await {
+            if write.send(Message::Text(frame)).await.is_err() {
+                break;
+            }
+        }
+    });
 
     if let Ok(mut s) = state().lock() {
         s.connected = true;
@@ -106,6 +152,13 @@ async fn run_once(app: &AppHandle, token: &str) -> Result<(), String> {
             _ => {}
         }
     };
+
+    // Соединение закрылось: обнуляем outbox (дальнейшие send станут no-op) и
+    // гасим задачу-писателя, чтобы она не висела на мёртвом сокете.
+    if let Ok(mut o) = outbox().lock() {
+        *o = None;
+    }
+    writer.abort();
 
     if let Ok(mut s) = state().lock() {
         s.connected = false;

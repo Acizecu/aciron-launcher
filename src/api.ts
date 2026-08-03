@@ -554,6 +554,18 @@ export async function chatMarkRead(user_id: string): Promise<void> {
   await invoke("chat_mark_read", { userId: user_id });
 }
 
+// Сообщить собеседнику, что мы печатаем (real-time «печатает…»). Best-effort:
+// уходит в вебсокет через Rust; сервер ретранслирует адресату. Ошибки глушим —
+// индикатор набора некритичен.
+export async function sendTyping(user_id: string): Promise<void> {
+  if (!isTauri) return;
+  try {
+    await invoke("realtime_send_typing", { userId: user_id });
+  } catch {
+    /* typing некритичен */
+  }
+}
+
 export async function gameLogTail(game: string): Promise<string[]> {
   if (!isTauri) return [];
   return invoke<string[]>("game_log_tail", { game });

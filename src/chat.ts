@@ -9,6 +9,7 @@ import {
   chatOverview,
   chatSend,
   isTauri,
+  sendTyping,
   type ChatMessage,
 } from "./api";
 
@@ -40,9 +41,12 @@ type State = {
   unread: Record<string, number>;
 
   last: Record<string, number>;
+
+  // userId → печатает (true, пока не истёк TTL). Эфемерно, в кэш не пишется.
+  typing: Record<string, boolean>;
 };
 
-let state: State = { byUser: {}, unread: {}, last: {} };
+let state: State = { byUser: {}, unread: {}, last: {}, typing: {} };
 const subs = new Set<() => void>();
 
 function emit(next: Partial<State>) {
@@ -127,6 +131,32 @@ export async function loadOlder(userId: string): Promise<void> {
 }
 
 const tempId = () => `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+// --- Пересылка с атрибуцией «переслано от <кого>» ---
+// Атрибуцию исходного автора кодируем ПРЯМО в тело сообщения приватными
+// маркерами (Private Use Area). Причина: сервер хранит и возвращает тело
+// как есть (история + realtime прокидывает message вербатим), поэтому шапка
+// «Переслано от…» переживает перезагрузку и доезжает получателю БЕЗ новых
+// серверных полей. Клиент парсит маркер и рисует стилизованную шапку; маркеры
+// невидимы и не являются пробелами (trim их не срежет).
+const FWD_A = "";
+const FWD_B = "";
+
+export function encodeForward(fromName: string, body: string): string {
+  // Пересылка уже пересланного сохраняет ПЕРВОГО автора: если тело уже помечено,
+  // не оборачиваем повторно — отдаём как есть.
+  if (parseForward(body).forwardedFrom) return body;
+  const name = fromName.replace(FWD_A, "").replace(FWD_B, "").trim() || "неизвестно";
+  return `${FWD_A}${name}${FWD_B}${body}`;
+}
+
+export function parseForward(body: string): { forwardedFrom?: string; text: string } {
+  if (body.startsWith(FWD_A)) {
+    const end = body.indexOf(FWD_B);
+    if (end > 1) return { forwardedFrom: body.slice(1, end), text: body.slice(end + 1) };
+  }
+  return { text: body };
+}
 
 export async function send(userId: string, body: string): Promise<void> {
   const text = body.trim();
@@ -254,6 +284,34 @@ function markTheirsRead(byUserId: string) {
   patch(byUserId, { messages: conv.messages.map((m) => ({ ...m, read: true })) });
 }
 
+// --- «Печатает…» ---
+// Индикатор эфемерный: приходит по вебсокету (событие chat-typing от Rust),
+// держится TTL и сам гаснет, если новых сигналов нет.
+const TYPING_TTL = 5000;
+const typingTimers: Record<string, number> = {};
+
+function setTyping(other: string | undefined) {
+  if (!other) return;
+  if (!state.typing[other]) emit({ typing: { ...state.typing, [other]: true } });
+  if (typingTimers[other]) clearTimeout(typingTimers[other]);
+  typingTimers[other] = window.setTimeout(() => {
+    delete typingTimers[other];
+    const rest = { ...state.typing };
+    delete rest[other];
+    emit({ typing: rest });
+  }, TYPING_TTL);
+}
+
+// Троттлированное уведомление сервера, что МЫ печатаем: не чаще раза в 2.5с на
+// собеседника (сервер тоже троттлит и ретранслирует только друзьям).
+const lastTyped: Record<string, number> = {};
+export function notifyTyping(userId: string) {
+  const now = Date.now();
+  if (now - (lastTyped[userId] ?? 0) < 2500) return;
+  lastTyped[userId] = now;
+  void sendTyping(userId);
+}
+
 let unlisten: (() => void) | undefined;
 
 const arrivals = new Set<(m: ChatMessage, from: string) => void>();
@@ -277,12 +335,14 @@ function listen(): () => void {
     });
     const b = await on<string>("chat-read", (e) => markTheirsRead(e.payload));
     const c = await on<string[]>("chat-deleted", (e) => dropIds(e.payload ?? []));
+    const d = await on<{ with: string }>("chat-typing", (e) => setTyping(e.payload?.with));
     if (dead) {
       a();
       b();
       c();
+      d();
     } else {
-      offs.push(a, b, c);
+      offs.push(a, b, c, d);
     }
   })();
   return () => {
@@ -332,6 +392,16 @@ export function useUnread(): Record<string, number> {
     subscribe,
     () => state.unread,
     () => state.unread
+  );
+}
+
+// Печатает ли собеседник прямо сейчас. Возвращает булев срез, поэтому ре-рендер
+// только при смене состояния именно этого пользователя.
+export function useTyping(userId: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => !!state.typing[userId],
+    () => false
   );
 }
 

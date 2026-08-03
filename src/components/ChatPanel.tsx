@@ -3,17 +3,21 @@ import Head from "./Head";
 import ProfileModal from "./ProfileModal";
 import MessageMenu, { type MenuItem } from "./chat/MessageMenu";
 import ForwardModal from "./chat/ForwardModal";
-import { friendSkinUrl, MAX_MESSAGE, type Friend } from "../api";
+import { friendSkinUrl, getAccounts, MAX_MESSAGE, type Friend } from "../api";
 import { PRESENCE_COLOR, presenceText } from "../friends";
 import {
   discard,
+  encodeForward,
   loadOlder,
+  notifyTyping,
   openConversation,
+  parseForward,
   remove,
   retry,
   send,
   setOpenConversation,
   useConversation,
+  useTyping,
   type LocalMessage,
 } from "../chat";
 import { useToast } from "../ToastContext";
@@ -96,6 +100,8 @@ const Bubble = memo(function Bubble({
   onToggle: (id: string) => void;
   onMenu: (e: React.MouseEvent, msg: LocalMessage) => void;
 }) {
+  // Разбор маркера пересылки: forwardedFrom → шапка «Переслано от…», text → тело.
+  const fwd = parseForward(msg.body);
   return (
     <div
       onContextMenu={(e) => onMenu(e, msg)}
@@ -121,7 +127,17 @@ const Bubble = memo(function Bubble({
         }`}
       >
         {}
-        <div className="whitespace-pre-wrap break-words text-sm leading-snug">{msg.body}</div>
+        {fwd.forwardedFrom && (
+          <div
+            className={`mb-1 flex items-center gap-1 border-l-2 pl-1.5 text-[11px] ${
+              mine ? "border-bg/40 text-bg/70" : "border-accent/50 text-muted"
+            }`}
+          >
+            <i className="fa-solid fa-share text-[9px]" />
+            Переслано от {fwd.forwardedFrom}
+          </div>
+        )}
+        <div className="whitespace-pre-wrap break-words text-sm leading-snug">{fwd.text}</div>
         <div
           className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${
             mine ? "text-bg/60" : "text-muted"
@@ -144,10 +160,12 @@ const Composer = memo(function Composer({
   username,
   sending,
   onSubmit,
+  onTyping,
 }: {
   username: string;
   sending: boolean;
   onSubmit: (text: string) => void | Promise<void>;
+  onTyping?: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const over = draft.length > MAX_MESSAGE;
@@ -167,7 +185,11 @@ const Composer = memo(function Composer({
         <textarea
           value={draft}
           rows={1}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            // Сообщаем собеседнику о наборе (внутри троттлинг ~2.5с).
+            if (e.target.value.trim()) onTyping?.();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -197,6 +219,7 @@ const Composer = memo(function Composer({
 
 export default function ChatPanel({ friend }: { friend: Friend }) {
   const conv = useConversation(friend.id);
+  const typing = useTyping(friend.id);
   const [sending, setSending] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -378,7 +401,13 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
                 style={{ background: PRESENCE_COLOR[friend.presence.state] }}
               />
             </div>
-            <div className="truncate text-[11px] text-muted">{presenceText(friend.presence)}</div>
+            <div className="truncate text-[11px]">
+              {typing ? (
+                <span className="text-accent">печатает…</span>
+              ) : (
+                <span className="text-muted">{presenceText(friend.presence)}</span>
+              )}
+            </div>
           </div>
         </button>
 
@@ -462,7 +491,13 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       </div>
 
       {}
-      <Composer key={friend.id} username={friend.username} sending={sending} onSubmit={submit} />
+      <Composer
+        key={friend.id}
+        username={friend.username}
+        sending={sending}
+        onSubmit={submit}
+        onTyping={() => notifyTyping(friend.id)}
+      />
 
       {menu && <MessageMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
       {forward && (
@@ -470,13 +505,27 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
           count={forward.length}
           onClose={() => setForward(null)}
           onPick={async (to) => {
-            const texts = conv.messages.filter((m) => forward.includes(m.id)).map((m) => m.body);
+            const msgs = conv.messages.filter((m) => forward.includes(m.id));
             setForward(null);
             setSelected(new Set());
+            // Моё отображаемое имя (для пересылки СВОИХ сообщений) — один раз.
+            let myName = "Вы";
             try {
-
-              for (const t of texts) await send(to, t);
-              toast(`Переслано: ${texts.length}`, "success");
+              const acc = await getAccounts();
+              const me = acc.accounts.find((a) => a.id === acc.active);
+              if (me) myName = me.aciron_name || me.username;
+            } catch {
+              /* имя не критично — оставим «Вы» */
+            }
+            try {
+              for (const m of msgs) {
+                // Автор: сообщение собеседника → его ник; иначе моё → myName.
+                // Пересылка пересланного сохранит ПЕРВОГО автора (encodeForward
+                // не оборачивает уже помеченное тело повторно).
+                const author = m.from === friend.id ? friend.username : myName;
+                await send(to, encodeForward(author, m.body));
+              }
+              toast(`Переслано: ${msgs.length}`, "success");
             } catch (e) {
               toast(String(e).replace(/^Error:\s*/, ""), "error");
             }
