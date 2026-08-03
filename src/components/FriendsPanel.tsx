@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import ProfileModal from "./ProfileModal";
 import Head from "./Head";
 import ConfirmModal from "./ConfirmModal";
@@ -40,7 +40,7 @@ function human(e: unknown): string {
   return m;
 }
 
-function IconBtn({
+const IconBtn = memo(function IconBtn({
   icon,
   title,
   color,
@@ -61,9 +61,13 @@ function IconBtn({
       <i className={`fa-solid ${icon} text-xs`} />
     </button>
   );
-}
+});
 
-function FriendRow({
+// memo + колбэки принимают f/f.id, поэтому родитель передаёт ОДИН стабильный
+// набор хендлеров вместо трёх свежих inline-стрелок на строку каждый рендер.
+// Так строки не перерисовываются на каждое нажатие в поиске / событие чата,
+// если сами пропсы строки (f, unread) не изменились.
+const FriendRow = memo(function FriendRow({
   f,
   unread,
   onChat,
@@ -72,9 +76,9 @@ function FriendRow({
 }: {
   f: Friend;
   unread: number;
-  onChat: () => void;
-  onProfile: () => void;
-  onRemove: () => void;
+  onChat: (id: string) => void;
+  onProfile: (f: Friend) => void;
+  onRemove: (f: Friend) => void;
 }) {
   const color = PRESENCE_COLOR[f.presence.state];
   const playing = f.presence.inGame;
@@ -82,7 +86,7 @@ function FriendRow({
     <div className="group flex items-center gap-3 rounded-xl bg-card p-2.5">
       {}
       <button
-        onClick={onProfile}
+        onClick={() => onProfile(f)}
         title="Открыть профиль"
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
@@ -117,14 +121,17 @@ function FriendRow({
       )}
       {}
       <div className="hidden shrink-0 gap-1 group-hover:flex">
-        <IconBtn icon="fa-comment" title="Написать" onClick={onChat} />
-        <IconBtn icon="fa-user-minus" title="Удалить из друзей" onClick={onRemove} />
+        <IconBtn icon="fa-comment" title="Написать" onClick={() => onChat(f.id)} />
+        <IconBtn icon="fa-user-minus" title="Удалить из друзей" onClick={() => onRemove(f)} />
       </div>
     </div>
   );
-}
+});
 
-function PendingRow({
+// memo + колбэки принимают u -> родитель передаёт стабильные хендлеры вместо
+// свежих inline-стрелок на строку. Строки заявок не перерисовываются на
+// нажатия в поиске / churn чата, если их пропсы не менялись.
+const PendingRow = memo(function PendingRow({
   u,
   incoming,
   onAccept,
@@ -132,8 +139,8 @@ function PendingRow({
 }: {
   u: PendingUser;
   incoming: boolean;
-  onAccept: () => void;
-  onDecline: () => void;
+  onAccept: (u: PendingUser) => void;
+  onDecline: (u: PendingUser) => void;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-xl bg-card p-2.5">
@@ -146,19 +153,19 @@ function PendingRow({
         <>
           <button
             title="Принять"
-            onClick={onAccept}
+            onClick={() => onAccept(u)}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-bg transition-colors hover:bg-accent-hover"
           >
             <i className="fa-solid fa-check text-xs" />
           </button>
-          <IconBtn icon="fa-xmark" title="Отклонить" onClick={onDecline} />
+          <IconBtn icon="fa-xmark" title="Отклонить" onClick={() => onDecline(u)} />
         </>
       ) : (
-        <IconBtn icon="fa-xmark" title="Отменить заявку" onClick={onDecline} />
+        <IconBtn icon="fa-xmark" title="Отменить заявку" onClick={() => onDecline(u)} />
       )}
     </div>
   );
-}
+});
 
 function Empty({ text }: { text: string }) {
   return <div className="rounded-xl  p-4 text-center text-xs text-muted">{text}</div>;
@@ -170,8 +177,12 @@ export default function FriendsPanel() {
 
   const [profile, setProfile] = useState<Friend | null>(null);
 
-  const openChat = (userId: string) =>
-    window.dispatchEvent(new CustomEvent("aciron-open-chat", { detail: userId }));
+  // Стабильный хендлер — чтобы memo-строки не перерисовывались из-за нового
+  // inline-колбэка на каждый рендер панели.
+  const openChat = useCallback(
+    (userId: string) => window.dispatchEvent(new CustomEvent("aciron-open-chat", { detail: userId })),
+    []
+  );
   const [query, setQuery] = useState("");
   const [settings, setSettings] = useState(false);
   const [signIn, setSignIn] = useState(false);
@@ -186,29 +197,74 @@ export default function FriendsPanel() {
   }, [prefs.showGame, prefs.showServer]);
 
   const nick = query.trim();
-  const friends = data ? sortFriends(data.friends) : [];
-  const list = friends.filter((f) => f.username.toLowerCase().includes(nick.toLowerCase()));
+  // Мемоизируем сортировку/фильтрацию: раньше sortFriends (аллокация+sort),
+  // .filter и .some прогонялись на КАЖДЫЙ рендер — а панель ре-рендерится на
+  // каждое нажатие в поиске и на любое событие чата (useChat подписан на весь
+  // стор). Теперь sorted пересчитывается только при смене data.friends, а
+  // list/canInvite — при смене sorted или nick. Результат тот же.
+  const friends = useMemo(() => (data ? sortFriends(data.friends) : []), [data?.friends]);
+  const list = useMemo(
+    () => friends.filter((f) => f.username.toLowerCase().includes(nick.toLowerCase())),
+    [friends, nick]
+  );
   const incoming = data?.incoming ?? [];
   const outgoing = data?.outgoing ?? [];
 
-  const canInvite =
-    NICK_RE.test(nick) && !friends.some((f) => f.username.toLowerCase() === nick.toLowerCase());
+  const canInvite = useMemo(
+    () => NICK_RE.test(nick) && !friends.some((f) => f.username.toLowerCase() === nick.toLowerCase()),
+    [friends, nick]
+  );
 
-  const actOpt = async (
-    mutate: (d: FriendsData) => FriendsData,
-    fn: () => Promise<unknown>,
-    ok?: string
-  ) => {
-    const prev = patchFriends(mutate);
-    try {
-      await fn();
-      if (ok) toast(ok, "success");
-      refreshFriends();
-    } catch (e) {
-      restoreFriends(prev);
-      toast(human(e), "error");
-    }
-  };
+  // useCallback (toast стабилен из контекста) — чтобы производные стабильные
+  // хендлеры строк ниже не пересоздавались каждый рендер.
+  const actOpt = useCallback(
+    async (
+      mutate: (d: FriendsData) => FriendsData,
+      fn: () => Promise<unknown>,
+      ok?: string
+    ) => {
+      const prev = patchFriends(mutate);
+      try {
+        await fn();
+        if (ok) toast(ok, "success");
+        refreshFriends();
+      } catch (e) {
+        restoreFriends(prev);
+        toast(human(e), "error");
+      }
+    },
+    [toast]
+  );
+
+  // Стабильные хендлеры строк-заявок: те же оптимистичные мутации, что и раньше
+  // (фильтр по u.id из incoming/outgoing), но одна ссылка на все строки, чтобы
+  // memo(PendingRow) реально срезал ре-рендеры. Поведение 1-в-1.
+  const acceptIncoming = useCallback(
+    (u: PendingUser) =>
+      actOpt(
+        (d) => ({ ...d, incoming: d.incoming.filter((x) => x.id !== u.id) }),
+        () => friendRespond(u.id, true),
+        `${u.username} теперь у вас в друзьях`
+      ),
+    [actOpt]
+  );
+  const declineIncoming = useCallback(
+    (u: PendingUser) =>
+      actOpt(
+        (d) => ({ ...d, incoming: d.incoming.filter((x) => x.id !== u.id) }),
+        () => friendRespond(u.id, false)
+      ),
+    [actOpt]
+  );
+  const cancelOutgoing = useCallback(
+    (u: PendingUser) =>
+      actOpt(
+        (d) => ({ ...d, outgoing: d.outgoing.filter((x) => x.id !== u.id) }),
+        () => friendCancel(u.id)
+      ),
+    [actOpt]
+  );
+  const noop = useCallback(() => {}, []);
 
   const invite = async () => {
     if (!canInvite || adding) return;
@@ -324,19 +380,8 @@ export default function FriendsPanel() {
                   key={u.id}
                   u={u}
                   incoming
-                  onAccept={() =>
-                    actOpt(
-                      (d) => ({ ...d, incoming: d.incoming.filter((x) => x.id !== u.id) }),
-                      () => friendRespond(u.id, true),
-                      `${u.username} теперь у вас в друзьях`
-                    )
-                  }
-                  onDecline={() =>
-                    actOpt(
-                      (d) => ({ ...d, incoming: d.incoming.filter((x) => x.id !== u.id) }),
-                      () => friendRespond(u.id, false)
-                    )
-                  }
+                  onAccept={acceptIncoming}
+                  onDecline={declineIncoming}
                 />
               ))}
               {outgoing.map((u) => (
@@ -344,13 +389,8 @@ export default function FriendsPanel() {
                   key={u.id}
                   u={u}
                   incoming={false}
-                  onAccept={() => {}}
-                  onDecline={() =>
-                    actOpt(
-                      (d) => ({ ...d, outgoing: d.outgoing.filter((x) => x.id !== u.id) }),
-                      () => friendCancel(u.id)
-                    )
-                  }
+                  onAccept={noop}
+                  onDecline={cancelOutgoing}
                 />
               ))}
             </>
@@ -362,9 +402,9 @@ export default function FriendsPanel() {
                 key={f.id}
                 f={f}
                 unread={unread[f.id] ?? 0}
-                onChat={() => openChat(f.id)}
-                onProfile={() => setProfile(f)}
-                onRemove={() => setConfirm(f)}
+                onChat={openChat}
+                onProfile={setProfile}
+                onRemove={setConfirm}
               />
             ))}
             {list.length === 0 && !canInvite && (

@@ -1,17 +1,32 @@
 use serde_json::{json, Value};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 const MCSTATUS: &str = "https://api.mcstatus.io/v2/status/java";
 
+// B8: один ленивый общий Client вместо нового на каждый запрос статуса (образец —
+// modrinth.rs/aciron.rs). Список серверов рендерит по строке-компоненту, каждая
+// зовёт server_status — раньше это давало N холодных TLS-хендшейков к одному
+// api.mcstatus.io; общий клиент переиспользует keep-alive/TLS-пул. Отдельный
+// статик, т.к. user-agent тут другой ("...(aciron.pro)"), чтобы сохранить
+// поведение 1-в-1. UA и таймауты те же.
+fn http() -> Result<reqwest::Client, String> {
+    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .user_agent("AcironLauncher/0.1 (aciron.pro)")
+                .connect_timeout(Duration::from_secs(8))
+                .timeout(Duration::from_secs(20))
+                .build()
+                .map_err(|e| e.to_string())
+        })
+        .clone()
+}
+
 #[tauri::command]
 pub async fn server_status(address: String) -> Result<Value, String> {
-    let cl = reqwest::Client::builder()
-        .user_agent("AcironLauncher/0.1 (aciron.pro)")
-
-        .connect_timeout(Duration::from_secs(8))
-        .timeout(Duration::from_secs(20))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let cl = http()?;
     let resp = cl
         .get(format!("{MCSTATUS}/{address}"))
         .send()

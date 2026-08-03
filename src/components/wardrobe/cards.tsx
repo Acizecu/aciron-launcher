@@ -1,4 +1,5 @@
 
+import { memo } from "react";
 import SkinThumb from "./SkinThumb";
 import TexturePreview from "./TexturePreview";
 import { cardInDelay } from "../../anim";
@@ -114,7 +115,12 @@ export function CardTools({ onEdit, onDelete }: { onEdit?: () => void; onDelete?
   );
 }
 
-export function SkinCard({
+// memo: сетка карточек ре-рендерится на любое из 20+ useState в WardrobePage
+// (busy/instant/edit/...). Тяжёлый WebGL уже за useEffect[url,model,shot], но memo
+// убирает лишний VDOM-дифф карточек при несвязанных изменениях состояния родителя.
+// Пропсы примитивны/стабильны на уровне item, поэтому дефолтное поверхностное
+// сравнение корректно (колбэки инлайновые — при их смене карточка честно обновится).
+function SkinCardImpl({
   name,
   url,
   model,
@@ -146,8 +152,9 @@ export function SkinCard({
     </div>
   );
 }
+export const SkinCard = memo(SkinCardImpl);
 
-export function CapeCard({
+function CapeCardImpl({
   entry,
   active,
   index,
@@ -178,8 +185,9 @@ export function CapeCard({
     </div>
   );
 }
+export const CapeCard = memo(CapeCardImpl);
 
-export function OutfitCard({
+function OutfitCardImpl({
   outfit,
   data,
   stock,
@@ -249,3 +257,4 @@ export function OutfitCard({
     </div>
   );
 }
+export const OutfitCard = memo(OutfitCardImpl);

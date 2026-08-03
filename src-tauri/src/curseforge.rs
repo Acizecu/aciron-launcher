@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::Duration;
 use tauri::AppHandle;
 
@@ -32,7 +33,7 @@ fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     Some(p)
 }
 
-fn http() -> Result<reqwest::Client, String> {
+fn build_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1 (aciron.pro)")
         .default_headers(proxy_headers())
@@ -40,6 +41,21 @@ fn http() -> Result<reqwest::Client, String> {
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())
+}
+
+// B8: один общий reqwest::Client на модуль вместо нового на каждую команду.
+// Клиент внутри — Arc, так что клонирование дёшево, а переиспользование пула
+// соединений/TLS-сессий экономит редкие handshake между командами. Заголовки/UA/
+// таймауты — константы (proxy_headers через option_env!), поэтому единый клиент
+// ведёт себя 1-в-1 как раньше. Сигнатура http() сохранена, чтобы не трогать вызовы.
+fn http() -> Result<reqwest::Client, String> {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    if let Some(c) = CLIENT.get() {
+        return Ok(c.clone());
+    }
+    let c = build_client()?;
+    // Если гонка проиграна, get_or_init вернёт уже сохранённый клиент — тоже валиден.
+    Ok(CLIENT.get_or_init(|| c).clone())
 }
 
 pub fn proxy_headers() -> reqwest::header::HeaderMap {
@@ -328,19 +344,45 @@ pub async fn curseforge_project_versions(project_id: String) -> Result<Value, St
     Ok(Value::Array(versions))
 }
 
+// B4: потоковая загрузка вместо буферизации всего файла в памяти.
+// Пишем чанки по мере прихода (образец — modrinth.rs download_cancelable),
+// что убирает пик ~1× размера файла в RAM на каждую параллельную загрузку.
+// Поведение то же: тот же путь назначения, та же семантика ошибок (любая
+// сетевая/IO-ошибка → Err), файл создаётся целиком при успехе.
 async fn download_to(cl: &reqwest::Client, url: &str, path: &Path) -> Result<(), String> {
+    use futures::StreamExt;
+    use tokio::io::AsyncWriteExt;
+
     if let Some(p) = path.parent() {
         tokio::fs::create_dir_all(p).await.map_err(|e| e.to_string())?;
     }
-    let bytes = cl
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .bytes()
-        .await
-        .map_err(|e| e.to_string())?;
-    tokio::fs::write(path, &bytes).await.map_err(|e| e.to_string())
+    // Пишем во временный .part и атомарно переименовываем в итоговый файл. Стриминг
+    // напрямую в path оставлял бы усечённый файл при обрыве/ошибке — на следующем
+    // запуске он выглядел бы как корректно установленный. .part + rename исключает это.
+    let tmp = {
+        let mut s = path.as_os_str().to_os_string();
+        s.push(".part");
+        std::path::PathBuf::from(s)
+    };
+    let res: Result<(), String> = async {
+        let resp = cl.get(url).send().await.map_err(|e| e.to_string())?;
+        let mut stream = resp.bytes_stream();
+        let mut file = tokio::fs::File::create(&tmp).await.map_err(|e| e.to_string())?;
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk.map_err(|e| e.to_string())?;
+            file.write_all(&bytes).await.map_err(|e| e.to_string())?;
+        }
+        file.flush().await.map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    .await;
+    match res {
+        Ok(()) => tokio::fs::rename(&tmp, path).await.map_err(|e| e.to_string()),
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            Err(e)
+        }
+    }
 }
 
 /// Ссылка на скачивание файла: сначала downloadUrl, иначе отдельный download-url эндпоинт.
@@ -609,19 +651,37 @@ pub async fn curseforge_install_modpack(
 
     emit(&app, "modpack", "Скачивание модпака", 0, 1);
     let url = file_download_url(&cl, mid, &file).await?;
-    let bytes = cl
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .bytes()
-        .await
-        .map_err(|e| e.to_string())?;
+
+    // B4: .zip модпака стримим во временный файл, а не держим в памяти + ещё раз
+    // в bytes.to_vec() (это был пик ~2× размера модпака). Читаем чанки и пишем на
+    // диск по мере прихода; ZipArchive затем работает поверх файла, а не буфера.
+    // Уникальное имя — по mid+file-id, чтобы параллельные установки не пересекались.
+    let file_id = file["id"].as_i64().unwrap_or_default();
+    let tmp_zip = std::env::temp_dir().join(format!("aciron-cf-modpack-{mid}-{file_id}.zip"));
+    {
+        use futures::StreamExt;
+        use tokio::io::AsyncWriteExt;
+        let resp = cl.get(&url).send().await.map_err(|e| e.to_string())?;
+        let mut stream = resp.bytes_stream();
+        let mut out = tokio::fs::File::create(&tmp_zip)
+            .await
+            .map_err(|e| e.to_string())?;
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk.map_err(|e| e.to_string())?;
+            out.write_all(&bytes).await.map_err(|e| e.to_string())?;
+        }
+        out.flush().await.map_err(|e| e.to_string())?;
+    }
 
     // --- синхронно: разбор zip, создание сборки, распаковка overrides ---
-    let (build_id, build_dir, files_list) = {
-        let reader = std::io::Cursor::new(bytes.to_vec());
-        let mut zip = zip::ZipArchive::new(reader).map_err(|e| e.to_string())?;
+    // Выносим блокирующий zip-I/O в spawn_blocking, чтобы не держать поток
+    // tokio-executor'а на чтении/распаковке (образец: launcher.rs spawn_blocking).
+    // Семантика ошибок 1-в-1: те же строки, fail-fast через ?, build создаётся
+    // ровно там же (после парса manifest.json). Временный .zip удаляем в любом исходе.
+    let tmp_zip_for_task = tmp_zip.clone();
+    let parse_result = tokio::task::spawn_blocking(move || -> Result<(String, PathBuf, Vec<Value>), String> {
+        let f = std::fs::File::open(&tmp_zip_for_task).map_err(|e| e.to_string())?;
+        let mut zip = zip::ZipArchive::new(f).map_err(|e| e.to_string())?;
 
         let manifest_txt = {
             let mut f = zip
@@ -682,37 +742,85 @@ pub async fn curseforge_install_modpack(
         }
 
         let files_list = manifest["files"].as_array().cloned().unwrap_or_default();
-        (build.id, dir, files_list)
+        Ok((build.id, dir, files_list))
+    })
+    .await;
+
+    // Временный .zip больше не нужен ни при успехе, ни при ошибке.
+    let _ = tokio::fs::remove_file(&tmp_zip).await;
+
+    let (build_id, build_dir, files_list) = match parse_result {
+        Ok(r) => r?,
+        Err(e) => return Err(e.to_string()),
     };
 
     // --- асинхронно: качаем моды по projectID/fileID ---
+    // B2: моды качаем конкурентно через buffer_unordered(8) вместо строго
+    // последовательного цикла (образец: modrinth.rs check_build_updates buffer_unordered(8)).
+    // Именно 8, а не 16 — CurseForge строг по rate-limit. Поведение 1-в-1:
+    //  • тот же фильтр (pid!=0 && fid!=0), те же silent-skip'ы при любой ошибке
+    //    (get_json / file_download_url / download_to) — как прежние if let Ok / is_ok;
+    //  • итоговый build.mods сохраняет порядок исходного files_list (сортируем по индексу);
+    //  • прогресс идёт монотонно до total через atomic-счётчик (как launcher.rs ассеты).
+    // mods_dir считаем один раз (устраняем N+1 load_settings/load_builds на каждый мод).
+    use futures::StreamExt;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Arc;
+
     let total = files_list.len() as u64;
-    let mut mods_entries: Vec<InstalledMod> = Vec::new();
-    for (i, f) in files_list.iter().enumerate() {
+    let mods_dir = builds::mods_dir(&build_id);
+    let done = Arc::new(AtomicU64::new(0));
+
+    // into_iter() (а не iter()): раньше .iter().enumerate() отдавало &serde_json::Value,
+    // из-за чего .map-замыкание, возвращающее async-блок, не было higher-ranked-lifetime
+    // general enough — tauri::generate_handler не мог доказать FnOnce для любых лайфтаймов
+    // ("implementation of FnOnce/Iterator is not general enough"). Отдавая владение `f`,
+    // заём через границу async исчезает и HRTB-ошибка уходит. pid/fid извлекаются здесь же
+    // (owned i64), сам `f` в async-теле не нужен; `total` уже посчитан выше по .len(),
+    // `files_list` дальше не используется — поведение 1-в-1.
+    let tasks = files_list.into_iter().enumerate().map(|(i, f)| {
+        let cl = cl.clone();
+        let app = app.clone();
+        let mods_dir = mods_dir.clone();
+        let done = done.clone();
         let pid = f["projectID"].as_i64().unwrap_or(0);
         let fid = f["fileID"].as_i64().unwrap_or(0);
-        if pid != 0 && fid != 0 {
-            if let Ok(fj) = get_json(&cl, &format!("{}/v1/mods/{pid}/files/{fid}", base())).await {
-                let dl_file = &fj["data"];
-                if let Ok(durl) = file_download_url(&cl, pid, dl_file).await {
-                    let filename = dl_file["fileName"].as_str().unwrap_or("mod.jar").to_string();
-                    let dest = builds::mods_dir(&build_id).join(&filename);
-                    if download_to(&cl, &durl, &dest).await.is_ok() {
-                        mods_entries.push(InstalledMod {
-                            project_id: format!("cf:{pid}"),
-                            version_id: fid.to_string(),
-                            name: filename.trim_end_matches(".jar").to_string(),
-                            filename,
-                            icon_url: String::new(),
-                            enabled: true,
-                            kind: "mod".into(),
-                        });
+        async move {
+            let mut entry: Option<InstalledMod> = None;
+            if pid != 0 && fid != 0 {
+                if let Ok(fj) =
+                    get_json(&cl, &format!("{}/v1/mods/{pid}/files/{fid}", base())).await
+                {
+                    let dl_file = &fj["data"];
+                    if let Ok(durl) = file_download_url(&cl, pid, dl_file).await {
+                        let filename =
+                            dl_file["fileName"].as_str().unwrap_or("mod.jar").to_string();
+                        let dest = mods_dir.join(&filename);
+                        if download_to(&cl, &durl, &dest).await.is_ok() {
+                            entry = Some(InstalledMod {
+                                project_id: format!("cf:{pid}"),
+                                version_id: fid.to_string(),
+                                name: filename.trim_end_matches(".jar").to_string(),
+                                filename,
+                                icon_url: String::new(),
+                                enabled: true,
+                                kind: "mod".into(),
+                            });
+                        }
                     }
                 }
             }
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            emit(&app, "modpack", "Загрузка модпака", n, total);
+            (i, entry)
         }
-        emit(&app, "modpack", "Загрузка модпака", (i + 1) as u64, total);
-    }
+    });
+
+    let mut results: Vec<(usize, Option<InstalledMod>)> =
+        futures::stream::iter(tasks).buffer_unordered(8).collect().await;
+    // Восстанавливаем исходный порядок files_list, затем оставляем только успешные.
+    results.sort_by_key(|(i, _)| *i);
+    let mods_entries: Vec<InstalledMod> = results.into_iter().filter_map(|(_, e)| e).collect();
 
     let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
     build.mods = mods_entries;

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Head from "./Head";
-import { friendSkinUrl, type ChatMessage } from "../api";
+import { friendSkinUrl, type ChatMessage, type Friend } from "../api";
 import { onMessage } from "../chat";
 import { useFriends } from "../friends";
 import { playNotification } from "../sound";
@@ -13,15 +13,18 @@ type Item = { key: number; msg: ChatMessage; from: string };
 
 function Toast({
   item,
+  friend,
   onOpen,
   onDone,
 }: {
   item: Item;
+  friend: Friend | undefined;
   onOpen: () => void;
   onDone: () => void;
 }) {
-  const { data } = useFriends();
-  const friend = data?.friends.find((f) => f.id === item.from);
+  // Toast теперь презентационный: друг приходит пропсом из родителя (одна подписка
+  // useFriends + один Map-lookup вместо подписки и .find() в КАЖДОМ тосте). Апдейт
+  // списка друзей больше не ре-рендерит все активные тосты по отдельности.
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
@@ -73,6 +76,14 @@ export default function ChatToasts({
   onOpen: (userId: string) => void;
 }) {
   const [queue, setQueue] = useState<Item[]>([]);
+  const { data } = useFriends();
+
+  // Один раз строим индекс id→friend вместо линейного .find() в каждом тосте.
+  const byId = useMemo(() => {
+    const m = new Map<string, Friend>();
+    for (const f of data?.friends ?? []) m.set(f.id, f);
+    return m;
+  }, [data?.friends]);
 
   useEffect(() => {
     let n = 0;
@@ -90,6 +101,7 @@ export default function ChatToasts({
         <Toast
           key={it.key}
           item={it}
+          friend={byId.get(it.from)}
           onOpen={() => {
             onOpen(it.from);
             setQueue((q) => q.filter((x) => x.key !== it.key));

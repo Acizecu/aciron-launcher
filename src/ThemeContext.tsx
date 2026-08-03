@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -290,22 +291,30 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [palette, state]);
 
-  const value: Ctx = {
-    state,
-    palette,
-    saved: state.saved,
-    setTheme: (id) => setState((s) => ({ ...s, id })),
-    setSeed: (patch) =>
+  // Сеттеры используют только updater-форму setState, поэтому не зависят ни от
+  // какого замыкания и стабильны на весь жизненный цикл провайдера (deps []).
+  // Стабилизация нужна, чтобы value ниже не пересоздавался из-за новых ссылок на колбэки.
+  const setTheme = useCallback((id: ThemeId) => setState((s) => ({ ...s, id })), []);
+
+  const setSeed = useCallback(
+    (patch: Partial<ThemeSeed>) =>
       setState((s) => ({ ...s, id: "custom", seed: { ...s.seed, ...patch } })),
-    setToken: (key, val) =>
-      setState((s) => {
-        const overrides = { ...s.overrides };
-        if (val === null) delete overrides[key];
-        else overrides[key] = val;
-        return { ...s, id: "custom", overrides };
-      }),
-    resetTokens: () => setState((s) => ({ ...s, overrides: {} })),
-    savePreset: (name, pal) =>
+    []
+  );
+
+  const setToken = useCallback((key: keyof Palette, val: string | null) => {
+    setState((s) => {
+      const overrides = { ...s.overrides };
+      if (val === null) delete overrides[key];
+      else overrides[key] = val;
+      return { ...s, id: "custom", overrides };
+    });
+  }, []);
+
+  const resetTokens = useCallback(() => setState((s) => ({ ...s, overrides: {} })), []);
+
+  const savePreset = useCallback(
+    (name: string, pal?: Palette) =>
       setState((s) => ({
         ...s,
         saved: [
@@ -317,23 +326,65 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           },
         ],
       })),
+    []
+  );
 
-    applySaved: (p) =>
+  const applySaved = useCallback(
+    (p: SavedPreset) =>
       setState((s) => ({
         ...s,
         id: "custom",
         seed: { accent: p.palette.accent, base: p.palette.bg },
         overrides: { ...p.palette },
       })),
-    deleteSaved: (id) => setState((s) => ({ ...s, saved: s.saved.filter((p) => p.id !== id) })),
-    renameSaved: (id, name) =>
+    []
+  );
+
+  const deleteSaved = useCallback(
+    (id: string) => setState((s) => ({ ...s, saved: s.saved.filter((p) => p.id !== id) })),
+    []
+  );
+
+  const renameSaved = useCallback(
+    (id: string, name: string) =>
       setState((s) => ({
         ...s,
         saved: s.saved.map((p) =>
           p.id === id ? { ...p, name: name.trim().slice(0, 24) || p.name } : p
         ),
       })),
-  };
+    []
+  );
+
+  // value пересоздаётся только когда реально меняется state/palette/saved, а не
+  // на каждый рендер провайдера — потребители useTheme() не ре-рендерятся зря.
+  const value = useMemo<Ctx>(
+    () => ({
+      state,
+      palette,
+      saved: state.saved,
+      setTheme,
+      setSeed,
+      setToken,
+      resetTokens,
+      savePreset,
+      applySaved,
+      deleteSaved,
+      renameSaved,
+    }),
+    [
+      state,
+      palette,
+      setTheme,
+      setSeed,
+      setToken,
+      resetTokens,
+      savePreset,
+      applySaved,
+      deleteSaved,
+      renameSaved,
+    ]
+  );
 
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
 }

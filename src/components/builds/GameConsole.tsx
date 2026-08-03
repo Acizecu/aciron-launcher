@@ -68,8 +68,8 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
     if (isTauri) {
       void (async () => {
         const { listen } = await import("@tauri-apps/api/event");
-        const un = await listen<{ game: string; text: string }>("game-log", (e) => {
-          if (e.payload.game === gameId) add([e.payload.text]);
+        const un = await listen<{ game: string; lines: string[] }>("game-log", (e) => {
+          if (e.payload.game === gameId) add(e.payload.lines);
         });
         if (dead) un();
         else off = un;

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Head from "./Head";
 import ProfileModal from "./ProfileModal";
 import MessageMenu, { type MenuItem } from "./chat/MessageMenu";
@@ -20,8 +20,13 @@ import { useToast } from "../ToastContext";
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
-const time = (ms: number) =>
-  new Date(ms).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+// Форматтеры Intl создаём один раз на модуль: toLocaleTimeString/toLocaleDateString
+// заново конструируют форматтер на каждый вызов, а в списке они дёргаются N раз за
+// рендер. Результат вывода идентичен прежним вызовам с теми же опциями.
+const TIME_FMT = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
+const DATE_FMT = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
+
+const time = (ms: number) => TIME_FMT.format(ms);
 
 function dayLabel(ms: number): string {
   const d = new Date(ms);
@@ -31,7 +36,7 @@ function dayLabel(ms: number): string {
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
   if (sameDay(d, yesterday)) return "Вчера";
-  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  return DATE_FMT.format(d);
 }
 
 function Ticks({ msg }: { msg: LocalMessage }) {
@@ -69,7 +74,12 @@ function MessagesSkeleton() {
   );
 }
 
-function Bubble({
+// memo + стабильные пропсы: набор текста в composer'е больше не ре-рендерит список
+// сообщений (draft вынесен в отдельный Composer ниже), а при легитимном ре-рендере
+// панели перерисовываются только те Bubble, чьи пропсы реально изменились. Колбэки
+// приходят из useCallback родителя и вызываются с msg.id/msg, поэтому идентичны по
+// ссылке между рендерами — иначе memo был бы бесполезен.
+const Bubble = memo(function Bubble({
   msg,
   mine,
   grouped,
@@ -83,13 +93,13 @@ function Bubble({
   grouped: boolean;
   selected: boolean;
   selecting: boolean;
-  onToggle: () => void;
-  onMenu: (e: React.MouseEvent) => void;
+  onToggle: (id: string) => void;
+  onMenu: (e: React.MouseEvent, msg: LocalMessage) => void;
 }) {
   return (
     <div
-      onContextMenu={onMenu}
-      onClick={() => selecting && onToggle()}
+      onContextMenu={(e) => onMenu(e, msg)}
+      onClick={() => selecting && onToggle(msg.id)}
       className={`flex ${mine ? "justify-end" : "justify-start"} ${grouped ? "mt-0.5" : "mt-2"} ${
         selecting ? "cursor-pointer" : ""
       } ${selected ? "rounded-lg bg-accent/10" : ""}`}
@@ -123,11 +133,70 @@ function Bubble({
       </div>
     </div>
   );
-}
+});
+
+// Композер вынесен в отдельный компонент: draft живёт здесь, поэтому нажатия клавиш
+// ре-рендерят только этот маленький компонент, а не весь ChatPanel со списком
+// сообщений. onSubmit получает готовый текст, ввод/лимит считаются локально —
+// поведение (Enter=отправить, Shift+Enter=перенос, дизейбл при пустом/переполнении,
+// очистка после отправки) сохранено 1-в-1.
+const Composer = memo(function Composer({
+  username,
+  sending,
+  onSubmit,
+}: {
+  username: string;
+  sending: boolean;
+  onSubmit: (text: string) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState("");
+  const over = draft.length > MAX_MESSAGE;
+
+  // Внимание: submit НЕ проверяет `over` — как и раньше, Enter отправляет даже
+  // сообщение сверх лимита (лимитом заблокирована только кнопка). Поведение 1-в-1.
+  const submit = () => {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setDraft("");
+    void onSubmit(text);
+  };
+
+  return (
+    <div className="border-t border-border/70 px-5 py-3">
+      <div className="flex items-end gap-2">
+        <textarea
+          value={draft}
+          rows={1}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder={`Сообщение для ${username}`}
+          className="max-h-32 min-h-[42px] flex-1 resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none"
+        />
+        <button
+          onClick={submit}
+          disabled={!draft.trim() || over}
+          title="Отправить"
+          className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-accent text-bg transition-colors hover:bg-accent-hover disabled:opacity-40"
+        >
+          <i className="fa-solid fa-paper-plane text-sm" />
+        </button>
+      </div>
+      {over && (
+        <div className="mt-1.5 text-[11px] text-[#fca5a5]">
+          Слишком длинное: {draft.length} из {MAX_MESSAGE}
+        </div>
+      )}
+    </div>
+  );
+});
 
 export default function ChatPanel({ friend }: { friend: Friend }) {
   const conv = useConversation(friend.id);
-  const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -145,7 +214,8 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
   useEffect(() => {
     setOpenConversation(friend.id);
     void openConversation(friend.id);
-    setDraft("");
+    // draft теперь живёт в <Composer key={friend.id}>: смена собеседника ремонтит
+    // композер и очищает поле ввода так же, как раньше делал setDraft("").
     setSelected(new Set());
     return () => setOpenConversation(null);
   }, [friend.id]);
@@ -171,43 +241,51 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
     }
   };
 
-  const submit = async () => {
-    const text = draft.trim();
-    if (!text || sending) return;
-    setSending(true);
+  const submit = useCallback(
+    async (text: string) => {
+      if (!text || sending) return;
+      setSending(true);
+      wasAtBottom.current = true;
+      try {
+        await send(friend.id, text);
+      } catch {
+        toast("Сообщение не отправлено", "error");
+      } finally {
+        setSending(false);
+      }
+    },
+    [friend.id, sending, toast]
+  );
 
-    setDraft("");
-    wasAtBottom.current = true;
-    try {
-      await send(friend.id, text);
-    } catch {
+  const copy = useCallback(
+    (ids: string[]) => {
+      const text = conv.messages
+        .filter((m) => ids.includes(m.id))
+        .map((m) => m.body)
+        .join("\n");
+      void navigator.clipboard.writeText(text);
+      toast(ids.length > 1 ? "Сообщения скопированы" : "Скопировано", "success");
+    },
+    [conv.messages, toast]
+  );
 
-      toast("Сообщение не отправлено", "error");
-    } finally {
-      setSending(false);
-    }
-  };
+  const del = useCallback(
+    async (ids: string[]) => {
+      try {
+        const n = await remove(friend.id, ids);
+        setSelected(new Set());
+        if (n === 0) toast("Удалять можно только свои сообщения", "error");
+      } catch (e) {
+        toast(String(e).replace(/^Error:\s*/, ""), "error");
+      }
+    },
+    [friend.id, toast]
+  );
 
-  const copy = (ids: string[]) => {
-    const text = conv.messages
-      .filter((m) => ids.includes(m.id))
-      .map((m) => m.body)
-      .join("\n");
-    void navigator.clipboard.writeText(text);
-    toast(ids.length > 1 ? "Сообщения скопированы" : "Скопировано", "success");
-  };
-
-  const del = async (ids: string[]) => {
-    try {
-      const n = await remove(friend.id, ids);
-      setSelected(new Set());
-      if (n === 0) toast("Удалять можно только свои сообщения", "error");
-    } catch (e) {
-      toast(String(e).replace(/^Error:\s*/, ""), "error");
-    }
-  };
-
-  const openMenu = (e: React.MouseEvent, msg: LocalMessage) => {
+  // useCallback, чтобы onMenu приходил в мемоизированный Bubble стабильной ссылкой.
+  // Зависит от selected (меняет пункты/множество для действий) — при смене выделения
+  // список ре-рендерится осознанно (нужно показать галочки), но не при наборе текста.
+  const openMenu = useCallback((e: React.MouseEvent, msg: LocalMessage) => {
     e.preventDefault();
 
     const ids = selected.has(msg.id) ? [...selected] : [msg.id];
@@ -243,10 +321,37 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       });
     }
     setMenu({ x: e.clientX, y: e.clientY, items });
-  };
+  }, [selected, friend.id, copy, del, toast]);
+
+  // Стабильный переключатель выделения (функциональный setSelected → пустые deps),
+  // передаётся мемоизированному Bubble по ссылке, поэтому не рушит memo.
+  const onToggle = useCallback((id: string) => {
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }, []);
 
   const selecting = selected.size > 0;
-  const over = draft.length > MAX_MESSAGE;
+
+  // Группировку/подписи дня считаем один раз на изменение сообщений, а не N*3 раз
+  // за каждый рендер панели: at сообщений неизменны, вывод чисто производный, поэтому
+  // useMemo по conv.messages даёт тот же результат без пересчёта на посторонних
+  // ре-рендерах (выделение, отправка). Логика newDay/grouped идентична прежней.
+  const rows = useMemo(
+    () =>
+      conv.messages.map((m, i) => {
+        const prev = conv.messages[i - 1];
+        const mine = m.from !== friend.id;
+        const newDay = !prev || dayLabel(prev.at) !== dayLabel(m.at);
+        const grouped =
+          !newDay && !!prev && prev.from === m.from && m.at - prev.at < GROUP_WINDOW_MS;
+        return { m, mine, newDay, grouped };
+      }),
+    [conv.messages, friend.id]
+  );
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
@@ -337,71 +442,27 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
           </div>
         )}
 
-        {conv.messages.map((m, i) => {
-          const prev = conv.messages[i - 1];
-          const mine = m.from !== friend.id;
-          const newDay = !prev || dayLabel(prev.at) !== dayLabel(m.at);
-          const grouped =
-            !newDay && !!prev && prev.from === m.from && m.at - prev.at < GROUP_WINDOW_MS;
-          return (
-            <div key={m.id}>
-              {newDay && (
-                <div className="my-3 text-center text-[11px] text-muted">{dayLabel(m.at)}</div>
-              )}
-              <Bubble
-                msg={m}
-                mine={mine}
-                grouped={grouped}
-                selected={selected.has(m.id)}
-                selecting={selecting}
-                onToggle={() =>
-                  setSelected((s) => {
-                    const n = new Set(s);
-                    if (n.has(m.id)) n.delete(m.id);
-                    else n.add(m.id);
-                    return n;
-                  })
-                }
-                onMenu={(e) => openMenu(e, m)}
-              />
-            </div>
-          );
-        })}
+        {rows.map(({ m, mine, newDay, grouped }) => (
+          <div key={m.id}>
+            {newDay && (
+              <div className="my-3 text-center text-[11px] text-muted">{dayLabel(m.at)}</div>
+            )}
+            <Bubble
+              msg={m}
+              mine={mine}
+              grouped={grouped}
+              selected={selected.has(m.id)}
+              selecting={selecting}
+              onToggle={onToggle}
+              onMenu={openMenu}
+            />
+          </div>
+        ))}
         <div ref={bottom} />
       </div>
 
       {}
-      <div className="border-t border-border/70 px-5 py-3">
-        <div className="flex items-end gap-2">
-          <textarea
-            value={draft}
-            rows={1}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void submit();
-              }
-            }}
-            placeholder={`Сообщение для ${friend.username}`}
-            className="max-h-32 min-h-[42px] flex-1 resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none"
-          />
-          <button
-            onClick={() => void submit()}
-            disabled={!draft.trim() || over}
-            title="Отправить"
-            className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-accent text-bg transition-colors hover:bg-accent-hover disabled:opacity-40"
-          >
-            <i className="fa-solid fa-paper-plane text-sm" />
-          </button>
-        </div>
-        {over && (
-          <div className="mt-1.5 text-[11px] text-[#fca5a5]">
-            Слишком длинное: {draft.length} из {MAX_MESSAGE}
-          </div>
-        )}
-      </div>
+      <Composer key={friend.id} username={friend.username} sending={sending} onSubmit={submit} />
 
       {menu && <MessageMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
       {forward && (

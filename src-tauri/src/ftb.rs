@@ -2,6 +2,8 @@ use crate::builds::{self, Build, InstalledMod};
 use crate::launcher::emit;
 use serde_json::{json, Value};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tauri::AppHandle;
 
@@ -22,8 +24,7 @@ fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     Some(p)
 }
 
-fn http() -> Result<reqwest::Client, String> {
-
+fn build_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1 (aciron.pro)")
         .default_headers(crate::curseforge::proxy_headers())
@@ -31,6 +32,16 @@ fn http() -> Result<reqwest::Client, String> {
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())
+}
+
+// B8: один ленивый reqwest::Client на модуль (образец — cancel.rs/discord.rs OnceLock).
+// Client клонируется дёшево и шарит внутренний connection-pool/TLS, поэтому команды
+// (search/project/versions/install) переиспользуют keep-alive соединения между вызовами.
+// Конфигурация статична (user-agent + compile-time proxy_headers), так что кэшировать
+// клиент безопасно — поведение идентично прежнему построению на каждый вызов.
+fn http() -> Result<reqwest::Client, String> {
+    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+    CLIENT.get_or_init(build_client).clone()
 }
 
 fn strip_id(project_id: &str) -> &str {
@@ -97,12 +108,33 @@ pub async fn ftb_search(
         .skip(offset as usize)
         .take(limit as usize)
         .collect();
-    let mut hits: Vec<Value> = Vec::new();
-    for id in page {
-        if let Ok(pack) = get_json(&cl, &format!("{API}/modpack/{id}")).await {
-            hits.push(normalize_hit(&pack));
+
+    // B5: раньше детали каждого пака страницы тянулись строго последовательно
+    // (N round-trip'ов до api.modpacks.ch перед выдачей). Теперь тянем через
+    // buffer_unordered(8) — задержка ≈ один RTT вместо суммы. batch-эндпоинта
+    // у modpacks.ch public нет, поэтому параллелим по одному запросу на пак.
+    // Список ранжирован (search/popular), а buffer_unordered отдаёт результаты
+    // в произвольном порядке — поэтому тегируем индексом и восстанавливаем порядок,
+    // а неуспешные запросы отбрасываем ровно как прежний `if let Ok(..)`.
+    use futures::StreamExt;
+    let tasks = page.into_iter().enumerate().map(|(i, id)| {
+        let cl = cl.clone();
+        async move {
+            match get_json(&cl, &format!("{API}/modpack/{id}")).await {
+                Ok(pack) => Some((i, normalize_hit(&pack))),
+                Err(_) => None,
+            }
         }
-    }
+    });
+    let mut ordered: Vec<(usize, Value)> = futures::stream::iter(tasks)
+        .buffer_unordered(8)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .flatten()
+        .collect();
+    ordered.sort_by_key(|(i, _)| *i);
+    let hits: Vec<Value> = ordered.into_iter().map(|(_, v)| v).collect();
 
     Ok(json!({
         "hits": hits,
@@ -188,19 +220,44 @@ pub async fn ftb_project_versions(project_id: String) -> Result<Value, String> {
     Ok(Value::Array(versions))
 }
 
+// B6: стриминг ответа чанками вместо буферизации всего файла в память
+// (.bytes() -> tokio::fs::write). Образец — modrinth.rs download_cancelable.
+// Пиковое потребление памяти теперь ограничено размером чанка, а не всего файла;
+// это особенно важно при параллельной установке модпака (B3). Поведение (создать
+// родительскую директорию, записать байты в path, вернуть ошибку сети/IO) неизменно.
 async fn download_to(cl: &reqwest::Client, url: &str, path: &Path) -> Result<(), String> {
+    use futures::StreamExt;
+    use tokio::io::AsyncWriteExt;
+
     if let Some(p) = path.parent() {
         tokio::fs::create_dir_all(p).await.map_err(|e| e.to_string())?;
     }
-    let bytes = cl
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .bytes()
-        .await
-        .map_err(|e| e.to_string())?;
-    tokio::fs::write(path, &bytes).await.map_err(|e| e.to_string())
+    // Пишем во временный .part и атомарно переименовываем: обрыв/ошибка не оставят
+    // усечённый файл на месте итогового (иначе он сошёл бы за корректно установленный).
+    let tmp = {
+        let mut s = path.as_os_str().to_os_string();
+        s.push(".part");
+        std::path::PathBuf::from(s)
+    };
+    let res: Result<(), String> = async {
+        let resp = cl.get(url).send().await.map_err(|e| e.to_string())?;
+        let mut stream = resp.bytes_stream();
+        let mut file = tokio::fs::File::create(&tmp).await.map_err(|e| e.to_string())?;
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk.map_err(|e| e.to_string())?;
+            file.write_all(&bytes).await.map_err(|e| e.to_string())?;
+        }
+        file.flush().await.map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    .await;
+    match res {
+        Ok(()) => tokio::fs::rename(&tmp, path).await.map_err(|e| e.to_string()),
+        Err(e) => {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            Err(e)
+        }
+    }
 }
 
 async fn resolve_url(cl: &reqwest::Client, f: &Value) -> Option<String> {
@@ -266,35 +323,72 @@ pub async fn ftb_install_modpack(
 
     let files = manifest["files"].as_array().cloned().unwrap_or_default();
     let total = files.len() as u64;
-    let mut mods_entries: Vec<InstalledMod> = Vec::new();
 
-    for (i, f) in files.iter().enumerate() {
+    // B3: раньше файлы модпака обрабатывались строго последовательно — на каждый
+    // CF-файл resolve_url делал лишний round-trip к download-url прокси (ftb.rs),
+    // а затем download_to тоже .await по одному. На крупных FTB-модпаках это
+    // сотни сериализованных сетевых операций. Теперь и resolve_url, и download_to
+    // выполняются внутри одной задачи на файл, а задачи гоняются через
+    // buffer_unordered(8) (CF-прокси строг по rate-limit — держим 8, как в
+    // curseforge.rs/modrinth check_build_updates).
+    //
+    // Поведение сохранено 1-в-1:
+    //  * прогресс: как и раньше, каждый файл эмитит ровно один тик "modpack"/
+    //    "Загрузка модпака"; счётчик атомарный (образец — launcher.rs done.fetch_add),
+    //    значение current теперь порядковый номер завершения (total совпадает,
+    //    монотонно 1..=total). Пустой name по-прежнему не эмитит прогресс (ранний
+    //    `continue` без emit) — такой файл возвращает None и не двигает счётчик;
+    //  * serveronly и провал safe_join по-прежнему эмитят прогресс и не качаются;
+    //  * mods_entries собираются по индексу файла и восстанавливаются в исходном
+    //    порядке (buffer_unordered отдаёт результаты вразнобой);
+    //  * каждый файл пишется в свой safe_join-путь, гонок по файловой системе нет.
+    use futures::StreamExt;
+    let done = Arc::new(AtomicU64::new(0));
+    // into_iter() (а не iter()) отдаёт владение Value в замыкание: раньше замыкание
+    // принимало &serde_json::Value и клонировало его внутри (let f = f.clone()), из-за
+    // чего async-блок захватывал заём и не был higher-ranked-lifetime general enough —
+    // tauri::generate_handler не мог доказать FnOnce для любых лайфтаймов. Передавая
+    // owned `f`, заём через границу async исчезает (HRTB-ошибка уходит), а лишний clone
+    // устранён. `files` — уже owned Vec и дальше не используется, поведение 1-в-1.
+    let tasks = files.into_iter().enumerate().map(|(i, f)| {
+        let cl = cl.clone();
+        let app = app.clone();
+        let build_dir = build_dir.clone();
+        let done = done.clone();
+        async move {
+            let emit_tick = || {
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                emit(&app, "modpack", "Загрузка модпака", n, total);
+            };
 
-        if f["serveronly"].as_bool() == Some(true) {
-            emit(&app, "modpack", "Загрузка модпака", (i + 1) as u64, total);
-            continue;
-        }
-        let fname = f["name"].as_str().unwrap_or("").to_string();
-        if fname.is_empty() {
-            continue;
-        }
-
-        let rel = f["path"].as_str().unwrap_or("./");
-        let rel = rel.trim_start_matches("./").trim_start_matches('/');
-
-        let dest = match safe_join(&build_dir, rel).and_then(|d| safe_join(&d, &fname)) {
-            Some(d) => d,
-            None => {
-                emit(&app, "modpack", "Загрузка модпака", (i + 1) as u64, total);
-                continue;
+            if f["serveronly"].as_bool() == Some(true) {
+                emit_tick();
+                return None;
             }
-        };
+            let fname = f["name"].as_str().unwrap_or("").to_string();
+            if fname.is_empty() {
+                // как и в исходнике: ранний выход без эмита прогресса
+                return None;
+            }
 
-        if let Some(url) = resolve_url(&cl, f).await {
-            if download_to(&cl, &url, &dest).await.is_ok() {
+            let rel = f["path"].as_str().unwrap_or("./");
+            let rel = rel.trim_start_matches("./").trim_start_matches('/');
 
-                if rel.replace('\\', "/").starts_with("mods") && fname.ends_with(".jar") {
-                    mods_entries.push(InstalledMod {
+            let dest = match safe_join(&build_dir, rel).and_then(|d| safe_join(&d, &fname)) {
+                Some(d) => d,
+                None => {
+                    emit_tick();
+                    return None;
+                }
+            };
+
+            let mut entry: Option<InstalledMod> = None;
+            if let Some(url) = resolve_url(&cl, &f).await {
+                if download_to(&cl, &url, &dest).await.is_ok()
+                    && rel.replace('\\', "/").starts_with("mods")
+                    && fname.ends_with(".jar")
+                {
+                    entry = Some(InstalledMod {
                         project_id: format!("local:{fname}"),
                         version_id: String::new(),
                         name: fname.trim_end_matches(".jar").to_string(),
@@ -305,9 +399,20 @@ pub async fn ftb_install_modpack(
                     });
                 }
             }
+            emit_tick();
+            entry.map(|e| (i, e))
         }
-        emit(&app, "modpack", "Загрузка модпака", (i + 1) as u64, total);
-    }
+    });
+
+    let mut collected: Vec<(usize, InstalledMod)> = futures::stream::iter(tasks)
+        .buffer_unordered(8)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .flatten()
+        .collect();
+    collected.sort_by_key(|(i, _)| *i);
+    let mods_entries: Vec<InstalledMod> = collected.into_iter().map(|(_, e)| e).collect();
 
     let mut build = builds::get_build(&build.id).ok_or("Сборка не найдена")?;
     build.mods = mods_entries;

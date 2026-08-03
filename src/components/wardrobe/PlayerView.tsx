@@ -172,11 +172,42 @@ export default function PlayerView({
       }
       renderer.render(scene, camera);
     };
-    tick();
+
+    // Гейтинг RAF по видимости: не крутим цикл, когда превью не видно (окно свёрнуто/
+    // скрыто, либо панель перекрыта модалкой). Поза time-driven (idlePose/applyAnimation
+    // по clock.getElapsedTime()), поэтому при возобновлении она продолжается с корректной
+    // фазы — визуально 1-в-1, экономится только лишний GPU/CPU, пока превью не смотрят.
+    let running = false;
+    let visibleInView = true; // IntersectionObserver сообщит фактическое значение
+    const shouldRun = () => alive && visibleInView && !document.hidden;
+    const startLoop = () => {
+      if (running || !shouldRun()) return;
+      running = true;
+      tick();
+    };
+    const stopLoop = () => {
+      if (!running) return;
+      running = false;
+      cancelAnimationFrame(frame);
+    };
+    const syncLoop = () => (shouldRun() ? startLoop() : stopLoop());
+
+    const onVisibility = () => syncLoop();
+    document.addEventListener("visibilitychange", onVisibility);
+
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) visibleInView = e.isIntersecting;
+      syncLoop();
+    });
+    io.observe(host);
+
+    startLoop();
 
     return () => {
       alive = false;
-      cancelAnimationFrame(frame);
+      stopLoop();
+      document.removeEventListener("visibilitychange", onVisibility);
+      io.disconnect();
       ro.disconnect();
       renderer.domElement.removeEventListener("pointerdown", down);
       renderer.domElement.removeEventListener("pointermove", move);

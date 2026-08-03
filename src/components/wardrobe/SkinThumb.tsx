@@ -54,12 +54,34 @@ function stage(): Shared {
   return shared;
 }
 
+// Кэш готовых снимков по (url,model,shot). Один и тот же url всегда даёт то же
+// изображение (та же naturalHeight -> та же legacy-ветка UV в buildPlayer), поэтому
+// dataURL детерминирован по этому ключу. Это убирает повторную сборку рига при
+// ре-маунтах (переключение вкладок гардероба, скролл-ремаунт) и дедуплицирует
+// одинаковые скины, используемые в нескольких образах.
+const thumbCache = new Map<string, string>();
+const cacheKey = (url: string, model: SkinModel, shot: ThumbShot) => `${url}|${model}|${shot}`;
+
+// Рисует уже готовый dataURL в целевой canvas без построения рига (мгновенно).
+function paintCached(target: HTMLCanvasElement, dataUrl: string) {
+  const ctx = target.getContext("2d");
+  if (!ctx) return;
+  const img = new Image();
+  img.onload = () => {
+    ctx.clearRect(0, 0, target.width, target.height);
+    ctx.drawImage(img, 0, 0);
+  };
+  img.src = dataUrl;
+}
+
+// Строит риг, делает снимок общим рендерером и возвращает dataURL для кэша.
+// Визуальный результат идентичен прежней версии (тот же рендер + drawImage).
 function snapshot(
   target: HTMLCanvasElement,
   skin: HTMLImageElement,
   model: SkinModel,
   shot: ThumbShot
-) {
+): string | null {
   const s = stage();
   const { w, h, y, dist } = SHOTS[shot];
   s.renderer.setSize(w, h, false);
@@ -77,6 +99,13 @@ function snapshot(
     if (ctx) {
       ctx.clearRect(0, 0, target.width, target.height);
       ctx.drawImage(s.renderer.domElement, 0, 0);
+    }
+    // Снимаем dataURL с общего рендерера (preserveDrawingBuffer:true уже включён),
+    // чтобы закэшировать результат для последующих маунтов/дублей.
+    try {
+      return s.renderer.domElement.toDataURL("image/png");
+    } catch {
+      return null;
     }
   } finally {
 
@@ -103,17 +132,60 @@ export default function SkinThumb({
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas || !url) return;
-    let alive = true;
 
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      if (alive) snapshot(canvas, img, model, shot);
+    const key = cacheKey(url, model, shot);
+
+    // Быстрый путь: результат уже посчитан — рисуем его без риг/WebGL-работы.
+    const cached = thumbCache.get(key);
+    if (cached) {
+      paintCached(canvas, cached);
+      return;
+    }
+
+    let alive = true;
+    let started = false;
+
+    // Строим снимок лениво — только когда карточка реально видна во вьюпорте.
+    // Это размазывает всплеск синхронной GPU-работы при монтировании всей сетки
+    // и не тратит ресурсы на карточки ниже сгиба, которые пользователь не видит.
+    const build = () => {
+      if (started || !alive) return;
+      started = true;
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        if (!alive) return;
+        const dataUrl = snapshot(canvas, img, model, shot);
+        if (dataUrl) thumbCache.set(key, dataUrl);
+      };
+      img.src = url;
     };
-    img.src = url;
+
+    // IntersectionObserver может быть недоступен в редких средах — тогда строим сразу.
+    if (typeof IntersectionObserver === "undefined") {
+      build();
+      return () => {
+        alive = false;
+      };
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            build();
+            io.disconnect();
+            break;
+          }
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    io.observe(canvas);
 
     return () => {
       alive = false;
+      io.disconnect();
     };
   }, [url, model, shot]);
 

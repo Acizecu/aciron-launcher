@@ -68,18 +68,35 @@ pub fn set_presence_privacy(show_game: bool, show_server: bool) {
     }
 }
 
+// Читаем только ХВОСТ файла: seek к концу минус `max`, а не весь файл в память.
+// Раньше std::fs::read засасывал весь latest.log целиком (за модовую сессию он
+// растёт до многих МБ) каждые 20с ради поиска в последних 128KB — лишний I/O и
+// вторая аллокация. Теперь читаем ровно хвост. Разрыв UTF-8/строки на границе
+// seek безвреден: from_utf8_lossy это переживёт, а искомая строка "Connecting to"
+// целиком лежит внутри хвоста. Поведение поиска не меняется.
 fn read_tail(path: &PathBuf, max: usize) -> String {
-    let data = match std::fs::read(path) {
-        Ok(d) => d,
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = match std::fs::File::open(path) {
+        Ok(f) => f,
         Err(_) => return String::new(),
     };
-    let start = data.len().saturating_sub(max);
-    String::from_utf8_lossy(&data[start..]).to_string()
+    let len = match f.metadata() {
+        Ok(m) => m.len(),
+        Err(_) => return String::new(),
+    };
+    let start = len.saturating_sub(max as u64);
+    if start > 0 && f.seek(SeekFrom::Start(start)).is_err() {
+        return String::new();
+    }
+    let cap = std::cmp::min(len, max as u64) as usize;
+    let mut buf = Vec::with_capacity(cap);
+    if f.read_to_end(&mut buf).is_err() {
+        return String::new();
+    }
+    String::from_utf8_lossy(&buf).into_owned()
 }
 
-fn server_from_log(log_path: &Option<PathBuf>) -> Option<String> {
-    let path = log_path.as_ref()?;
-    let tail = read_tail(path, 128 * 1024);
+fn parse_server(tail: &str) -> Option<String> {
     let mut found = None;
     for line in tail.lines() {
         if let Some(idx) = line.find("Connecting to ") {
@@ -91,6 +108,20 @@ fn server_from_log(log_path: &Option<PathBuf>) -> Option<String> {
         }
     }
     found
+}
+
+// Чтение хвоста лога — блокирующий I/O; выносим его в spawn_blocking, чтобы не
+// занимать async-воркер tokio на время syscall (beat() крутится на том же
+// рантайме, что и realtime::connect_loop). Логика поиска сервера не меняется.
+async fn server_from_log(log_path: &Option<PathBuf>) -> Option<String> {
+    let path = log_path.clone()?;
+    tokio::task::spawn_blocking(move || {
+        let tail = read_tail(&path, 128 * 1024);
+        parse_server(&tail)
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 #[cfg(windows)]
@@ -133,7 +164,7 @@ async fn beat() {
     let priv_ = privacy().lock().map(|p| p.clone()).unwrap_or_default();
 
     let server = if act.in_game && priv_.show_server {
-        server_from_log(&act.log_path)
+        server_from_log(&act.log_path).await
     } else {
         None
     };

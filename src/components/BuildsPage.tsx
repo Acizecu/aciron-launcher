@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getBuilds,
   deleteBuild,
@@ -97,6 +97,130 @@ type View = "list" | "detail" | "browse";
 
 type ModFilter = "all" | "on" | "off" | "outdated";
 
+// Вынесенная memo-строка мода: раньше это был инлайн-JSX в items.map со свежими
+// колбэками на строку, поэтому ВСЕ видимые строки перерисовывались на каждое
+// нажатие в поиске/toggle. Теперь строка перерисовывается только когда меняются
+// её собственные пропсы (m, флаги picked/hasUpdate/updating/leaving, i для
+// анимации). Колбэки родитель передаёт стабильными (useCallback). Разметка и
+// поведение 1-в-1 с прежним инлайном.
+type ModRowProps = {
+  m: InstalledMod;
+  i: number;
+  metaIcon: string;
+  picked: boolean;
+  hasUpdate: boolean;
+  updating: boolean;
+  leaving: boolean;
+  onTogglePick: (projectId: string) => void;
+  onOpen: (m: InstalledMod) => void;
+  onUpdate: (projectId: string, name: string) => void;
+  onToggle: (projectId: string) => void;
+  onRemove: (m: InstalledMod) => void;
+};
+
+const ModRow = memo(function ModRow({
+  m,
+  i,
+  metaIcon,
+  picked,
+  hasUpdate,
+  updating,
+  leaving,
+  onTogglePick,
+  onOpen,
+  onUpdate,
+  onToggle,
+  onRemove,
+}: ModRowProps) {
+  const manual = m.project_id.startsWith("local:");
+  const target = modPageTarget(m);
+  return (
+    <div
+      style={leaving ? undefined : cardInDelay(i)}
+      className={`group flex items-center gap-3 rounded-[16px] border-1 border-[#232427]/65 bg-card p-3 transition-colors hover:border-accent/40 ${
+        leaving ? "row-out" : "card-in"
+      } ${m.enabled ? "" : "opacity-60"}`}
+    >
+      {}
+      <button onClick={() => onTogglePick(m.project_id)} title="Выделить" className="shrink-0">
+        <Check on={picked} />
+      </button>
+
+      <button
+        onClick={() => onOpen(m)}
+        disabled={!target}
+        title={target ? "Открыть страницу" : "Файл не опознан на Modrinth"}
+        className={`flex min-w-0 flex-1 items-center gap-3 text-left ${
+          target ? "cursor-pointer" : "cursor-default"
+        }`}
+      >
+        <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-bg">
+          {m.icon_url ? (
+            <img src={m.icon_url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <i className={`fa-solid ${metaIcon} text-muted`} />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span
+              className={`truncate text-sm font-medium text-text ${
+                target ? "group-hover:text-accent" : ""
+              }`}
+              title={m.name}
+            >
+              {m.name}
+            </span>
+            {manual && (
+              <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-[10px] text-muted">
+                вручную
+              </span>
+            )}
+          </div>
+          <div className="truncate text-[10px] text-[#818181]" title={m.filename}>
+            {m.filename || "—"}
+          </div>
+        </div>
+      </button>
+
+      {}
+      {hasUpdate && (
+        <button
+          onClick={() => onUpdate(m.project_id, m.name)}
+          disabled={updating}
+          title="Доступно обновление — скачать"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-accent transition-colors hover:bg-accent hover:text-bg disabled:opacity-60"
+        >
+          <i className={`fa-solid ${updating ? "fa-spinner fa-spin" : "fa-download"} text-xs`} />
+        </button>
+      )}
+
+      {}
+      <button
+        onClick={() => onToggle(m.project_id)}
+        title={m.enabled ? "Выключить" : "Включить"}
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+          m.enabled ? "bg-accent" : "bg-border"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+            m.enabled ? "left-[22px]" : "left-0.5"
+          }`}
+        />
+      </button>
+
+      <button
+        onClick={() => onRemove(m)}
+        title="Удалить"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-muted opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
+      >
+        <i className="fa-solid fa-trash-can text-xs" />
+      </button>
+    </div>
+  );
+});
+
 export default function BuildsPage() {
   const [builds, setBuilds] = useState<Build[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -118,6 +242,11 @@ export default function BuildsPage() {
 
   const [updates, setUpdates] = useState<string[]>([]);
   const [updatingMod, setUpdatingMod] = useState<Set<string>>(new Set());
+  // Синхронное зеркало updatingMod для дедупа в стабильном updateOneMod:
+  // функциональный setState-updater в React выполняется не в момент вызова, а
+  // при обработке очереди, поэтому для мгновенного guard читаем ref.
+  const updatingRef = useRef<Set<string>>(updatingMod);
+  updatingRef.current = updatingMod;
 
   const [dyingMods, setDyingMods] = useState<string[]>([]);
 
@@ -176,6 +305,36 @@ export default function BuildsPage() {
   useFlip(gridRef, builds.map((b) => b.id).join());
 
   const selected = builds.find((b) => b.id === selectedId) ?? null;
+
+  // Раньше весь этот вывод (фильтрация модов по kind, счётчики, items из двух
+  // .filter, массив FILTERS) считался в inline-IIFE на КАЖДЫЙ рендер — а рендер
+  // происходит на каждое нажатие в поиске модов, любой toggle, событие
+  // download/run. Выносим в useMemo с точными зависимостями: логика и результат
+  // 1-в-1, но пересчёт только при реальном изменении входных данных.
+  const contentMods = contentTab === "console" ? null : contentTab;
+  const all = useMemo(
+    () => (selected && contentMods ? selected.mods.filter((m) => m.kind === contentMods) : []),
+    [selected?.mods, contentMods]
+  );
+  const enabledCount = useMemo(() => all.filter((m) => m.enabled).length, [all]);
+  const outdatedCount = useMemo(
+    () => all.filter((m) => updates.includes(m.project_id)).length,
+    [all, updates]
+  );
+  const items = useMemo(() => {
+    const q = modSearch.trim().toLowerCase();
+    return all
+      .filter((m) =>
+        modFilter === "on"
+          ? m.enabled
+          : modFilter === "off"
+          ? !m.enabled
+          : modFilter === "outdated"
+          ? updates.includes(m.project_id)
+          : true
+      )
+      .filter((m) => !q || m.name.toLowerCase().includes(q) || m.filename.toLowerCase().includes(q));
+  }, [all, modFilter, modSearch, updates]);
 
   const openBuild = async (id: string) => {
     setSelectedId(id);
@@ -256,35 +415,63 @@ export default function BuildsPage() {
     }, ROW_OUT_MS);
   };
 
-  const updateOneMod = async (projectId: string, name: string) => {
-    if (!selected || updatingMod.has(projectId)) return;
-    setUpdatingMod((prev) => new Set(prev).add(projectId));
-    startTask(`mod:${projectId}`, `Обновление · ${name}`);
-    try {
-      const updated = await modrinthInstall(selected.id, projectId);
-      if (wasCancelled(`mod:${projectId}`)) return;
-      setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
-      setUpdates((u) => u.filter((id) => id !== projectId));
-      endTask(`mod:${projectId}`, true);
-      toast(`«${name}» обновлён`, "success");
-    } catch (e) {
-      endTask(`mod:${projectId}`, false);
-      toast(String(e), "error");
-    }
-    setUpdatingMod((prev) => {
-      const next = new Set(prev);
-      next.delete(projectId);
-      return next;
-    });
-  };
+  // Тело без изменений по семантике; useCallback keyed на selectedId (не на весь
+  // selected, чтобы toggle/refresh, меняющие builds, не пересоздавали хендлер) —
+  // это даёт memo(ModRow) стабильный проп. Guard читает updatingRef (синхронное
+  // зеркало) вместо updatingMod, чтобы не тянуть его в deps; поведение то же.
+  const updateOneMod = useCallback(
+    async (projectId: string, name: string) => {
+      if (!selectedId || updatingRef.current.has(projectId)) return;
+      setUpdatingMod((prev) => new Set(prev).add(projectId));
+      startTask(`mod:${projectId}`, `Обновление · ${name}`);
+      try {
+        const updated = await modrinthInstall(selectedId, projectId);
+        if (wasCancelled(`mod:${projectId}`)) return;
+        setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
+        setUpdates((u) => u.filter((id) => id !== projectId));
+        endTask(`mod:${projectId}`, true);
+        toast(`«${name}» обновлён`, "success");
+      } catch (e) {
+        endTask(`mod:${projectId}`, false);
+        toast(String(e), "error");
+      }
+      setUpdatingMod((prev) => {
+        const next = new Set(prev);
+        next.delete(projectId);
+        return next;
+      });
+    },
+    [selectedId, toast]
+  );
 
-  const toggleOneMod = async (projectId: string) => {
-    if (!selected) return;
-    const updated = await toggleMod(selected.id, projectId);
-    setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
-    const m = updated.mods.find((x) => x.project_id === projectId);
-    if (m) toast(`Мод «${m.name}» ${m.enabled ? "включён" : "выключен"}`, "info");
-  };
+  const toggleOneMod = useCallback(
+    async (projectId: string) => {
+      if (!selectedId) return;
+      const updated = await toggleMod(selectedId, projectId);
+      setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
+      const m = updated.mods.find((x) => x.project_id === projectId);
+      if (m) toast(`Мод «${m.name}» ${m.enabled ? "включён" : "выключен"}`, "info");
+    },
+    [selectedId, toast]
+  );
+
+  // Стабильные хендлеры для строки мода (принимают mod/id) — одна ссылка на все
+  // строки, чтобы memo(ModRow) реально срезал ре-рендеры при вводе/toggle.
+  const togglePicked = useCallback(
+    (projectId: string) =>
+      setPicked((p) =>
+        p.includes(projectId) ? p.filter((x) => x !== projectId) : [...p, projectId]
+      ),
+    []
+  );
+  const openModPage = useCallback(
+    (m: InstalledMod) => {
+      const target = modPageTarget(m);
+      if (target) setModPage(target);
+    },
+    []
+  );
+  const confirmRemoveOne = useCallback((m: InstalledMod) => setConfirmMods([m]), []);
 
   const onInstalled = (updated: Build) =>
     setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
@@ -500,8 +687,8 @@ export default function BuildsPage() {
 
         {contentTab !== "console" && (() => {
           const meta = CONTENT_TABS.find((t) => t.id === contentTab)!;
-          const all = selected.mods.filter((m) => m.kind === contentTab);
-          const on = all.filter((m) => m.enabled).length;
+          // all/on/outdated/items вынесены в useMemo выше — здесь только чтение.
+          const on = enabledCount;
 
           if (all.length === 0) {
             return (
@@ -523,19 +710,7 @@ export default function BuildsPage() {
             );
           }
 
-          const q = modSearch.trim().toLowerCase();
-          const outdated = all.filter((m) => updates.includes(m.project_id)).length;
-          const items = all
-            .filter((m) =>
-              modFilter === "on"
-                ? m.enabled
-                : modFilter === "off"
-                ? !m.enabled
-                : modFilter === "outdated"
-                ? updates.includes(m.project_id)
-                : true
-            )
-            .filter((m) => !q || m.name.toLowerCase().includes(q) || m.filename.toLowerCase().includes(q));
+          const outdated = outdatedCount;
 
           const FILTERS: { id: ModFilter; label: string; count: number }[] = [
             { id: "all", label: "Все", count: all.length },
@@ -645,112 +820,23 @@ export default function BuildsPage() {
                       Ничего не нашлось
                     </div>
                   )}
-                  {items.map((m, i) => {
-                    const manual = m.project_id.startsWith("local:");
-                    const target = modPageTarget(m);
-                    const hasUpdate = updates.includes(m.project_id);
-                    const leaving = dyingMods.includes(m.project_id);
-                    return (
-                      <div
-                        key={m.project_id}
-                        style={leaving ? undefined : cardInDelay(i)}
-                        className={`group flex items-center gap-3 rounded-[16px] border-1 border-[#232427]/65 bg-card p-3 transition-colors hover:border-accent/40 ${
-                          leaving ? "row-out" : "card-in"
-                        } ${m.enabled ? "" : "opacity-60"}`}
-                      >
-                        {}
-                        <button
-                          onClick={() =>
-                            setPicked((p) =>
-                              p.includes(m.project_id)
-                                ? p.filter((x) => x !== m.project_id)
-                                : [...p, m.project_id]
-                            )
-                          }
-                          title="Выделить"
-                          className="shrink-0"
-                        >
-                          <Check on={picked.includes(m.project_id)} />
-                        </button>
-
-                        <button
-                          onClick={() => target && setModPage(target)}
-                          disabled={!target}
-                          title={target ? "Открыть страницу" : "Файл не опознан на Modrinth"}
-                          className={`flex min-w-0 flex-1 items-center gap-3 text-left ${
-                            target ? "cursor-pointer" : "cursor-default"
-                          }`}
-                        >
-                          <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-bg">
-                            {m.icon_url ? (
-                              <img src={m.icon_url} alt="" className="h-full w-full object-cover" />
-                            ) : (
-                              <i className={`fa-solid ${meta.icon} text-muted`} />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`truncate text-sm font-medium text-text ${
-                                  target ? "group-hover:text-accent" : ""
-                                }`}
-                                title={m.name}
-                              >
-                                {m.name}
-                              </span>
-                              {manual && (
-                                <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-[10px] text-muted">
-                                  вручную
-                                </span>
-                              )}
-                            </div>
-                            <div className="truncate text-[10px] text-[#818181]" title={m.filename}>
-                              {m.filename || "—"}
-                            </div>
-                          </div>
-                        </button>
-
-                        {}
-                        {hasUpdate && (
-                          <button
-                            onClick={() => updateOneMod(m.project_id, m.name)}
-                            disabled={updatingMod.has(m.project_id)}
-                            title="Доступно обновление — скачать"
-                            className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-accent transition-colors hover:bg-accent hover:text-bg disabled:opacity-60"
-                          >
-                            <i
-                              className={`fa-solid ${
-                                updatingMod.has(m.project_id) ? "fa-spinner fa-spin" : "fa-download"
-                              } text-xs`}
-                            />
-                          </button>
-                        )}
-
-                        {}
-                        <button
-                          onClick={() => toggleOneMod(m.project_id)}
-                          title={m.enabled ? "Выключить" : "Включить"}
-                          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                            m.enabled ? "bg-accent" : "bg-border"
-                          }`}
-                        >
-                          <span
-                            className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
-                              m.enabled ? "left-[22px]" : "left-0.5"
-                            }`}
-                          />
-                        </button>
-
-                        <button
-                          onClick={() => setConfirmMods([m])}
-                          title="Удалить"
-                          className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-muted opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
-                        >
-                          <i className="fa-solid fa-trash-can text-xs" />
-                        </button>
-                      </div>
-                    );
-                  })}
+                  {items.map((m, i) => (
+                    <ModRow
+                      key={m.project_id}
+                      m={m}
+                      i={i}
+                      metaIcon={meta.icon}
+                      picked={picked.includes(m.project_id)}
+                      hasUpdate={updates.includes(m.project_id)}
+                      updating={updatingMod.has(m.project_id)}
+                      leaving={dyingMods.includes(m.project_id)}
+                      onTogglePick={togglePicked}
+                      onOpen={openModPage}
+                      onUpdate={updateOneMod}
+                      onToggle={toggleOneMod}
+                      onRemove={confirmRemoveOne}
+                    />
+                  ))}
                 </div>
               </div>
             </div>

@@ -248,7 +248,22 @@ pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Valu
 /// Скачивает файл во временный <path>.part и атомарно переименовывает в итоговый
 /// путь, чтобы прерванная загрузка не оставляла битый финальный файл.
 /// Возвращает скачанные байты (для проверки хэша в download_file_checked).
-async fn download_to(client: &reqwest::Client, url: &str, path: &Path) -> Result<Vec<u8>, String> {
+///
+/// Возвращаем `bytes::Bytes` (Arc-обёртка над буфером ответа), а не `Vec<u8>`:
+/// раньше здесь был лишний `bytes.to_vec()` — вторая полная копия каждого файла в
+/// куче поверх буфера ответа, помноженная на buffer_unordered(16). Для проверки
+/// размера/SHA1 в download_file_checked достаточно `&[u8]` (Bytes дерефается в
+/// срез), поэтому копия не нужна и поведение не меняется.
+///
+/// Тип именно `bytes::Bytes`: это то, что реально возвращает `reqwest::Response::bytes()`
+/// (reqwest 0.12 НЕ ре-экспортит его как `reqwest::Bytes`). `bytes` уже присутствует в
+/// графе как транзитивная зависимость reqwest/tokio, поэтому объявлен прямой зависимостью
+/// без новой загрузки — только чтобы имя типа было доступно.
+async fn download_to(
+    client: &reqwest::Client,
+    url: &str,
+    path: &Path,
+) -> Result<bytes::Bytes, String> {
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent)
             .await
@@ -273,7 +288,7 @@ async fn download_to(client: &reqwest::Client, url: &str, path: &Path) -> Result
     tokio::fs::rename(&tmp, path)
         .await
         .map_err(|e| e.to_string())?;
-    Ok(bytes.to_vec())
+    Ok(bytes)
 }
 
 /// Скачивает файл, если его ещё нет. Пишет через <path>.part + rename (атомарно).
@@ -287,16 +302,39 @@ pub(crate) async fn download_file(client: &reqwest::Client, url: &str, path: &Pa
 /// Скачивает файл с проверкой целостности: сверяет размер и SHA1 (если заданы).
 /// Существующий файл переиспользуется, только если его размер/хэш совпадают,
 /// иначе — перекачивается. При несовпадении после загрузки файл удаляется.
+///
+/// `content_addressed` = true, если имя файла является его SHA1 (ассеты/объекты
+/// CAS). Тогда для УЖЕ существующего файла проверяем только размер (метаданные,
+/// без чтения и хеширования) — так старт уже установленной версии не пере-хеширует
+/// сотни МБ ассетов каждый раз. Полный SHA1 всё равно считается по свежескачанным
+/// байтам ниже, т.е. первичная загрузка по-прежнему верифицируется.
 pub(crate) async fn download_file_checked(
     client: &reqwest::Client,
     url: &str,
     path: &Path,
     sha1: Option<&str>,
     size: Option<u64>,
+    content_addressed: bool,
 ) -> Result<(), String> {
     // Если файл уже есть — проверяем его целостность, чтобы не качать зря.
+    // Проверка синхронная (std::fs::read + SHA1 для не-CAS файлов) — уводим её в
+    // spawn_blocking, чтобы не блокировать tokio-worker под buffer_unordered(16).
     if path.exists() {
-        if file_matches(path, sha1, size) {
+        let already_valid = {
+            let p = path.to_path_buf();
+            let sha1_owned = sha1.map(|s| s.to_string());
+            tokio::task::spawn_blocking(move || {
+                if content_addressed {
+                    // Имя = SHA1: достаточно наличия и размера.
+                    file_meta_matches(&p, size)
+                } else {
+                    file_matches(&p, sha1_owned.as_deref(), size)
+                }
+            })
+            .await
+            .unwrap_or(false)
+        };
+        if already_valid {
             return Ok(());
         }
         // Битый/устаревший файл — удаляем и качаем заново.
@@ -329,18 +367,24 @@ pub(crate) async fn download_file_checked(
 /// SHA1 байтов в hex-строке нижнего регистра.
 fn sha1_hex(data: &[u8]) -> String {
     use sha1::{Digest, Sha1};
+    use std::fmt::Write as _;
     let mut hasher = Sha1::new();
     hasher.update(data);
     let digest = hasher.finalize();
     let mut s = String::with_capacity(digest.len() * 2);
     for b in digest.iter() {
-        s.push_str(&format!("{b:02x}"));
+        // write! пишет прямо в уже зарезервированный буфер — без временной String
+        // на каждый байт, как делал прежний s.push_str(&format!(...)).
+        let _ = write!(s, "{b:02x}");
     }
     s
 }
 
 /// Проверяет, что файл на диске соответствует ожидаемым размеру/SHA1.
 /// Если ожидаемые значения не заданы — считаем существующий файл валидным.
+///
+/// Полный вариант: читает файл целиком и пересчитывает SHA1. Дорогой — вызывать
+/// только там, где имя файла НЕ является его хэшем (client.jar, библиотеки).
 fn file_matches(path: &Path, sha1: Option<&str>, size: Option<u64>) -> bool {
     let data = match std::fs::read(path) {
         Ok(d) => d,
@@ -353,6 +397,27 @@ fn file_matches(path: &Path, sha1: Option<&str>, size: Option<u64>) -> bool {
     }
     if let Some(expected) = sha1 {
         if !sha1_hex(&data).eq_ignore_ascii_case(expected) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Дешёвая проверка по метаданным: только размер (без чтения содержимого/SHA1).
+/// Для content-addressed файлов (имя файла = SHA1, как у ассетов и объектов CAS)
+/// совпадения имени+размера достаточно: расхождение содержимого при совпадающем
+/// имени означало бы коллизию SHA1. Так мы не перечитываем и не пере-хешируем
+/// сотни МБ уже валидных ассетов на каждом запуске.
+fn file_meta_matches(path: &Path, size: Option<u64>) -> bool {
+    let meta = match std::fs::metadata(path) {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    if let Some(expected) = size {
+        if meta.len() != expected {
             return false;
         }
     }
@@ -535,7 +600,8 @@ async fn prepare_and_launch(
     let client_sha1 = client_download["sha1"].as_str();
     let client_size = client_download["size"].as_u64();
     emit(app, "client", "Загрузка клиента", 0, 1);
-    download_file_checked(&dl_client, client_url, &client_jar, client_sha1, client_size).await?;
+    // client.jar: имя = <version>.jar (НЕ хэш) → полная проверка целостности.
+    download_file_checked(&dl_client, client_url, &client_jar, client_sha1, client_size, false).await?;
     emit(app, "client", "Клиент загружен", 1, 1);
 
     // 4) Библиотеки + нативы
@@ -543,10 +609,19 @@ async fn prepare_and_launch(
     let libs = version_json["libraries"].as_array().unwrap_or(&empty);
     // classpath хранит (group:artifact, путь) — чтобы библиотеки загрузчика
     // могли перекрыть ванильные того же артефакта (иначе Fabric падает на дублях ASM).
+    //
+    // Two-pass: сперва синхронно (в порядке libs) строим classpath/native_jars и
+    // список задач загрузки, затем качаем их параллельно (buffer_unordered), как
+    // ассеты/java-runtime. Порядок classpath и дедуп остаются детерминированными,
+    // т.к. формируются в первом проходе; распаковка нативов — отдельным проходом
+    // после завершения всех загрузок. Семантика ошибок сохранена: любая неудачная
+    // загрузка обрывает установку (fail-fast) через `?` по результатам стрима.
     let mut classpath: Vec<(String, PathBuf)> = Vec::new();
     let mut native_jars: Vec<PathBuf> = Vec::new();
-    let total_libs = libs.len() as u64;
-    for (i, lib) in libs.iter().enumerate() {
+    // Задачи загрузки: (url, dest, sha1, size). content_addressed=false — имена
+    // библиотек это maven-пути, не хэши.
+    let mut lib_tasks: Vec<(String, PathBuf, Option<String>, Option<u64>)> = Vec::new();
+    for lib in libs.iter() {
         if let Some(rules) = lib.get("rules") {
             if !rules_allow(rules) {
                 continue;
@@ -564,7 +639,7 @@ async fn prepare_and_launch(
                 // Хэш/размер из манифеста — для проверки целостности библиотеки.
                 let sha1 = artifact["sha1"].as_str();
                 let size = artifact["size"].as_u64();
-                download_file_checked(&dl_client, url, &dest, sha1, size).await?;
+                lib_tasks.push((url.to_string(), dest.clone(), sha1.map(String::from), size));
                 // натив-классификаторы не участвуют в дедупликации по ключу
                 let is_native = path.contains("natives-");
                 let key = if is_native {
@@ -590,18 +665,57 @@ async fn prepare_and_launch(
                         // Хэш/размер из манифеста — для проверки целостности натива.
                         let sha1 = classifier["sha1"].as_str();
                         let size = classifier["size"].as_u64();
-                        download_file_checked(&dl_client, url, &dest, sha1, size).await?;
+                        lib_tasks.push((url.to_string(), dest.clone(), sha1.map(String::from), size));
                         native_jars.push(dest);
                     }
                 }
             }
         }
-        emit(app, "libraries", "Загрузка библиотек", (i + 1) as u64, total_libs);
     }
 
-    // Распаковка нативов
-    for jar in &native_jars {
-        extract_natives(jar, &natives_dir)?;
+    // Параллельная загрузка библиотек (как ассеты). Прогресс — через atomic-счётчик.
+    let total_libs = lib_tasks.len() as u64;
+    let lib_done = Arc::new(AtomicU64::new(0));
+    emit(app, "libraries", "Загрузка библиотек", 0, total_libs);
+    let lib_results: Vec<Result<(), String>> = stream::iter(lib_tasks.into_iter().map(
+        |(url, dest, sha1, size)| {
+            let client = dl_client.clone();
+            let done = lib_done.clone();
+            let app = app.clone();
+            async move {
+                let r =
+                    download_file_checked(&client, &url, &dest, sha1.as_deref(), size, false).await;
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                emit(&app, "libraries", "Загрузка библиотек", n, total_libs);
+                r
+            }
+        },
+    ))
+    .buffer_unordered(16)
+    .collect()
+    .await;
+    // Fail-fast: первая же ошибка загрузки обрывает установку (как прежний `?`).
+    for r in lib_results {
+        r?;
+    }
+
+    // Распаковка нативов (после того как все jar скачаны).
+    // Синхронный zip-I/O (open + ZipArchive + io::copy) уводим в spawn_blocking,
+    // чтобы не блокировать tokio-worker под async prepare_and_launch. Поведение
+    // 1-в-1: тот же порядок jar, та же пофайловая проверка out.exists() внутри
+    // extract_natives (само-восстановление при удалённых DLL сохраняется), тот же
+    // fail-fast по ошибке распаковки.
+    if !native_jars.is_empty() {
+        let natives = native_jars.clone();
+        let natives_dir2 = natives_dir.clone();
+        tokio::task::spawn_blocking(move || -> Result<(), String> {
+            for jar in &natives {
+                extract_natives(jar, &natives_dir2)?;
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|e| e.to_string())??;
     }
 
     // Java нужна ДО загрузчика: установщик Forge/NeoForge запускается через неё.
@@ -636,18 +750,36 @@ async fn prepare_and_launch(
             "fabric" | "quilt" => {
                 let profile = fetch_loader_profile(&client, loader, version).await?;
                 if let Some(libs) = profile["libraries"].as_array() {
+                    // Two-pass, как для ванильных либ: сперва синхронно строим classpath
+                    // (retain/push В ПОРЯДКЕ профиля — либы загрузчика перекрывают
+                    // ванильные того же артефакта, иначе Fabric падает на дублях ASM),
+                    // затем качаем jar-ы параллельно. Порядок перекрытия сохранён, т.к.
+                    // classpath формируется до/независимо от загрузки.
+                    let mut loader_tasks: Vec<(String, PathBuf)> = Vec::new();
                     for lib in libs {
                         if let (Some(name), Some(url)) = (lib["name"].as_str(), lib["url"].as_str()) {
                             if let Some(path) = maven_path(name) {
                                 let full_url = format!("{}/{}", url.trim_end_matches('/'), path);
                                 let dest = libraries_dir.join(&path);
-                                // Клиент загрузки (без общего timeout) — jar может быть крупным.
-                                download_file(&dl_client, &full_url, &dest).await?;
+                                loader_tasks.push((full_url, dest.clone()));
                                 let key = artifact_key(name);
                                 classpath.retain(|(k, _)| k.is_empty() || k != &key);
                                 classpath.push((key, dest));
                             }
                         }
+                    }
+                    // Клиент загрузки (без общего timeout) — jar может быть крупным.
+                    let results: Vec<Result<(), String>> = stream::iter(loader_tasks.into_iter().map(
+                        |(full_url, dest)| {
+                            let client = dl_client.clone();
+                            async move { download_file(&client, &full_url, &dest).await }
+                        },
+                    ))
+                    .buffer_unordered(16)
+                    .collect()
+                    .await;
+                    for r in results {
+                        r?;
                     }
                 }
                 loader_main_class = profile["mainClass"].as_str().map(|s| s.to_string());
@@ -722,7 +854,10 @@ async fn prepare_and_launch(
             let sub = &hash[0..2];
             let path = objects_dir.join(sub).join(&hash);
             let url = format!("{RESOURCES}/{sub}/{hash}");
-            let _ = download_file_checked(&client, &url, &path, Some(&hash), size).await;
+            // content_addressed=true: имя объекта = его SHA1, поэтому существующий
+            // ассет проверяется только по наличию+размеру, без чтения и пере-хеширования
+            // сотен МБ на каждом запуске (полный SHA1 считается при первичной загрузке).
+            let _ = download_file_checked(&client, &url, &path, Some(&hash), size, true).await;
             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
             if n % 25 == 0 || n == total {
                 emit(&app, "assets", "Загрузка ресурсов", n, total);
@@ -909,47 +1044,49 @@ async fn prepare_and_launch(
         .filter(|t| !t.is_empty());
 
     // Каждая игра — свой монитор-поток, владеющий своим Child.
+    // Блокирующий child.wait() вместо busy-poll try_wait каждые 700мс: поток спит
+    // в ядре до завершения процесса — без периодических пробуждений и без задержки
+    // до 700мс на обнаружение выхода. Остановка (stop_game) не трогает Child, а бьёт
+    // процесс по pid через taskkill, поэтому wait() всё равно разблокируется, когда
+    // ОС завершит процесс — механизм остановки совместим. Вся пост-обработка выхода
+    // (детект краха, playtime, unregister, emit game-exited, clear) выполняется ровно
+    // один раз, как и раньше.
     std::thread::spawn(move || {
         let mut child = child;
-        loop {
-            std::thread::sleep(std::time::Duration::from_millis(700));
-            let success = match child.try_wait() {
-                Ok(Some(status)) => status.success(),
-                Ok(None) => continue,
-                Err(_) => false,
-            };
+        let success = match child.wait() {
+            Ok(status) => status.success(),
+            Err(_) => false,
+        };
 
-            // Ранний выход с ошибкой = вероятно краш. Показываем хвост лога.
-            if !success && started.elapsed().as_secs() < 40 {
-                let tail = log_tail(&log_path2, 1600);
-                let msg = if tail.is_empty() {
-                    "Игра неожиданно закрылась. Смотрите logs/aciron-latest.log.".to_string()
-                } else {
-                    format!("Игра закрылась с ошибкой:\n{tail}")
-                };
-                emit(&app2, "error", &msg, 0, 1);
-            }
-            if let Some(bid) = &track_build {
-                crate::builds::add_playtime(bid, started.elapsed().as_secs());
-            }
-            crate::recents::add_playtime(&game_id2, started.elapsed().as_secs());
-            if let Some(tok) = aciron_token.clone() {
-                tauri::async_runtime::spawn(crate::aciron::add_playtime(
-                    tok,
-                    started.elapsed().as_secs(),
-                ));
-            }
-            // Discord/присутствие сбрасываем только когда не осталось запущенных игр.
-            if unregister_game(pid) == 0 {
-                crate::discord::set_idle();
-                crate::presence::set_stopped();
-            }
-            let _ = app2.emit("game-exited", serde_json::json!({ "id": game_id2 }));
-            // Хвост лога больше не нужен: игра закрыта, а держать десятки
-            // тысяч строк на каждую запущенную за сессию сборку незачем.
-            crate::gamelog::clear(&game_id2);
-            break;
+        // Ранний выход с ошибкой = вероятно краш. Показываем хвост лога.
+        if !success && started.elapsed().as_secs() < 40 {
+            let tail = log_tail(&log_path2, 1600);
+            let msg = if tail.is_empty() {
+                "Игра неожиданно закрылась. Смотрите logs/aciron-latest.log.".to_string()
+            } else {
+                format!("Игра закрылась с ошибкой:\n{tail}")
+            };
+            emit(&app2, "error", &msg, 0, 1);
         }
+        if let Some(bid) = &track_build {
+            crate::builds::add_playtime(bid, started.elapsed().as_secs());
+        }
+        crate::recents::add_playtime(&game_id2, started.elapsed().as_secs());
+        if let Some(tok) = aciron_token.clone() {
+            tauri::async_runtime::spawn(crate::aciron::add_playtime(
+                tok,
+                started.elapsed().as_secs(),
+            ));
+        }
+        // Discord/присутствие сбрасываем только когда не осталось запущенных игр.
+        if unregister_game(pid) == 0 {
+            crate::discord::set_idle();
+            crate::presence::set_stopped();
+        }
+        let _ = app2.emit("game-exited", serde_json::json!({ "id": game_id2 }));
+        // Хвост лога больше не нужен: игра закрыта, а держать десятки
+        // тысяч строк на каждую запущенную за сессию сборку незачем.
+        crate::gamelog::clear(&game_id2);
     });
 
     Ok(())
@@ -1151,12 +1288,14 @@ fn ensure_aciron_skins(root: &Path) -> Option<PathBuf> {
 
 fn sha256_hex(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};
+    use std::fmt::Write as _;
     let mut hasher = Sha256::new();
     hasher.update(data);
     let digest = hasher.finalize();
     let mut s = String::with_capacity(digest.len() * 2);
     for b in digest.iter() {
-        s.push_str(&format!("{b:02x}"));
+        // write! в зарезервированный буфер — без временной String на байт.
+        let _ = write!(s, "{b:02x}");
     }
     s
 }

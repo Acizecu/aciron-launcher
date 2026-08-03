@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha512};
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::Duration;
 use tauri::AppHandle;
 
@@ -20,14 +21,31 @@ fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     Some(p)
 }
 
-fn http() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
+// Ленивый общий Client на весь модуль (B8): reqwest::Client внутри держит пул
+// соединений/TLS-сессий, дёшево клонируется и потокобезопасен. Раньше http()
+// строил новый Client на КАЖДУЮ tauri-команду, выбрасывая keep-alive соединения
+// между вызовами (search -> project -> versions открывали TCP+TLS заново).
+// Теперь клиент строится один раз и переиспользуется; поведение (user-agent,
+// таймауты) и сигнатура http() -> Result<Client, String> сохранены 1-в-1, так что
+// все существующие вызовы `http()?` работают без изменений. При ошибке сборки
+// клиента (практически недостижимой) возвращаем ту же Err(String), что и раньше.
+fn client() -> Result<&'static reqwest::Client, String> {
+    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .user_agent("AcironLauncher/0.1 (aciron.pro)")
+                .connect_timeout(Duration::from_secs(8))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| e.to_string())
+        })
+        .as_ref()
+        .map_err(|e| e.clone())
+}
 
-        .user_agent("AcironLauncher/0.1 (aciron.pro)")
-        .connect_timeout(Duration::from_secs(8))
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())
+fn http() -> Result<reqwest::Client, String> {
+    client().map(|c| c.clone())
 }
 
 #[tauri::command]
@@ -306,56 +324,148 @@ async fn build_from_mrpack(
     let total = files_list.len() as u64;
     let ckey = "legacy";
     crate::cancel::reset(ckey);
-    let mut mods_entries: Vec<InstalledMod> = Vec::new();
-    for (i, f) in files_list.iter().enumerate() {
-        if crate::cancel::is_cancelled(ckey) {
 
-            let _ = builds::delete_build(build_id.clone());
-            return Err(crate::cancel::CANCELLED.into());
-        }
-        if f["env"]["client"].as_str() == Some("unsupported") {
-            continue;
-        }
-        let path = f["path"].as_str().unwrap_or("");
-        if path.is_empty() {
-            continue;
-        }
-        let dl = f["downloads"]
-            .as_array()
-            .and_then(|a| a.first())
-            .and_then(|u| u.as_str());
-        if let Some(dl) = dl {
+    // B1: раньше файлы модпака качались строго по одному (последовательный
+    // `for` + `download_cancelable(...).await`), из-за чего сетевые RTT не
+    // перекрывались и установка большого модпака шла суммой латентностей.
+    // Теперь качаем через buffer_unordered(8) — тот же приём, что уже принят
+    // в check_build_updates (buffer_unordered(8)) и в launcher.rs (ассеты
+    // buffer_unordered(16)). Семантику сохраняем 1-в-1:
+    //  * порядок mods_entries восстанавливаем по исходному индексу (сортировкой),
+    //    поэтому build.mods не зависит от порядка завершения задач;
+    //  * отмена проверяется до старта каждой задачи И внутри download_cancelable
+    //    (на каждый chunk) — как и было; при отмене удаляем сборку и возвращаем
+    //    CANCELLED;
+    //  * ошибка загрузки БЕЗ отмены по-прежнему игнорируется (файл пропускается,
+    //    но mods/-запись всё равно добавляется — как в исходном коде);
+    //  * прогресс считаем атомарно (AtomicU64 fetch_add), эмитим порционно,
+    //    финальный emit гарантирует total == total.
+    // Мы завели свежий локальный ckey-механизм не трогая (общий ключ "legacy"
+    // сохранён), т.к. cancel.rs потокобезопасен (Mutex<HashSet>).
+    use futures::StreamExt;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::Arc;
 
-            let dest = match safe_join(&build_dir, path) {
-                Some(d) => d,
-                None => continue,
-            };
-            if download_cancelable(cl, dl, &dest, ckey).await.is_err()
-                && crate::cancel::is_cancelled(ckey)
-            {
-                let _ = builds::delete_build(build_id.clone());
-                return Err(crate::cancel::CANCELLED.into());
+    let done = Arc::new(AtomicU64::new(0));
+    // Признак отмены, замеченной внутри какой-либо задачи — чтобы после
+    // завершения стрима принять то же решение (delete_build + CANCELLED),
+    // что и раньше при раннем return.
+    let cancelled = Arc::new(AtomicBool::new(false));
+
+    // Сначала полностью вытаскиваем owned-данные из files_list (borrow &Value
+    // заканчивается здесь). Это обязательно: если мапить прямо по
+    // files_list.iter().enumerate(), замыкание получает аргумент
+    // (usize, &serde_json::Value), и futures::stream::iter(..).buffer_unordered
+    // требует от этого замыкания HRTB-обобщённости по времени жизни borrow'а,
+    // которую компилятор доказать не может ("implementation of `FnOnce`/`Iterator`
+    // is not general enough"). Владеющий Vec убирает borrow из сигнатуры
+    // замыкания — futures становятся 'static по этим данным. Поведение 1-в-1:
+    // тот же индекс i (enumerate ниже идёт в том же порядке), те же извлечённые
+    // значения (unsupported/path/dl), тот же buffer_unordered(8).
+    let prepared: Vec<(bool, String, Option<String>)> = files_list
+        .iter()
+        .map(|f| {
+            let unsupported = f["env"]["client"].as_str() == Some("unsupported");
+            let path = f["path"].as_str().unwrap_or("").to_string();
+            let dl = f["downloads"]
+                .as_array()
+                .and_then(|a| a.first())
+                .and_then(|u| u.as_str())
+                .map(|s| s.to_string());
+            (unsupported, path, dl)
+        })
+        .collect();
+
+    let tasks = prepared.into_iter().enumerate().map(|(i, (unsupported, path, dl))| {
+        // cl: &reqwest::Client — берём ВЛАДЕЮЩИЙ клон Client (дёшево, шарит пул),
+        // а не клон ссылки; (*cl).clone() снимает неоднозначность метода clone.
+        let cl = (*cl).clone();
+        let build_dir = build_dir.clone();
+        // app: &AppHandle — тоже берём владеющий клон (Arc внутри), не клон ссылки.
+        let app = (*app).clone();
+        let done = done.clone();
+        let cancelled = cancelled.clone();
+        async move {
+            // Отмена, замеченная до старта задачи — эквивалент проверки в начале
+            // старого цикла. Возвращаем маркер отмены, прогресс не двигаем.
+            if crate::cancel::is_cancelled(ckey) {
+                cancelled.store(true, Ordering::Relaxed);
+                return None;
             }
-            if path.starts_with("mods/") {
-                let filename = Path::new(path)
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or(path)
-                    .to_string();
-                let name = filename.trim_end_matches(".jar").to_string();
-                mods_entries.push(InstalledMod {
-                    project_id: format!("mrpack:{filename}"),
-                    version_id: String::new(),
-                    name,
-                    filename,
-                    icon_url: String::new(),
-                    enabled: true,
-                    kind: "mod".into(),
-                });
+            if unsupported {
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if n % 10 == 0 || n == total {
+                    emit(&app, "modpack", "Загрузка модпака", n, total);
+                }
+                return None;
             }
+            if path.is_empty() {
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if n % 10 == 0 || n == total {
+                    emit(&app, "modpack", "Загрузка модпака", n, total);
+                }
+                return None;
+            }
+            let mut entry: Option<InstalledMod> = None;
+            if let Some(dl) = dl {
+                let dest = match safe_join(&build_dir, &path) {
+                    Some(d) => d,
+                    // Как и в исходнике: при неудачном safe_join итерация
+                    // прерывалась `continue` ДО emit — прогресс не двигаем.
+                    None => return None,
+                };
+                if download_cancelable(&cl, &dl, &dest, ckey).await.is_err()
+                    && crate::cancel::is_cancelled(ckey)
+                {
+                    cancelled.store(true, Ordering::Relaxed);
+                    return None;
+                }
+                if path.starts_with("mods/") {
+                    let filename = Path::new(&path)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(&path)
+                        .to_string();
+                    let name = filename.trim_end_matches(".jar").to_string();
+                    entry = Some(InstalledMod {
+                        project_id: format!("mrpack:{filename}"),
+                        version_id: String::new(),
+                        name,
+                        filename,
+                        icon_url: String::new(),
+                        enabled: true,
+                        kind: "mod".into(),
+                    });
+                }
+            }
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            if n % 10 == 0 || n == total {
+                emit(&app, "modpack", "Загрузка модпака", n, total);
+            }
+            entry.map(|m| (i, m))
         }
-        emit(app, "modpack", "Загрузка модпака", (i + 1) as u64, total);
+    });
+
+    let results: Vec<Option<(usize, InstalledMod)>> =
+        futures::stream::iter(tasks).buffer_unordered(8).collect().await;
+
+    if cancelled.load(Ordering::Relaxed) {
+        let _ = builds::delete_build(build_id.clone());
+        return Err(crate::cancel::CANCELLED.into());
     }
+
+    // Финальный emit прогресса стадии модпака: гарантирует 100%, как в исходном
+    // последовательном цикле, где последняя итерация эмитила (total, total).
+    // Порядок завершения задач в buffer_unordered произволен, поэтому точный
+    // момент n == total мог не совпасть — добираем здесь. Безопасно и идемпотентно.
+    if total > 0 {
+        emit(app, "modpack", "Загрузка модпака", total, total);
+    }
+
+    // Восстанавливаем исходный (файловый) порядок mods_entries по индексу.
+    let mut collected: Vec<(usize, InstalledMod)> = results.into_iter().flatten().collect();
+    collected.sort_by_key(|(i, _)| *i);
+    let mods_entries: Vec<InstalledMod> = collected.into_iter().map(|(_, m)| m).collect();
 
     let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
     build.mods = mods_entries;

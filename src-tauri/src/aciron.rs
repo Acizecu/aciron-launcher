@@ -29,14 +29,30 @@ const CLIENT_KEY: &str = match option_env!("ACIRON_CLIENT_KEY") {
     None => "",
 };
 
+// B8: один ленивый общий reqwest::Client на весь модуль (образец — modrinth.rs).
+// reqwest::Client внутри держит пул keep-alive соединений и TLS-сессий, дёшево
+// клонируется (Arc) и потокобезопасен. Раньше http() строил НОВЫЙ Client на
+// каждый вызов request()/get/post/patch/delete, а значит каждый исходящий запрос
+// заново делал TCP+TLS handshake — особенно заметно на фоне: presence heartbeat
+// раз в 20с, poll друзей раз в 90с, чат/гардероб. Теперь клиент строится один раз
+// и переиспользуется, keep-alive/TLS-reuse работают между запросами.
+// Поведение 1-в-1: user-agent и таймауты те же, сигнатура http() сохранена, так
+// что все вызовы `http()?` компилируются без изменений; при (практически
+// недостижимой) ошибке сборки возвращается та же Err(String), что и раньше.
 pub(crate) fn http() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .user_agent("AcironLauncher")
-        // Таймауты: не зависаем на медленном/мёртвом соединении.
-        .connect_timeout(std::time::Duration::from_secs(8))
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|e| e.to_string())
+    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
+        std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .user_agent("AcironLauncher")
+                // Таймауты: не зависаем на медленном/мёртвом соединении.
+                .connect_timeout(std::time::Duration::from_secs(8))
+                .timeout(std::time::Duration::from_secs(20))
+                .build()
+                .map_err(|e| e.to_string())
+        })
+        .clone()
 }
 
 /// Заголовки подписи для запроса: метод, путь, время и одноразовая метка.

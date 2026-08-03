@@ -94,13 +94,18 @@ pub async fn friend_profile(user_id: String) -> Result<serde_json::Value, String
 }
 
 fn urlencode(s: &str) -> String {
+    use std::fmt::Write;
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 out.push(b as char)
             }
-            _ => out.push_str(&format!("%{b:02X}")),
+            // write! пишет hex прямо в буфер без промежуточного format!-String на
+            // каждый байт. Вывод байт-в-байт тот же; write! в String инфаллибелен.
+            _ => {
+                let _ = write!(out, "%{b:02X}");
+            }
         }
     }
     out

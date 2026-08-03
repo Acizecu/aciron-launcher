@@ -278,8 +278,25 @@ async fn build_profile(
 
     // Библиотеки: установщик уже разложил их в libraries/. Догружаем только то,
     // у чего есть прямой url и чего нет на диске (обычные зависимости).
+    //
+    // B7: раньше догрузка шла строго последовательно (download_file(..).await
+    // в цикле). Теперь недостающие библиотеки качаем параллельно через
+    // futures::stream::iter(..).buffer_unordered(N) — тот же приём, что уже
+    // используют launcher.rs (ассеты/либы, N=16) и modrinth.rs (N=8).
+    // Порядок classpath СОХРАНЁН 1-в-1: сначала одним проходом по vjson в
+    // ИСХОДНОМ порядке собираем записи (ключ+dest и, если файла нет, задание на
+    // скачивание), затем скачиваем недостающие конкурентно, и только потом
+    // ОТДЕЛЬНЫМ проходом в том же исходном порядке пушим в `libraries` те,
+    // что реально лежат на диске (тот же пост-загрузочный gate dest.exists()).
+    // Так библиотеки без url (созданные процессорами установщика) и порядок их
+    // добавления не меняются. Ошибки скачивания по-прежнему игнорируются
+    // (`let _ =`), чтобы не сломать recovery-флоу с повторным запуском
+    // установщика (см. install(): проверка profile.libraries на существование).
     let mut libraries: Vec<(String, PathBuf)> = Vec::new();
     if let Some(libs) = vjson["libraries"].as_array() {
+        // Проход 1 (в исходном порядке): решаем key+dest и что докачивать.
+        let mut entries: Vec<(String, PathBuf)> = Vec::new();
+        let mut to_download: Vec<(String, PathBuf)> = Vec::new();
         for lib in libs {
             let name = lib["name"].as_str().unwrap_or("");
             if name.is_empty() {
@@ -297,11 +314,35 @@ async fn build_profile(
             let dest = libraries_dir.join(&path);
             if !dest.exists() {
                 if let Some(url) = art["url"].as_str().filter(|u| !u.is_empty()) {
-                    let _ = download_file(client, url, &dest).await;
+                    to_download.push((url.to_string(), dest.clone()));
                 }
             }
+            entries.push((artifact_key(name), dest));
+        }
+
+        // Проход 2: недостающие библиотеки качаем параллельно (умеренно, N=16 —
+        // как ванильные либы/ассеты в launcher.rs; это обычные maven-зеркала без
+        // строгого rate-limit). reqwest::Client дёшево шарится между задачами.
+        // Ошибки глотаем — как и в исходном последовательном коде.
+        if !to_download.is_empty() {
+            use futures::StreamExt;
+            futures::stream::iter(to_download.into_iter().map(|(url, dest)| {
+                let client = client.clone();
+                async move {
+                    let _ = download_file(&client, &url, &dest).await;
+                }
+            }))
+            .buffer_unordered(16)
+            .collect::<Vec<_>>()
+            .await;
+        }
+
+        // Проход 3 (в исходном порядке): тот же пост-загрузочный gate, что и
+        // раньше — включаем только фактически существующие файлы, порядок
+        // classpath не меняется.
+        for (key, dest) in entries {
             if dest.exists() {
-                libraries.push((artifact_key(name), dest));
+                libraries.push((key, dest));
             }
         }
     }

@@ -321,7 +321,35 @@ export function useChat(): State {
   );
 }
 
+// Селекторные подписчики: вместо возврата всего `state` (любой emit создаёт новый
+// top-level объект → все потребители useChat ре-рендерятся на любое изменение чата)
+// возвращаем только нужный срез. patch() спредит только byUser, поэтому ссылки на
+// unread/last и на конкретную Conversation стабильны, пока сам срез не изменился →
+// useSyncExternalStore выходит из ре-рендера по Object.is. Поведение идентично
+// useChat(), но подписчик перерисовывается только при изменении его среза.
+export function useUnread(): Record<string, number> {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.unread,
+    () => state.unread
+  );
+}
+
+export function useLast(): Record<string, number> {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.last,
+    () => state.last
+  );
+}
+
 export function useConversation(userId: string): Conversation {
-  const s = useChat();
-  return s.byUser[userId] ?? EMPTY;
+  // Подписка на срез одного диалога: тик unread или сообщение в ДРУГОМ диалоге
+  // не трогают state.byUser[userId] (patch создаёт новый объект только для своего
+  // userId), поэтому снапшот стабилен по Object.is и этот компонент не ре-рендерится.
+  return useSyncExternalStore(
+    subscribe,
+    () => state.byUser[userId] ?? EMPTY,
+    () => state.byUser[userId] ?? EMPTY
+  );
 }

@@ -50,7 +50,12 @@ export function refreshFriends() {
 export function patchFriends(fn: (d: FriendsData) => FriendsData): FriendsData | null {
   if (!snap.data) return null;
   const prev = snap.data;
-  emit({ data: fn(structuredClone(prev)) });
+  // Все вызывающие (FriendsPanel/FriendRequestToast/FriendSettingsModal) — чистые
+  // иммутабельные апдейтеры ({...d, ...}/.filter()), они не мутируют d на месте,
+  // поэтому глубокий structuredClone(prev) был лишней работой на каждое действие.
+  // Передаём prev напрямую: результат идентичен, а контракт отката сохранён —
+  // prev остаётся нетронутым оригиналом для restoreFriends(prev).
+  emit({ data: fn(prev) });
   return prev;
 }
 

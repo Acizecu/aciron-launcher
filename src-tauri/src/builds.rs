@@ -84,9 +84,14 @@ pub struct Build {
 
 /// Добавляет секунды к наигранному времени сборки.
 pub fn add_playtime(build_id: &str, secs: u64) {
-    if let Some(mut b) = get_build(build_id) {
+    // Один read+write вместо прежних двух чтений builds.json
+    // (get_build -> load_builds, затем upsert_build -> load_builds + save).
+    // Поведение то же: если сборка есть — инкремент playtime и сохранение;
+    // если нет — ничего не пишем.
+    let mut list = load_builds();
+    if let Some(b) = list.iter_mut().find(|b| b.id == build_id) {
         b.playtime_secs += secs;
-        let _ = upsert_build(b);
+        let _ = save_builds(&list);
     }
 }
 
@@ -184,6 +189,15 @@ pub fn build_dir(id: &str) -> PathBuf {
         .map(|b| if b.dir.is_empty() { b.id } else { b.dir })
         .unwrap_or_else(|| id.to_string());
     PathBuf::from(&s.builds_dir).join(folder)
+}
+
+/// Как build_dir, но по уже загруженной сборке — без повторного load_settings /
+/// load_builds. Поведение идентично build_dir(&b.id): при пустом b.dir берётся
+/// b.id (совпадает с get_build(id) для той же записи). Используется в командах,
+/// которые уже держат Build на руках, чтобы убрать N+1 чтения builds.json.
+fn build_dir_for(builds_dir: &str, b: &Build) -> PathBuf {
+    let folder = if b.dir.is_empty() { &b.id } else { &b.dir };
+    PathBuf::from(builds_dir).join(folder)
 }
 
 pub fn mods_dir(id: &str) -> PathBuf {
@@ -290,7 +304,8 @@ pub fn open_build_folder(id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn set_build_banner(build_id: String, src_path: String) -> Result<Build, String> {
     let mut build = get_build(&build_id).ok_or("Сборка не найдена")?;
-    let dir = build_dir(&build_id);
+    // Папку резолвим по загруженной сборке — без повторного load_builds.
+    let dir = build_dir_for(&settings::load_settings().builds_dir, &build);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if !build.banner.is_empty() {
         let _ = std::fs::remove_file(dir.join(&build.banner));
@@ -320,7 +335,8 @@ pub fn get_build_banner(build_id: String) -> Option<String> {
     if build.banner.is_empty() {
         return None;
     }
-    file_data_url(&build_dir(&build_id).join(&build.banner))
+    let base = build_dir_for(&settings::load_settings().builds_dir, &build);
+    file_data_url(&base.join(&build.banner))
 }
 
 /// Читает картинку с диска и отдаёт как data-URL.
@@ -352,7 +368,8 @@ pub fn set_build_image(build_id: String, src_path: String) -> Result<Build, Stri
         .unwrap_or("png")
         .to_lowercase();
     let filename = format!("cover.{ext}");
-    let dir = build_dir(&build_id);
+    // Папку резолвим по загруженной сборке — без повторного load_builds.
+    let dir = build_dir_for(&settings::load_settings().builds_dir, &build);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if !build.image.is_empty() {
         let _ = std::fs::remove_file(dir.join(&build.image));
@@ -371,7 +388,7 @@ pub fn get_build_image(build_id: String) -> Option<String> {
     if build.image.is_empty() {
         return None;
     }
-    let path = build_dir(&build_id).join(&build.image);
+    let path = build_dir_for(&settings::load_settings().builds_dir, &build).join(&build.image);
     let bytes = std::fs::read(&path).ok()?;
     let ext = path
         .extension()
@@ -391,8 +408,10 @@ pub fn get_build_image(build_id: String) -> Option<String> {
 #[tauri::command]
 pub fn toggle_mod(build_id: String, project_id: String) -> Result<Build, String> {
     let mut build = get_build(&build_id).ok_or("Сборка не найдена")?;
+    // Резолвим папку по уже загруженной сборке — без повторного чтения builds.json.
+    let build_base = build_dir_for(&settings::load_settings().builds_dir, &build);
     if let Some(m) = build.mods.iter_mut().find(|m| m.project_id == project_id) {
-        let dir = build_dir(&build_id).join(kind_subdir(&m.kind));
+        let dir = build_base.join(kind_subdir(&m.kind));
         let cur = dir.join(&m.filename);
         let new_name = if m.enabled {
             format!("{}.disabled", m.filename)
@@ -414,8 +433,10 @@ pub fn toggle_mod(build_id: String, project_id: String) -> Result<Build, String>
 #[tauri::command]
 pub fn remove_mod(build_id: String, project_id: String) -> Result<Build, String> {
     let mut build = get_build(&build_id).ok_or("Сборка не найдена")?;
+    // Резолвим папку по уже загруженной сборке — без повторного чтения builds.json.
+    let build_base = build_dir_for(&settings::load_settings().builds_dir, &build);
     if let Some(m) = build.mods.iter().find(|m| m.project_id == project_id) {
-        let file = build_dir(&build_id).join(kind_subdir(&m.kind)).join(&m.filename);
+        let file = build_base.join(kind_subdir(&m.kind)).join(&m.filename);
         let _ = std::fs::remove_file(file);
     }
     build.mods.retain(|m| m.project_id != project_id);
@@ -431,8 +452,13 @@ pub fn refresh_build_content(build_id: String) -> Result<Build, String> {
     let mut build = get_build(&build_id).ok_or("Сборка не найдена")?;
     let mut kept: Vec<InstalledMod> = Vec::new();
 
+    // Папку сборки резолвим один раз (было: build_dir() внутри цикла ×3 →
+    // ×3 load_settings + ×3 load_builds). Значение то же: build уже загружен,
+    // на диске он не меняется до финального upsert_build ниже.
+    let build_base = build_dir_for(&settings::load_settings().builds_dir, &build);
+
     for kind in ["mod", "resourcepack", "shader"] {
-        let dir = build_dir(&build_id).join(kind_subdir(kind));
+        let dir = build_base.join(kind_subdir(kind));
         let _ = std::fs::create_dir_all(&dir);
         let exts = kind_exts(kind);
 

@@ -23,6 +23,10 @@ serde_json = "1"
 dirs = "5"
 # stream — потоковая загрузка (bytes_stream), нужна чтобы рвать соединение при отмене
 reqwest = { version = "0.12", features = ["json", "stream", "multipart"] }
+# Тип, который отдаёт reqwest::Response::bytes() (reqwest его не ре-экспортит).
+# Уже в графе транзитивно (reqwest/tokio) — прямая запись не тянет новую загрузку,
+# лишь делает имя bytes::Bytes доступным для download_to (см. launcher.rs).
+bytes = "1"
 tokio = { version = "1", features = ["full"] }
 # WebSocket присутствия. native-tls намеренно: reqwest здесь тоже на native-tls,
 # и второй стек TLS в сборке не нужен.

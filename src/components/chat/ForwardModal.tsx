@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Modal from "../Modal";
 import Head from "../Head";
 import { friendSkinUrl } from "../../api";
@@ -16,8 +16,14 @@ export default function ForwardModal({
   const { data } = useFriends();
   const [query, setQuery] = useState("");
 
-  const friends = sortFriends(data?.friends ?? []).filter((f) =>
-    f.username.toLowerCase().includes(query.trim().toLowerCase())
+  // Сортировку (O(n log n) с localeCompare) считаем один раз на изменение списка,
+  // а не на каждое нажатие клавиши; toLowerCase(query) вычисляем один раз, а не на
+  // каждом элементе. Результат фильтрации/порядок идентичны прежним.
+  const sorted = useMemo(() => sortFriends(data?.friends ?? []), [data?.friends]);
+  const q = query.trim().toLowerCase();
+  const friends = useMemo(
+    () => sorted.filter((f) => f.username.toLowerCase().includes(q)),
+    [sorted, q]
   );
 
   return (

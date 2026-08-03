@@ -191,7 +191,12 @@ export default function WardrobePage() {
   const patchData = (mut: (d: WardrobeData) => WardrobeData): WardrobeData | null => {
     if (!data) return null;
     const prev = data;
-    setData(mut(structuredClone(data)));
+    // Без structuredClone: оба вызывающих (saveEdit, delete confirm) строят полностью
+    // новый объект через {...d} + новые массивы (.map/.filter) и никогда не мутируют
+    // существующие элементы на месте, поэтому исходный граф (prev) остаётся нетронутым
+    // и годится для отката. Глубокое клонирование было лишней работой поверх новых
+    // иммутабельных копий, которые mut всё равно создаёт.
+    setData(mut(prev));
     return prev;
   };
 

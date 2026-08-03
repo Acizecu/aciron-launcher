@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useTheme,
   PRESET_LIST,
@@ -134,6 +134,11 @@ export default function ThemeSettings() {
   const [shareCode, setShareCode] = useState("");
   const toast = useToast();
 
+  // customPalette(theme) — чистая функция от theme; раньше вызывалась до N(TOKENS)+3
+  // раз за рендер (карточка, поле «Текст», ContrastNotice, каждый токен в map).
+  // Считаем палитру один раз и переиспользуем — результат идентичен.
+  const pal = useMemo(() => customPalette(theme), [theme]);
+
   return (
     <>
         <h2 className="text-lg font-bold text-text">Тема оформления</h2>
@@ -149,7 +154,7 @@ export default function ThemeSettings() {
           ))}
           <ThemeCard
             label="Своя тема"
-            palette={customPalette(theme)}
+            palette={pal}
             active={theme.id === "custom"}
             onClick={() => setTheme("custom")}
           />
@@ -179,13 +184,13 @@ export default function ThemeSettings() {
                 hint="По умолчанию подбирается под яркость фона."
               >
                 <ColorInput
-                  value={customPalette(theme).text}
+                  value={pal.text}
                   onChange={(v) => setSeed({ text: v })}
                 />
               </Field>
             </Card>
 
-            <ContrastNotice palette={customPalette(theme)} />
+            <ContrastNotice palette={pal} />
 
             {}
             <Card>
@@ -229,7 +234,7 @@ export default function ThemeSettings() {
                           </button>
                         )}
                         <ColorInput
-                          value={customPalette(theme)[t.key]}
+                          value={pal[t.key]}
                           onChange={(v) => setToken(t.key, v)}
                         />
                       </div>

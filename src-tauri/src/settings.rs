@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::{OnceLock, RwLock};
 use tauri::AppHandle;
 
 pub fn launcher_root() -> PathBuf {
@@ -241,7 +242,31 @@ pub fn detect_java() -> String {
     String::new()
 }
 
-pub fn load_settings() -> Settings {
+/// Кэш полностью разрешённых настроек (после подстановки java_path и ensure_dirs).
+///
+/// `load_settings()` дёргается очень часто (get_settings на каждом переключении
+/// вкладки во фронте, а также build_dir/get_installed_versions/launch_* внутри),
+/// и каждый вызов раньше = чтение+парсинг settings.json + возможный дисковый скан
+/// detect_java (перебор PATH и read_dir по Program Files) + 3× create_dir_all.
+/// Кэшируем результат в памяти; инвалидируем в save_settings. Слот инстанса
+/// (instance::slot) фиксируется единожды на запуск процесса через OnceLock, так
+/// что data_root() стабилен и кэш не может указать на чужой слот.
+fn settings_cache() -> &'static RwLock<Option<Settings>> {
+    static C: OnceLock<RwLock<Option<Settings>>> = OnceLock::new();
+    C.get_or_init(|| RwLock::new(None))
+}
+
+/// Сбрасывает кэш настроек (после записи файла), чтобы следующий load_settings
+/// перечитал диск и заново применил detect_java/ensure_dirs — семантика 1-в-1
+/// с прежним поведением (в т.ч. повторный detect_java, если java_path пуст).
+fn invalidate_settings_cache() {
+    if let Ok(mut guard) = settings_cache().write() {
+        *guard = None;
+    }
+}
+
+/// Читает и полностью разрешает настройки с диска (java_path + ensure_dirs).
+fn load_settings_uncached() -> Settings {
     let file = settings_file();
     let mut s = match std::fs::read_to_string(&file) {
         Ok(txt) => serde_json::from_str::<Settings>(&txt).unwrap_or_default(),
@@ -255,6 +280,23 @@ pub fn load_settings() -> Settings {
     s
 }
 
+pub fn load_settings() -> Settings {
+    // Быстрый путь: возвращаем кэш, если он прогрет.
+    if let Ok(guard) = settings_cache().read() {
+        if let Some(s) = guard.as_ref() {
+            return s.clone();
+        }
+    }
+    // Медленный путь: читаем диск и прогреваем кэш. Возможна гонка двух
+    // «первых» вызовов — оба сделают одинаковую работу и запишут один и тот же
+    // результат; это безопасно (последняя запись выигрывает, значение то же).
+    let s = load_settings_uncached();
+    if let Ok(mut guard) = settings_cache().write() {
+        *guard = Some(s.clone());
+    }
+    s
+}
+
 #[tauri::command]
 pub fn get_settings() -> Settings {
     load_settings()
@@ -265,6 +307,9 @@ pub fn save_settings(settings: Settings) -> Result<(), String> {
     ensure_dirs(&settings);
     let txt = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
     crate::atomic::write(&settings_file(), &txt)?;
+    // Инвалидируем кэш: следующий load_settings перечитает файл и заново
+    // применит detect_java/ensure_dirs — те же данные, что видит пользователь.
+    invalidate_settings_cache();
 
     crate::discord::set_enabled(settings.discord_rpc);
     Ok(())

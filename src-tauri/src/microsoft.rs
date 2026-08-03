@@ -17,14 +17,24 @@ const AUTH_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/
 const TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
 const SCOPE: &str = "XboxLive.signin offline_access";
 
+// B8: ленивый общий Client вместо нового на каждый вход/refresh (образец —
+// modrinth.rs/aciron.rs). reqwest::Client — Arc внутри, дёшево клонируется и
+// переиспользует пул/TLS-сессии. UA и таймауты — те же константы, сигнатура
+// http() сохранена, поведение 1-в-1. Выигрыш небольшой (http() зовётся только на
+// interactive_login/refresh_account), но правка тривиальна и безопасна.
 fn http() -> Result<reqwest::Client, String> {
-    reqwest::Client::builder()
-        .user_agent("AcironLauncher/0.1")
-
-        .connect_timeout(Duration::from_secs(8))
-        .timeout(Duration::from_secs(20))
-        .build()
-        .map_err(|e| e.to_string())
+    static CLIENT: std::sync::OnceLock<Result<reqwest::Client, String>> =
+        std::sync::OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .user_agent("AcironLauncher/0.1")
+                .connect_timeout(Duration::from_secs(8))
+                .timeout(Duration::from_secs(20))
+                .build()
+                .map_err(|e| e.to_string())
+        })
+        .clone()
 }
 
 const AUTH_WINDOW: &str = "ms-auth";
@@ -52,11 +62,16 @@ fn open_auth_window(app: &AppHandle, url: &str) -> Option<tauri::WebviewWindow> 
 }
 
 fn urlencode(s: &str) -> String {
+    use std::fmt::Write;
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
-            _ => out.push_str(&format!("%{b:02X}")),
+            // write! пишет hex прямо в буфер без промежуточного format!-String на
+            // каждый байт. Вывод байт-в-байт тот же; write! в String инфаллибелен.
+            _ => {
+                let _ = write!(out, "%{b:02X}");
+            }
         }
     }
     out
