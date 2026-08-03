@@ -15,12 +15,32 @@ const SKIP_DIRS = new Set([
 const SKIP_FILES = new Set([
   "TODO.md", "launcher-screenshot.png", ".DS_Store", "Thumbs.db",
 ]);
-const SKIP_RE = [/\.local$/, /\.log$/, /^\.env/, /\.key$/, /\.pem$/, /secret/i, /apikeys/i];
+// `.effective.` — сгенерированный конфиг дев-канала: в нём лежит токен
+// обновлений. Экспорт копирует файлы с диска, а не из git, и .gitignore его не
+// спасает — без этого правила токен уехал бы в публичный репозиторий.
+const SKIP_RE = [
+  /\.local$/,
+  /\.log$/,
+  /^\.env/,
+  /\.key$/,
+  /\.pem$/,
+  /\.effective\./,
+  /secret/i,
+  /apikeys/i,
+];
+
+// Исключения из SKIP_RE: имя выглядит «секретным», но файл обязан попасть в
+// экспорт. src-tauri/src/secret.rs — модуль шифрования токенов на диске (DPAPI),
+// самих секретов в нём нет, зато lib.rs объявляет `mod secret`. Правило
+// /secret/i молча выбрасывало его, и опубликованный прод переставал собираться:
+// accounts.rs зовёт crate::secret::encrypt/decrypt, а файла нет.
+const KEEP = new Set(["secret.rs"]);
 
 const CODE_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".rs", ".java"]);
 
 const skipName = (name) =>
-  SKIP_DIRS.has(name) || SKIP_FILES.has(name) || SKIP_RE.some((re) => re.test(name));
+  !KEEP.has(name) &&
+  (SKIP_DIRS.has(name) || SKIP_FILES.has(name) || SKIP_RE.some((re) => re.test(name)));
 
 function stripComments(src) {
   let out = "";
