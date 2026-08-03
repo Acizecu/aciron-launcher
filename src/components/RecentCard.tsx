@@ -57,6 +57,17 @@ export default function RecentCard({
       {}
       <div className="absolute inset-0 bg-black/80" />
 
+      {/* Клик по самой карточке ведёт к сборке. Лежит под кнопками (они идут
+          дальше в разметке), поэтому «Продолжить» и крестик перехват не задевает. */}
+      {recent.kind === "build" && (
+        <button
+          onClick={() => goToBuild(recent.id)}
+          title="Перейти к сборке"
+          aria-label="Перейти к сборке"
+          className="absolute inset-0 h-full w-full cursor-pointer bg-white/0 transition-colors hover:bg-white/5"
+        />
+      )}
+
       {}
       <button
         onClick={onRemove}
@@ -66,26 +77,19 @@ export default function RecentCard({
         <i className="fa-solid fa-xmark text-xs" />
       </button>
 
-      <div className="absolute inset-x-0 bottom-0 flex items-end gap-3 p-4">
+      {/* pointer-events-none, чтобы клик по названию/подписи доходил до подложки
+          перехода к сборке; сами кнопки возвращают себе события. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-3 p-4">
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-medium text-white">
             {recent.kind === "build" ? recent.name : `MC ${recent.name}`}
           </div>
           <div className="text-[10px] text-[#818181]">Вы играли {playtime(recent.playtime_secs)}</div>
         </div>
-        {recent.kind === "build" && (
-          <button
-            onClick={() => goToBuild(recent.id)}
-            title="Перейти к сборке"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-white/10 text-white/80 transition-colors hover:bg-white/20"
-          >
-            <i className="fa-solid fa-arrow-up-right-from-square text-xs" />
-          </button>
-        )}
         {running ? (
           <button
             onClick={() => stop(recent.id)}
-            className="h-9 shrink-0 rounded-lg bg-[#ef4444] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
+            className="pointer-events-auto h-9 shrink-0 rounded-lg bg-[#ef4444] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
           >
             Закрыть
           </button>
@@ -101,7 +105,7 @@ export default function RecentCard({
               }
             }}
             disabled={busy}
-            className="h-9 shrink-0 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
+            className="pointer-events-auto h-9 shrink-0 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? <i className="fa-solid fa-spinner fa-spin" /> : "Продолжить"}
           </button>
