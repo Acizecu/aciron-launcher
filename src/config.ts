@@ -3,7 +3,7 @@ export const DEV = false;
 
 export const ACIRON_LOGIN_ENABLED = true;
 
-export const APP_VERSION = "0.9.1";
+export const APP_VERSION = "0.9.2";
 export const APP_CHANNEL = "beta";
 
 export const GITHUB_URL = "https://github.com/Acizecu/aciron-launcher";
