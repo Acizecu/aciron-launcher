@@ -1,8 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getBuilds,
-  getInstalledVersions,
-  removeInstalledVersion,
   deleteBuild,
   openBuildFolder,
   removeMod,
@@ -19,7 +17,6 @@ import {
   type InstalledMod,
   type ModHit,
   type SourceId,
-  type InstalledVersion,
 } from "../api";
 import { coverFor } from "../covers";
 import { CARD_FALL_MS, ROW_OUT_MS, cardInDelay } from "../anim";
@@ -236,7 +233,6 @@ function verTag(type: string): string {
 
 export default function BuildsPage() {
   const [builds, setBuilds] = useState<Build[]>([]);
-  const [versions, setVersions] = useState<InstalledVersion[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("list");
   const [createModal, setCreateModal] = useState(false);
@@ -291,39 +287,12 @@ export default function BuildsPage() {
     }
   };
 
-  // Запуск ванильной установленной версии (target = сам id версии, напр. "1.20.1").
-  const startLaunchVersion = async (id: string) => {
-    if (launching.has(id)) return;
-    setLaunching((p) => new Set(p).add(id));
-    toast(`Запуск MC ${id}…`, "success");
-    try {
-      await launch(id);
-    } finally {
-      setLaunching((p) => {
-        const n = new Set(p);
-        n.delete(id);
-        return n;
-      });
-    }
-  };
-
-  const removeVersion = async (id: string) => {
-    if (isRunning(id)) {
-      toast("Нельзя удалить запущенную версию", "error");
-      return;
-    }
-    await removeInstalledVersion(id);
-    setVersions((vs) => vs.filter((v) => v.id !== id));
-    toast(`Версия ${id} удалена`, "success");
-  };
-
   const updateBuild = (updated: Build) =>
     setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
 
   const refresh = async () => {
-    const [list, vers] = await Promise.all([getBuilds(), getInstalledVersions()]);
+    const list = await getBuilds();
     setBuilds(list);
-    setVersions(vers);
     setSelectedId((prev) => (prev && list.some((b) => b.id === prev) ? prev : null));
   };
 
@@ -965,7 +934,7 @@ export default function BuildsPage() {
         />
       ) : (
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-        {builds.length === 0 && versions.length === 0 ? (
+        {builds.length === 0 ? (
           <div className="grid h-full place-items-center text-center">
             <div>
               <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-card text-2xl text-muted">
@@ -1083,67 +1052,6 @@ export default function BuildsPage() {
               </>
             );
           })()}
-          {versions.length > 0 && (
-            <div className={builds.length > 0 ? "mt-8" : ""}>
-              <h2 className="mb-3 text-[18px] font-light leading-none text-text">
-                Установленные версии
-              </h2>
-              <div className="grid gap-[18px] [grid-template-columns:repeat(auto-fill,minmax(250px,1fr))]">
-                {versions.map((v, i) => {
-                  const running = isRunning(v.id);
-                  const art = coverFor(v.id, v.id);
-                  const busyV = launching.has(v.id);
-                  return (
-                    <div
-                      key={v.id}
-                      style={cardInDelay(i)}
-                      className="group relative h-[150px] w-full max-w-[285px] overflow-hidden rounded-[16px] border-1 border-[#232427]/65 bg-card card-in"
-                    >
-                      {art ? (
-                        <img src={art} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                      ) : (
-                        <div className="absolute inset-0 bg-gradient-to-br from-accent/30 via-card to-bg" />
-                      )}
-                      <div className="absolute inset-0 bg-black/80" />
-                      <button
-                        onClick={() => removeVersion(v.id)}
-                        disabled={running}
-                        title={running ? "Версия запущена" : "Удалить версию"}
-                        className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-lg bg-black/50 text-white/70 opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100 disabled:cursor-not-allowed"
-                      >
-                        <i className="fa-solid fa-trash-can text-xs" />
-                      </button>
-                      <div className="absolute inset-x-0 bottom-0 flex items-end gap-3 p-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[15px] font-medium text-white">MC {v.id}</div>
-                          <div className="truncate text-[10px] text-[#818181]">
-                            Ванилла · {verTag(v.type)}
-                          </div>
-                        </div>
-                        {running ? (
-                          <button
-                            onClick={() => stop(v.id)}
-                            className="h-9 shrink-0 rounded-[8px] bg-[#ef4444] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
-                          >
-                            Закрыть
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => startLaunchVersion(v.id)}
-                            disabled={busyV}
-                            title="Запустить версию"
-                            className="h-9 shrink-0 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {busyV ? <i className="fa-solid fa-spinner fa-spin" /> : "Играть"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
           </>
         )}
       </div>
