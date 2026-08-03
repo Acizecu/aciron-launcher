@@ -33,6 +33,10 @@ fn base_data_root() -> PathBuf {
     launcher_root()
 }
 
+pub fn dir_is_writable(dir: &Path) -> bool {
+    is_writable(dir)
+}
+
 fn is_writable(dir: &Path) -> bool {
     let probe = dir.join(".aciron_write_test");
     match std::fs::write(&probe, b"") {
@@ -52,20 +56,47 @@ const DATA_FILES: [&str; 5] = [
     "recents.json",
 ];
 
-#[tauri::command]
-pub fn data_migration_pending() -> bool {
+/// Каталоги, где могли остаться данные предыдущей установки.
+///
+/// Кроме исторического `%APPDATA%\.acironlauncher` это папки прошлых установок:
+/// обновление не всегда попадало в каталог старого лаунчера (установка из .msi,
+/// перенесённая вручную папка), а данные лежат рядом с exe — и после такого
+/// обновления лаунчер выглядел пустым. Имя папки берём из product_name, чтобы
+/// dev-канал не утащил к себе данные обычного лаунчера.
+fn legacy_roots(product: &str) -> Vec<PathBuf> {
+    let mut roots = vec![launcher_root()];
+    for var in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(base) = std::env::var_os(var) {
+            roots.push(PathBuf::from(base).join(product));
+        }
+    }
+    roots
+}
 
+/// Первый каталог из legacy_roots, где лежат данные, которых нет в текущем.
+fn pending_migration_source(product: &str) -> Option<PathBuf> {
     if crate::instance::slot() > 1 {
-        return false;
+        return None;
     }
-    let old = launcher_root();
     let new = data_root();
-    if old == new {
-        return false;
-    }
-    DATA_FILES
-        .iter()
-        .any(|f| old.join(f).exists() && !new.join(f).exists())
+    legacy_roots(product).into_iter().find(|old| {
+        *old != new
+            && DATA_FILES
+                .iter()
+                .any(|f| old.join(f).exists() && !new.join(f).exists())
+    })
+}
+
+fn product_name(app: &AppHandle) -> String {
+    app.config()
+        .product_name
+        .clone()
+        .unwrap_or_else(|| "Aciron Launcher".into())
+}
+
+#[tauri::command]
+pub fn data_migration_pending(app: AppHandle) -> bool {
+    pending_migration_source(&product_name(&app)).is_some()
 }
 
 #[tauri::command]
@@ -76,11 +107,10 @@ pub async fn migrate_data(app: AppHandle) -> Result<(), String> {
 }
 
 fn migrate_data_blocking(app: &AppHandle) -> Result<(), String> {
-    let old = launcher_root();
-    let new = data_root();
-    if old == new {
+    let Some(old) = pending_migration_source(&product_name(app)) else {
         return Ok(());
-    }
+    };
+    let new = data_root();
     let pending: Vec<&str> = DATA_FILES
         .iter()
         .copied()

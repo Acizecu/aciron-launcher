@@ -45,6 +45,9 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
 
+            // Куда встанет следующее обновление — туда, где лаунчер работает сейчас.
+            update::remember_install_dir(app.handle());
+
             std::thread::spawn(discord::init);
 
             tauri::async_runtime::spawn(presence::heartbeat_loop());

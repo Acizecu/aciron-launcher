@@ -3,6 +3,113 @@ use std::time::Duration;
 
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Запоминает в реестре папку, из которой запущен лаунчер.
+///
+/// Обновление ставится тем же NSIS-инсталлятором, что и первая установка, но
+/// плагин обновлений запускает его пассивно (`/P /UPDATE`) и не передаёт `/D=`.
+/// Установщик сам выбирает каталог: сначала берёт значение по умолчанию
+/// (`%LOCALAPPDATA%\<ProductName>`), а затем в `RestorePreviousInstallLocation`
+/// пробует перекрыть его значением по умолчанию ключа
+/// `HKCU\Software\<Publisher>\<ProductName>`. Ключ пишет только сам NSIS —
+/// поэтому у тех, кто ставился из .msi или переносил папку руками, обновление
+/// уезжало в `%LOCALAPPDATA%` и выглядело как второй, пустой лаунчер (данные
+/// лежат рядом с exe, см. settings::base_data_root).
+///
+/// Пишем этот ключ на каждом старте: где лаунчер работает сейчас, туда и
+/// встанет следующее обновление.
+#[cfg(windows)]
+pub fn remember_install_dir(app: &tauri::AppHandle) {
+    // В dev-сборке exe лежит в target/debug — такой путь установщику не нужен.
+    if cfg!(debug_assertions) {
+        return;
+    }
+    // Второе окно работает из того же каталога; писать ключ дважды незачем.
+    if crate::instance::slot() > 1 {
+        return;
+    }
+
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let Some(dir) = exe.parent() else {
+        return;
+    };
+    // Рядом с exe обязан лежать uninstall.exe — его пишет только NSIS. Так мы
+    // отличаем настоящую установку от запуска собранного бинарника прямо из
+    // target\release: иначе следующее обновление уехало бы в папку сборки.
+    if !dir.join("uninstall.exe").exists() {
+        return;
+    }
+    // Program Files: установка из .msi. NSIS в режиме currentUser туда писать не
+    // сможет, так что подсовывать ему этот путь нельзя — пусть ставится в
+    // %LOCALAPPDATA% по умолчанию. Данные такой установки и так лежат не рядом
+    // с exe, а в launcher_root(), и переезжают отдельной миграцией.
+    if !crate::settings::dir_is_writable(dir) {
+        return;
+    }
+
+    let cfg = app.config();
+    let product = cfg.product_name.clone().unwrap_or_else(|| "Aciron Launcher".into());
+    // Так же, как это делает сборщик Tauri: издатель — либо явный `publisher`,
+    // либо средний сегмент идентификатора (com.aciron.launcher → aciron).
+    let publisher = cfg
+        .bundle
+        .publisher
+        .clone()
+        .or_else(|| cfg.identifier.split('.').nth(1).map(String::from))
+        .unwrap_or_else(|| "aciron".into());
+
+    write_hkcu_default(&format!("Software\\{publisher}\\{product}"), dir);
+}
+
+#[cfg(not(windows))]
+pub fn remember_install_dir(_app: &tauri::AppHandle) {}
+
+/// Пишет значение по умолчанию строкового ключа в HKEY_CURRENT_USER.
+#[cfg(windows)]
+fn write_hkcu_default(subkey: &str, value: &std::path::Path) {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegCreateKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_SET_VALUE,
+        REG_OPTION_NON_VOLATILE, REG_SZ,
+    };
+
+    let wide = |s: &std::ffi::OsStr| -> Vec<u16> {
+        s.encode_wide().chain(std::iter::once(0)).collect()
+    };
+    let key_w = wide(std::ffi::OsStr::new(subkey));
+    let val_w = wide(value.as_os_str());
+
+    unsafe {
+        let mut hkey: HKEY = std::ptr::null_mut();
+        let rc = RegCreateKeyExW(
+            HKEY_CURRENT_USER,
+            key_w.as_ptr(),
+            0,
+            std::ptr::null_mut(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            std::ptr::null(),
+            &mut hkey,
+            std::ptr::null_mut(),
+        );
+        if rc != ERROR_SUCCESS {
+            return;
+        }
+        // Длина в байтах вместе с завершающим нулём — этого требует REG_SZ.
+        RegSetValueExW(
+            hkey,
+            std::ptr::null(),
+            0,
+            REG_SZ,
+            val_w.as_ptr() as *const u8,
+            (val_w.len() * 2) as u32,
+        );
+        RegCloseKey(hkey);
+    }
+}
+
 const GITHUB_REPO: &str = "Acizecu/aciron-launcher";
 
 #[derive(Serialize, Default)]

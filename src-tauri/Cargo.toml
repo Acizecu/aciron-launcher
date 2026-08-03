@@ -45,9 +45,11 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 # SHA1 для сверки целостности загрузок с манифестом Mojang.
 sha1 = "0.10"
 
-# DPAPI для шифрования токенов на диске (CryptProtectData/CryptUnprotectData).
+# DPAPI для шифрования токенов на диске (CryptProtectData/CryptUnprotectData)
+# и реестр — туда пишется путь установки для инсталлятора обновления (update.rs).
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
     "Win32_Security_Cryptography",
     "Win32_Foundation",
+    "Win32_System_Registry",
 ] }
