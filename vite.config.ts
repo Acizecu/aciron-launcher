@@ -1,8 +1,23 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-export default defineConfig({
+export default defineConfig(({ command, mode }) => {
+  // VITE_ACIRON_ID_URL обязателен для релизной сборки. Без него api.ts молча
+  // подставляет https://example.invalid, лаунчер собирается и запускается, все
+  // запросы через Rust работают (там свой ACIRON_ID_URL из .cargo/config.toml),
+  // но КАЖДАЯ картинка — скины, плащи, аватары друзей — грузится с несуществующего
+  // домена и превью остаются пустыми без единого сообщения об ошибке. Именно так
+  // уехали 0.9.0 и 0.9.1. Пусть лучше падает сборка, чем релиз.
+  const env = loadEnv(mode, process.cwd(), "");
+  if (command === "build" && !env.VITE_ACIRON_ID_URL) {
+    throw new Error(
+      "VITE_ACIRON_ID_URL не задан — скины и плащи в сборке будут ссылаться на " +
+        "https://example.invalid. Скопируй .env.example в .env.local и впиши адрес."
+    );
+  }
+
+  return {
   plugins: [react(), tailwindcss()],
 
   build: {
@@ -41,4 +56,5 @@ export default defineConfig({
       awaitWriteFinish: { stabilityThreshold: 400, pollInterval: 60 },
     },
   },
+  };
 });

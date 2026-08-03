@@ -40,3 +40,8 @@ Thumbs.db
 .vscode
 *.suo
 *.user
+
+# Артефакты tsc: vite.config.js перекрывал настоящий vite.config.ts
+vite.config.js
+vite.config.d.ts
+*.tsbuildinfo
