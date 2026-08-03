@@ -8,10 +8,24 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-const CLIENT_ID: &str = match option_env!("ACIRON_MS_CLIENT_ID") {
+// client_id для входа Microsoft. Значение «по умолчанию» вшивается на сборке
+// (option_env), но его можно ПЕРЕОПРЕДЕЛИТЬ в рантайме через ACIRON_MS_CLIENT_ID —
+// так дев-сборке не нужно печь секрет в бинарь, чтобы включить MS-вход (тот же
+// приём, что и у ACIRON_ID_BASE в aciron.rs). Это PKCE public-client: секрета нет.
+const DEFAULT_CLIENT_ID: &str = match option_env!("ACIRON_MS_CLIENT_ID") {
     Some(v) => v,
     None => "",
 };
+
+fn client_id() -> &'static str {
+    static C: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    C.get_or_init(|| {
+        std::env::var("ACIRON_MS_CLIENT_ID")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| DEFAULT_CLIENT_ID.to_string())
+    })
+}
 
 const AUTH_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
 const TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
@@ -112,7 +126,7 @@ pub async fn add_microsoft_account(app: AppHandle) -> Result<Account, String> {
 }
 
 pub async fn interactive_login(app: AppHandle) -> Result<Account, String> {
-    if CLIENT_ID.is_empty() {
+    if client_id().is_empty() {
         return Err("Вход Microsoft не настроен в этой сборке (нет client_id)".into());
     }
 
@@ -135,7 +149,7 @@ pub async fn interactive_login(app: AppHandle) -> Result<Account, String> {
     let auth_url = format!(
         "{AUTH_URL}?client_id={cid}&response_type=code&redirect_uri={ru}&response_mode=query\
          &scope={sc}&code_challenge={ch}&code_challenge_method=S256&state={st}&prompt=select_account",
-        cid = CLIENT_ID,
+        cid = client_id(),
         ru = urlencode(&redirect),
         sc = urlencode(SCOPE),
         ch = challenge,
@@ -176,7 +190,7 @@ pub async fn interactive_login(app: AppHandle) -> Result<Account, String> {
     let tok: Value = cl
         .post(TOKEN_URL)
         .form(&[
-            ("client_id", CLIENT_ID),
+            ("client_id", client_id()),
             ("grant_type", "authorization_code"),
             ("code", code.as_str()),
             ("redirect_uri", redirect.as_str()),
@@ -281,7 +295,7 @@ pub async fn refresh_account(refresh_token: &str) -> Result<Account, String> {
         .post(TOKEN_URL)
         .form(&[
             ("grant_type", "refresh_token"),
-            ("client_id", CLIENT_ID),
+            ("client_id", client_id()),
             ("refresh_token", refresh_token),
             ("scope", SCOPE),
         ])
