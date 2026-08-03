@@ -182,6 +182,36 @@ fn save_builds(list: &[Build]) -> Result<(), String> {
     crate::atomic::write(&store_file(), &txt)
 }
 
+/// Сериализует изменения builds.json. Раньше create/upsert/delete делали
+/// load→modify→save без блокировки: параллельная установка модпака (create в
+/// начале, финальный upsert через минуты) и любая другая операция читали устаревший
+/// список и затирали чужие записи → потеря сборок и дубли. Лок вокруг коротких
+/// секций (без await внутри) это сериализует. Poisoning нам не важен — под локом
+/// только (), данные не портятся.
+fn builds_lock() -> &'static std::sync::Mutex<()> {
+    static L: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+    L.get_or_init(|| std::sync::Mutex::new(()))
+}
+
+/// Уникальное ОТОБРАЖАЕМОЕ имя сборки: если такое имя уже есть, добавляем
+/// " (2)", " (3)"… По решению владельца повторная установка того же модпака НЕ
+/// переиспользует и НЕ затирает существующую сборку (это исключает потерю данных),
+/// а создаётся отдельная с числовым суффиксом — чтобы их было видно раздельно.
+fn unique_name(name: &str) -> String {
+    let taken: Vec<String> = load_builds().into_iter().map(|b| b.name).collect();
+    if !taken.iter().any(|n| n == name) {
+        return name.to_string();
+    }
+    let mut n = 2u32;
+    loop {
+        let candidate = format!("{name} ({n})");
+        if !taken.iter().any(|x| x == &candidate) {
+            return candidate;
+        }
+        n += 1;
+    }
+}
+
 /// Папка данных конкретной сборки: <builds_dir>/<dir|id>.
 pub fn build_dir(id: &str) -> PathBuf {
     let s = settings::load_settings();
@@ -230,6 +260,7 @@ pub fn get_build(id: &str) -> Option<Build> {
 }
 
 pub fn upsert_build(build: Build) -> Result<(), String> {
+    let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
     let mut list = load_builds();
     if let Some(existing) = list.iter_mut().find(|b| b.id == build.id) {
         *existing = build;
@@ -253,6 +284,11 @@ pub fn create_build(name: String, mc_version: String, loader: String) -> Result<
     if mc_version.is_empty() {
         return Err("Выберите версию Minecraft".into());
     }
+    // Под локом: подбор уникального имени/папки и запись атомарны относительно
+    // параллельных create/upsert/delete — иначе две установки могли бы выбрать
+    // одинаковый суффикс или затереть список друг друга.
+    let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
+    let name = unique_name(&name);
     let dir = unique_dir(&name);
     let build = Build {
         id: gen_id(),
@@ -284,9 +320,13 @@ pub fn create_build(name: String, mc_version: String, loader: String) -> Result<
 pub fn delete_build(id: String) -> Result<(), String> {
     // Папку определяем ПОКА сборка ещё в списке (build_dir резолвит слаг через get_build).
     let dir = build_dir(&id);
-    let mut list = load_builds();
-    list.retain(|b| b.id != id);
-    save_builds(&list)?;
+    {
+        // Мутацию списка держим под локом; медленный remove_dir_all — вне лока.
+        let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
+        let mut list = load_builds();
+        list.retain(|b| b.id != id);
+        save_builds(&list)?;
+    }
     if dir.is_dir() {
         let _ = std::fs::remove_dir_all(&dir);
     }

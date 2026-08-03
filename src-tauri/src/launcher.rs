@@ -166,22 +166,36 @@ async fn ensure_java_runtime(
 
 #[derive(Clone, Serialize)]
 struct Progress {
+    /// Тип операции: "launch" (запуск игры), "install" (установка модпака/версии),
+    /// "migrate" (перенос данных). Событие launch-progress ГЛОБАЛЬНОЕ, поэтому без
+    /// этого тега «done» от запуска игры закрывал бы орб идущей установки, а ошибка
+    /// установки поднимала бы баннер запуска. Фронт слушает только «свою» операцию.
+    op: String,
     stage: String,
     message: String,
     current: u64,
     total: u64,
 }
 
-pub fn emit(app: &AppHandle, stage: &str, message: &str, current: u64, total: u64) {
+/// emit c явным тегом операции. Используют установщики модпаков ("install") и
+/// перенос данных ("migrate").
+pub fn emit_op(app: &AppHandle, op: &str, stage: &str, message: &str, current: u64, total: u64) {
     let _ = app.emit(
         "launch-progress",
         Progress {
+            op: op.into(),
             stage: stage.into(),
             message: message.into(),
             current,
             total,
         },
     );
+}
+
+/// emit по умолчанию — операция запуска игры ("launch"). Все вызовы в launcher.rs и
+/// forge.rs относятся к запуску, поэтому им дефолт подходит без правок.
+pub fn emit(app: &AppHandle, stage: &str, message: &str, current: u64, total: u64) {
+    emit_op(app, "launch", stage, message, current, total);
 }
 
 fn os_name() -> &'static str {

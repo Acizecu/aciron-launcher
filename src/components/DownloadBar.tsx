@@ -11,6 +11,7 @@ const STAGE: Record<string, { icon: string; title: string }> = {
   loader: { icon: "fa-puzzle-piece", title: "Загрузчик модов" },
   forge: { icon: "fa-puzzle-piece", title: "Forge" },
   fabric: { icon: "fa-puzzle-piece", title: "Fabric" },
+  identity: { icon: "fa-user-check", title: "Проверка входа" },
   mods: { icon: "fa-download", title: "Моды сборки" },
   modpack: { icon: "fa-download", title: "Сборка" },
 };

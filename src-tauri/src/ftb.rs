@@ -1,11 +1,18 @@
 use crate::builds::{self, Build, InstalledMod};
-use crate::launcher::emit;
+use crate::launcher::emit_op;
 use serde_json::{json, Value};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tauri::AppHandle;
+
+// Локальный emit тегирует ВСЕ события этого модуля как операцию "install", чтобы
+// орб установки не закрывался чужим "done" от запуска игры, а ошибка установки не
+// поднимала баннер запуска (launch-progress — глобальное событие).
+fn emit(app: &AppHandle, stage: &str, message: &str, current: u64, total: u64) {
+    emit_op(app, "install", stage, message, current, total);
+}
 
 const API: &str = "https://api.modpacks.ch/public";
 
@@ -281,7 +288,25 @@ pub async fn ftb_install_modpack(
     project_id: String,
     version_id: Option<String>,
 ) -> Result<Build, String> {
+    // Обёртка: любая ошибка (кроме отмены) шлёт "error", иначе орб установки завис
+    // бы на «Подготовка…» без сигнала о сбое. Отмену ошибкой не считаем.
+    let res = ftb_install_inner(app.clone(), project_id, version_id).await;
+    if let Err(e) = &res {
+        if e != crate::cancel::CANCELLED {
+            emit(&app, "error", e, 0, 1);
+        }
+    }
+    res
+}
+
+async fn ftb_install_inner(
+    app: AppHandle,
+    project_id: String,
+    version_id: Option<String>,
+) -> Result<Build, String> {
     let cl = http()?;
+    // Снимаем прошлую пометку отмены под общим ключом орба ("legacy").
+    crate::cancel::reset("legacy");
     let id = strip_id(&project_id).to_string();
 
     let pack = get_json(&cl, &format!("{API}/modpack/{id}")).await?;
@@ -320,6 +345,7 @@ pub async fn ftb_install_modpack(
 
     let build = builds::create_build(name, mc, loader.to_string())?;
     let build_dir = builds::build_dir(&build.id);
+    let build_id = build.id.clone();
 
     let files = manifest["files"].as_array().cloned().unwrap_or_default();
     let total = files.len() as u64;
@@ -383,7 +409,10 @@ pub async fn ftb_install_modpack(
             };
 
             let mut entry: Option<InstalledMod> = None;
-            if let Some(url) = resolve_url(&cl, &f).await {
+            // Отмена: не начинаем скачивание оставшихся файлов (итоговая очистка
+            // сборки — после сбора результатов).
+            if !crate::cancel::is_cancelled("legacy") {
+              if let Some(url) = resolve_url(&cl, &f).await {
                 if download_to(&cl, &url, &dest).await.is_ok()
                     && rel.replace('\\', "/").starts_with("mods")
                     && fname.ends_with(".jar")
@@ -398,6 +427,7 @@ pub async fn ftb_install_modpack(
                         kind: "mod".into(),
                     });
                 }
+              }
             }
             emit_tick();
             entry.map(|e| (i, e))
@@ -414,7 +444,21 @@ pub async fn ftb_install_modpack(
     collected.sort_by_key(|(i, _)| *i);
     let mods_entries: Vec<InstalledMod> = collected.into_iter().map(|(_, e)| e).collect();
 
-    let mut build = builds::get_build(&build.id).ok_or("Сборка не найдена")?;
+    // Отмена во время закачки → удаляем осиротевшую сборку целиком. Папка создана
+    // create_build этой операцией, поэтому remove_dir_all безопасен и не трогает
+    // ранее существовавшие данные (образец: modrinth build_from_mrpack).
+    if crate::cancel::is_cancelled("legacy") {
+        let _ = builds::delete_build(build_id.clone());
+        return Err(crate::cancel::CANCELLED.into());
+    }
+
+    let mut build = match builds::get_build(&build_id) {
+        Some(b) => b,
+        None => {
+            let _ = builds::delete_build(build_id.clone());
+            return Err("Сборка не найдена".into());
+        }
+    };
     build.mods = mods_entries;
     build.source_id = project_id.clone();
 
@@ -432,7 +476,10 @@ pub async fn ftb_install_modpack(
         build.icon_url = icon;
     }
 
-    builds::upsert_build(build.clone())?;
+    if let Err(e) = builds::upsert_build(build.clone()) {
+        let _ = builds::delete_build(build_id.clone());
+        return Err(e);
+    }
     emit(&app, "done", "Модпак установлен", 1, 1);
     Ok(build)
 }

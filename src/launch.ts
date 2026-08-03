@@ -12,6 +12,7 @@ async function appWin() {
 }
 
 export type Progress = {
+  op?: string;
   stage: string;
   message: string;
   current: number;
@@ -39,6 +40,12 @@ export function useLauncher() {
     const unlisteners: (() => void)[] = [];
     import("@tauri-apps/api/event").then(({ listen }) => {
       listen<Progress>("launch-progress", (e) => {
+        // PlayBar/DownloadBar показывают ТОЛЬКО прогресс запуска игры. Установку
+        // модпака и перенос данных (op="install"/"migrate") ведёт орб, а не эта
+        // панель — иначе ошибка установки поднимала бы баннер запуска, а её "done"
+        // сбрасывал бы состояние. Пустой op трактуем как запуск (совместимость).
+        const op = e.payload.op ?? "";
+        if (op && op !== "launch") return;
         setProgress(e.payload);
         if (e.payload.stage === "error") {
           setError(e.payload.message);

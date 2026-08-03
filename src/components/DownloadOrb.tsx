@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { isTauri } from "../api";
 import { cancelTask, legacyProgress, useTasks, type DlTask } from "../downloadTask";
 
-type Prog = { stage: string; message: string; current: number; total: number };
+type Prog = { op?: string; stage: string; message: string; current: number; total: number };
 
 function Ring({ pct, done, doneColor }: { pct: number; done: boolean; doneColor: string }) {
   const R = 20;
@@ -27,7 +27,8 @@ function Ring({ pct, done, doneColor }: { pct: number; done: boolean; doneColor:
 }
 
 function TaskLine({ t }: { t: DlTask }) {
-  const icon = t.cancelled
+  const failed = t.cancelled || (t.done && t.ok === false);
+  const icon = failed
     ? "fa-xmark text-[#ef4444]"
     : t.done
     ? "fa-check text-[#22c55e]"
@@ -38,7 +39,7 @@ function TaskLine({ t }: { t: DlTask }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-xs font-medium text-text">{t.name}</div>
         <div className="truncate text-[11px] text-muted">
-          {t.done ? t.message : t.total > 0 ? `${t.current} / ${t.total} файлов` : t.message}
+          {t.done ? t.message : t.total > 1 ? `${t.current} / ${t.total} файлов` : t.message}
         </div>
       </div>
       {!t.done && (
@@ -84,7 +85,7 @@ export default function DownloadOrb({ abovePlayBar = false }: { abovePlayBar?: b
     import("@tauri-apps/api/event").then(({ listen }) => {
       listen<Prog>("launch-progress", (ev) => {
         const p = ev.payload;
-        legacyProgress(p.stage, p.message, p.current, p.total);
+        legacyProgress(p.op ?? "", p.stage, p.message, p.current, p.total);
       }).then((u) => (un = u));
     });
     return () => un?.();
@@ -96,9 +97,16 @@ export default function DownloadOrb({ abovePlayBar = false }: { abovePlayBar?: b
   const allDone = active.length === 0;
 
   const cancelled = tasks.length > 0 ? tasks.every((t) => t.cancelled) : endedCancelled.current;
-  const okColor = cancelled ? "#ef4444" : "#22c55e";
+  // Ошибка (t.ok===false) тоже красит орб в красный и ставит крест, а не галочку.
+  const anyError = tasks.some((t) => t.done && t.ok === false);
+  const bad = cancelled || anyError;
+  const okColor = bad ? "#ef4444" : "#22c55e";
 
-  const withTotal = tasks.filter((t) => t.total > 0);
+  // Кольцо заполняют ТОЛЬКО реальные многофайловые загрузки (total > 1). Одношаговые
+  // этапы обработки (установка Forge, проверка Java, распаковка natives) идут с total<=1
+  // и НЕ двигают кольцо — вместо этого показывается спиннер + подпись этапа, чтобы орб
+  // не «висел» полным кружком минуту на постобработке. Поэтапность.
+  const withTotal = tasks.filter((t) => t.total > 1);
   const cur = withTotal.reduce((s, t) => s + t.current, 0);
   const total = withTotal.reduce((s, t) => s + t.total, 0);
   const pct = allDone ? 100 : total > 0 ? Math.min(100, Math.round((cur / total) * 100)) : 0;
@@ -123,7 +131,7 @@ export default function DownloadOrb({ abovePlayBar = false }: { abovePlayBar?: b
         {}
         <span
           className={`pointer-events-none absolute -inset-1 rounded-full blur-lg transition-colors ${
-            allDone ? (cancelled ? "bg-[#ef4444]/30" : "bg-[#22c55e]/30") : "animate-pulse bg-accent/30"
+            allDone ? (bad ? "bg-[#ef4444]/30" : "bg-[#22c55e]/30") : "animate-pulse bg-accent/30"
           }`}
         />
         <div className="relative grid h-12 w-12 place-items-center rounded-full border border-border bg-panel shadow-xl shadow-black/50">
@@ -135,7 +143,7 @@ export default function DownloadOrb({ abovePlayBar = false }: { abovePlayBar?: b
           <i
             className={`fa-solid text-sm transition-transform ${
               allDone
-                ? cancelled
+                ? bad
                   ? "fa-xmark scale-110 text-[#ef4444]"
                   : "fa-check scale-110 text-[#22c55e]"
                 : "fa-cube text-accent"

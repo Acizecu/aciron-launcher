@@ -87,7 +87,7 @@ fn migrate_data_blocking(app: &AppHandle) -> Result<(), String> {
         .filter(|f| old.join(f).exists() && !new.join(f).exists())
         .collect();
     let total = (pending.len() as u64).max(1);
-    crate::launcher::emit(app, "modpack", "Перенос данных", 0, total);
+    crate::launcher::emit_op(app, "migrate","modpack", "Перенос данных", 0, total);
 
     std::fs::create_dir_all(&new).map_err(|e| e.to_string())?;
     let mut done = 0u64;
@@ -100,10 +100,10 @@ fn migrate_data_blocking(app: &AppHandle) -> Result<(), String> {
             let _ = std::fs::remove_file(&src);
         }
         done += 1;
-        crate::launcher::emit(app, "modpack", "Перенос данных", done, total);
+        crate::launcher::emit_op(app, "migrate","modpack", "Перенос данных", done, total);
     }
 
-    crate::launcher::emit(app, "done", "Данные перенесены", 1, 1);
+    crate::launcher::emit_op(app, "migrate","done", "Данные перенесены", 1, 1);
     Ok(())
 }
 
@@ -396,7 +396,7 @@ fn move_directories_blocking(app: &AppHandle, moves: Vec<MovePair>) -> Result<()
     }
     let total = total.max(1);
     let mut done = 0u64;
-    crate::launcher::emit(app, "modpack", "Перенос файлов", 0, total);
+    crate::launcher::emit_op(app, "migrate","modpack", "Перенос файлов", 0, total);
 
     for m in &moves {
         let from = PathBuf::from(&m.from);
@@ -419,11 +419,11 @@ fn move_directories_blocking(app: &AppHandle, moves: Vec<MovePair>) -> Result<()
                 }
             }
             done += 1;
-            crate::launcher::emit(app, "modpack", "Перенос файлов", done, total);
+            crate::launcher::emit_op(app, "migrate","modpack", "Перенос файлов", done, total);
         }
     }
 
-    crate::launcher::emit(app, "done", "Файлы перенесены", 1, 1);
+    crate::launcher::emit_op(app, "migrate","done", "Файлы перенесены", 1, 1);
     Ok(())
 }
 

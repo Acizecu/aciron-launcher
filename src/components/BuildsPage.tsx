@@ -270,6 +270,9 @@ export default function BuildsPage() {
   const downloading = useDownloadActive();
 
   const [launching, setLaunching] = useState<Set<string>>(new Set());
+  // Guard от двойного импорта: без него быстрый двойной клик по «Импорт» запускал
+  // два import_mrpack → две одинаковые сборки.
+  const [importing, setImporting] = useState(false);
 
   const startLaunch = async (id: string, name: string) => {
     const target = `build:${id}`;
@@ -519,8 +522,10 @@ export default function BuildsPage() {
   };
 
   const importPack = async () => {
+    if (importing) return;
     const f = await pickFile("Modrinth-модпак", ["mrpack"]);
     if (!f) return;
+    setImporting(true);
     window.dispatchEvent(new CustomEvent("aciron-task-start", { detail: { name: "Импорт .mrpack" } }));
     try {
       const b = await importMrpack(f);
@@ -529,6 +534,8 @@ export default function BuildsPage() {
     } catch (e) {
       window.dispatchEvent(new CustomEvent("aciron-task-end"));
       toast(String(e), "error");
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -890,11 +897,12 @@ export default function BuildsPage() {
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={importPack}
+              disabled={importing}
               title="Импортировать .mrpack (Modrinth-модпак)"
-              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
+              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
               Импорт
-              <i className="fa-solid fa-file-zipper" />
+              <i className={`fa-solid ${importing ? "fa-spinner fa-spin" : "fa-file-zipper"}`} />
             </button>
             <button
               onClick={() => setCreateModal(true)}

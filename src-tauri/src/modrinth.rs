@@ -1,5 +1,12 @@
 use crate::builds::{self, Build, InstalledMod};
-use crate::launcher::emit;
+use crate::launcher::emit_op;
+
+// Локальный emit тегирует ВСЕ события этого модуля как операцию "install", чтобы
+// орб установки не закрывался чужим "done" от запуска игры, а ошибка установки не
+// поднимала баннер запуска (launch-progress — глобальное событие).
+fn emit(app: &tauri::AppHandle, stage: &str, message: &str, current: u64, total: u64) {
+    emit_op(app, "install", stage, message, current, total);
+}
 use serde_json::{json, Value};
 use sha2::{Digest, Sha512};
 use std::collections::HashSet;
@@ -195,6 +202,22 @@ pub async fn install_modpack(
     project_id: String,
     version_id: Option<String>,
 ) -> Result<Build, String> {
+    // Обёртка: любая ошибка (кроме отмены) шлёт "error", иначе орб установки завис
+    // бы на «Подготовка…» без сигнала о сбое. Отмену ошибкой не считаем.
+    let res = install_modpack_inner(app.clone(), project_id, version_id).await;
+    if let Err(e) = &res {
+        if e != crate::cancel::CANCELLED {
+            emit(&app, "error", e, 0, 1);
+        }
+    }
+    res
+}
+
+async fn install_modpack_inner(
+    app: AppHandle,
+    project_id: String,
+    version_id: Option<String>,
+) -> Result<Build, String> {
     let cl = http()?;
 
     let ver: Value = match version_id.as_deref().filter(|s| !s.is_empty()) {
@@ -246,6 +269,16 @@ pub async fn install_modpack(
 
 #[tauri::command]
 pub async fn import_mrpack(app: AppHandle, path: String) -> Result<Build, String> {
+    let res = import_mrpack_inner(app.clone(), path).await;
+    if let Err(e) = &res {
+        if e != crate::cancel::CANCELLED {
+            emit(&app, "error", e, 0, 1);
+        }
+    }
+    res
+}
+
+async fn import_mrpack_inner(app: AppHandle, path: String) -> Result<Build, String> {
     let cl = http()?;
     emit(&app, "modpack", "Чтение файла модпака", 0, 1);
     let bytes = std::fs::read(&path).map_err(|e| format!("Не удалось прочитать файл: {e}"))?;

@@ -1,6 +1,13 @@
 use crate::builds::{self, Build, InstalledMod};
-use crate::launcher::emit;
+use crate::launcher::emit_op;
 use serde_json::{json, Value};
+
+// Локальный emit тегирует ВСЕ события этого модуля как операцию "install", чтобы
+// орб установки не закрывался чужим "done" от запуска игры, а ошибка установки не
+// поднимала баннер запуска (launch-progress — глобальное событие).
+fn emit(app: &AppHandle, stage: &str, message: &str, current: u64, total: u64) {
+    emit_op(app, "install", stage, message, current, total);
+}
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
@@ -627,7 +634,25 @@ pub async fn curseforge_install_modpack(
     project_id: String,
     version_id: Option<String>,
 ) -> Result<Build, String> {
+    // Обёртка: любая ошибка (кроме отмены) шлёт "error", иначе орб установки завис
+    // бы на «Подготовка…» без сигнала о сбое. Отмену ошибкой не считаем.
+    let res = cf_install_inner(app.clone(), project_id, version_id).await;
+    if let Err(e) = &res {
+        if e != crate::cancel::CANCELLED {
+            emit(&app, "error", e, 0, 1);
+        }
+    }
+    res
+}
+
+async fn cf_install_inner(
+    app: AppHandle,
+    project_id: String,
+    version_id: Option<String>,
+) -> Result<Build, String> {
     let cl = http()?;
+    // Снимаем прошлую пометку отмены под общим ключом орба ("legacy").
+    crate::cancel::reset("legacy");
     let mid: i64 = strip_id(&project_id).parse().map_err(|_| "Неверный id CurseForge")?;
 
     // Файл модпака: выбранная версия или последняя.
@@ -667,6 +692,14 @@ pub async fn curseforge_install_modpack(
             .await
             .map_err(|e| e.to_string())?;
         while let Some(chunk) = stream.next().await {
+            // Отмена во время самой большой загрузки (.zip модпака) — сворачиваемся
+            // сразу, удаляя недокачанный временный файл. Сборки ещё нет — чистить
+            // нечего кроме tmp_zip.
+            if crate::cancel::is_cancelled("legacy") {
+                drop(out);
+                let _ = tokio::fs::remove_file(&tmp_zip).await;
+                return Err(crate::cancel::CANCELLED.into());
+            }
             let bytes = chunk.map_err(|e| e.to_string())?;
             out.write_all(&bytes).await.map_err(|e| e.to_string())?;
         }
@@ -787,7 +820,9 @@ pub async fn curseforge_install_modpack(
         let fid = f["fileID"].as_i64().unwrap_or(0);
         async move {
             let mut entry: Option<InstalledMod> = None;
-            if pid != 0 && fid != 0 {
+            // Отмена: пропускаем скачивание оставшихся модов, быстро сворачиваемся
+            // (итоговая очистка сборки — после сбора результатов).
+            if pid != 0 && fid != 0 && !crate::cancel::is_cancelled("legacy") {
                 if let Ok(fj) =
                     get_json(&cl, &format!("{}/v1/mods/{pid}/files/{fid}", base())).await
                 {
@@ -822,7 +857,21 @@ pub async fn curseforge_install_modpack(
     results.sort_by_key(|(i, _)| *i);
     let mods_entries: Vec<InstalledMod> = results.into_iter().filter_map(|(_, e)| e).collect();
 
-    let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
+    // Отмена во время закачки модов → удаляем осиротевшую сборку целиком. Папка
+    // создана create_build этой операцией, поэтому remove_dir_all безопасен и не
+    // трогает ранее существовавшие данные (образец: modrinth build_from_mrpack).
+    if crate::cancel::is_cancelled("legacy") {
+        let _ = builds::delete_build(build_id.clone());
+        return Err(crate::cancel::CANCELLED.into());
+    }
+
+    let mut build = match builds::get_build(&build_id) {
+        Some(b) => b,
+        None => {
+            let _ = builds::delete_build(build_id.clone());
+            return Err("Сборка не найдена".into());
+        }
+    };
     build.mods = mods_entries;
     build.source_id = project_id.clone();
 
@@ -842,7 +891,10 @@ pub async fn curseforge_install_modpack(
         build.icon_url = icon;
     }
 
-    builds::upsert_build(build.clone())?;
+    if let Err(e) = builds::upsert_build(build.clone()) {
+        let _ = builds::delete_build(build_id.clone());
+        return Err(e);
+    }
     emit(&app, "done", "Модпак установлен", 1, 1);
     Ok(build)
 }
