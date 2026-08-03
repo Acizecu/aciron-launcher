@@ -14,6 +14,8 @@ import {
   cachePeek,
   capeCatalog,
   capeCatalogApply,
+  CAPE_CATALOG_KEY,
+  SKIN_CATALOG_KEY,
   getAccounts,
   licenseCapeApply,
   licenseCapes,
@@ -125,25 +127,48 @@ export default function WardrobePage() {
     void load();
   }, [load]);
 
+  // Каталоги показываем сразу из кэша, но тут же перезапрашиваем: список
+  // пополняется на сервере, а кэш живёт полчаса и переживает перезапуск —
+  // иначе новые плащи и скины доезжают до людей с большой задержкой.
   useEffect(() => {
-    skinCatalog()
-      .then(setStock)
-      .catch(() => setStock([]));
+    let alive = true;
+    setStock((s) => s ?? cachePeek<CatalogSkin[]>(SKIN_CATALOG_KEY) ?? null);
+    skinCatalog(true)
+      .then((list) => alive && setStock(list))
+      // Оставляем показанное: моргнувшая сеть — не повод стирать каталог.
+      .catch(() => alive && setStock((s) => s ?? []));
+    return () => {
+      alive = false;
+    };
   }, []);
 
+  // Зависимость только от вкладки. Раньше здесь был ещё и `catalog`, но эффект
+  // сам его и меняет — получался бесконечный круг запросов.
   useEffect(() => {
-    if (tab !== "capes" || catalog) return;
-    capeCatalog().then(setCatalog).catch(() => setCatalog([]));
+    if (tab !== "capes") return;
+    let alive = true;
+    setCatalog((c) => c ?? cachePeek<CatalogCape[]>(CAPE_CATALOG_KEY) ?? null);
+    capeCatalog(true)
+      .then((list) => alive && setCatalog(list))
+      .catch(() => alive && setCatalog((c) => c ?? []));
     licenseCapes()
       .then((r) => {
+        if (!alive) return;
         setLic(r);
         setLicError("");
       })
       .catch((e) => {
-        setLic({ linked: false, capes: [] });
+        if (!alive) return;
+        // Плащи с лицензии оставляем на месте: сорванное обновление сессии
+        // Microsoft не означает, что плащей больше нет — только что их сейчас
+        // не спросить. Иначе они «пропадали» на ровном месте.
+        setLic((l) => l ?? { linked: false, capes: [] });
         setLicError(human(e));
       });
-  }, [tab, catalog]);
+    return () => {
+      alive = false;
+    };
+  }, [tab]);
 
   const needLogin = error === "NO_ACIRON" || error === "SESSION_EXPIRED";
 

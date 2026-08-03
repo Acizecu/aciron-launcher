@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "./Head";
 import ChatPanel from "./ChatPanel";
+import TypingDots from "./chat/TypingDots";
 import { friendSkinUrl, type Friend } from "../api";
 import { PRESENCE_COLOR, presenceText, sortFriends, useFriends } from "../friends";
-import { useChat } from "../chat";
+import { useChat, useTyping } from "../chat";
 
 function ChatRow({
   f,
@@ -16,6 +17,10 @@ function ChatRow({
   unread: number;
   onClick: () => void;
 }) {
+  // Пока человек печатает — вместо присутствия («Не активен») показываем бегущие
+  // точки: строка списка и так самое заметное место, где ждут ответа.
+  const typing = useTyping(f.id);
+
   return (
     <button
       onClick={onClick}
@@ -43,7 +48,13 @@ function ChatRow({
             style={{ background: PRESENCE_COLOR[f.presence.state] }}
           />
         </div>
-        <div className="truncate text-[11px] text-muted">{presenceText(f.presence)}</div>
+        <div className="truncate text-[11px]">
+          {typing ? (
+            <TypingDots />
+          ) : (
+            <span className="text-muted">{presenceText(f.presence)}</span>
+          )}
+        </div>
       </div>
       {unread > 0 && (
         <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-bg">

@@ -163,22 +163,51 @@ body {
   pointer-events: none;
 }
 
-/* ---- появление сообщения: мягко всплывает ---- */
-/* Только opacity + вертикальный сдвиг: без translateX/scale, иначе пузырь у
-   правого края создавал горизонтальное переполнение и мелькание (дёрганье). */
+/* ---- появление сообщения ----
+   Анимируем ТОЛЬКО прозрачность: любая анимация высоты (например, строки сетки
+   0fr → 1fr) заставляет ленту пересчитывать раскладку каждый кадр, и прокрутку
+   приходится догонять из JS — отсюда бралась мелкая дрожь. Высоту сообщение
+   занимает сразу, а вниз лента едет нативной плавной прокруткой (см. ChatPanel).
+   backwards обязателен: без него первый кадр рисуется в конечном виде и
+   сообщение мелькает целиком. */
 @keyframes msg-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 6px, 0);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 .msg-in {
-  animation: msg-in 0.18s ease-out;
-  will-change: transform, opacity;
+  animation: msg-in 0.2s ease-out backwards;
+}
+
+/* ---- «печатает…»: три точки, набегающие по очереди ---- */
+@keyframes typing-dot {
+  0%,
+  70%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+.typing-dot {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: typing-dot 1.1s ease-in-out infinite backwards;
+}
+.typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
 }
 
 /* ---- удаление строки списка: улетает влево ---- */

@@ -3,6 +3,7 @@ import Head from "./Head";
 import ProfileModal from "./ProfileModal";
 import MessageMenu, { type MenuItem } from "./chat/MessageMenu";
 import ForwardModal from "./chat/ForwardModal";
+import TypingDots from "./chat/TypingDots";
 import { friendSkinUrl, getAccounts, MAX_MESSAGE, type Friend } from "../api";
 import { PRESENCE_COLOR, presenceText } from "../friends";
 import {
@@ -247,18 +248,40 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
     return () => setOpenConversation(null);
   }, [friend.id]);
 
+  // Высота ленты на прошлой отрисовке — по её приросту понятно, доехало одно
+  // сообщение или подгрузилась пачка истории.
+  const prevHeight = useRef(0);
+
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
     if (keepHeight.current !== null) {
       el.scrollTop = el.scrollHeight - keepHeight.current;
       keepHeight.current = null;
+      prevHeight.current = el.scrollHeight;
       return;
     }
-    // Прямой scrollTop по самому контейнеру, а не scrollIntoView: последний
-    // скроллит и родительские контейнеры и дёргается, когда новый пузырь ещё
-    // анимируется. Тут — мгновенно и только внутри ленты сообщений.
-    if (wasAtBottom.current) el.scrollTop = el.scrollHeight;
+    if (!wasAtBottom.current) {
+      prevHeight.current = el.scrollHeight;
+      return;
+    }
+
+    const grew = el.scrollHeight - prevHeight.current;
+    prevHeight.current = el.scrollHeight;
+
+    /*
+     * Плавно докручиваем ленту сами — но силами браузера, а не из JS.
+     * Раньше здесь был скролл каждый кадр вдогонку растущей высоте: JS ставит
+     * scrollTop до пересчёта раскладки, анимация подрастает уже после — и низ
+     * каждый кадр промахивался на пару пикселей. Это и была дрожь.
+     *
+     * Нативная плавная прокрутка идёт на композиторе: содержимое неподвижно,
+     * едет только вьюпорт. Мгновенно — когда доехала не пара сообщений, а
+     * сразу много (открытие переписки, пересылка пачкой): такой «проезд» через
+     * всю историю смотрелся бы долго и странно.
+     */
+    const smooth = grew > 0 && grew < 320;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   }, [conv.messages]);
 
   const onScroll = () => {
@@ -415,7 +438,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
             </div>
             <div className="truncate text-[11px]">
               {typing ? (
-                <span className="text-accent">печатает…</span>
+                <TypingDots />
               ) : (
                 <span className="text-muted">{presenceText(friend.presence)}</span>
               )}
@@ -459,7 +482,14 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       </div>
 
       {}
-      <div ref={scroller} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+      {/* overflow-anchor: none — иначе браузер подкручивает прокрутку сам, и его
+          поправка накладывается на нашу; получается двойное движение. */}
+      <div
+        ref={scroller}
+        onScroll={onScroll}
+        style={{ overflowAnchor: "none" }}
+        className="min-h-0 flex-1 overflow-y-auto px-5 py-3"
+      >
         {conv.loading && conv.messages.length === 0 && <MessagesSkeleton />}
         {conv.error && (
           <div className="rounded-xl bg-[#ef4444]/10 px-4 py-3 text-xs text-[#fca5a5]">

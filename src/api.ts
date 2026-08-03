@@ -737,9 +737,22 @@ export async function wardrobeCapeOff(): Promise<void> {
 
 export type CatalogCape = { id: string; name: string; url: string; by: string };
 
-export async function capeCatalog(): Promise<CatalogCape[]> {
+export const CAPE_CATALOG_KEY = "cape-catalog";
+
+/**
+ * Каталог плащей.
+ *
+ * `force` — обойти кэш. Он нужен при открытии гардероба: каталог пополняется на
+ * стороне сервера (достаточно положить туда PNG), а получасовой кэш ещё и
+ * переживает перезапуск лаунчера — без принудительного обновления новые плащи
+ * не появлялись бы до полутора десятков минут после старта, а то и дольше.
+ */
+export async function capeCatalog(force = false): Promise<CatalogCape[]> {
   if (!isTauri) return [];
-  return cached("cape-catalog", 1_800_000, () => withTimeout(invoke<CatalogCape[]>("cape_catalog")));
+  if (force) cacheBust(CAPE_CATALOG_KEY);
+  return cached(CAPE_CATALOG_KEY, 1_800_000, () =>
+    withTimeout(invoke<CatalogCape[]>("cape_catalog"))
+  );
 }
 
 export async function capeCatalogApply(id: string): Promise<void> {
@@ -750,9 +763,15 @@ export async function capeCatalogApply(id: string): Promise<void> {
 
 export type CatalogSkin = { id: string; name: string; url: string; model: SkinModelId };
 
-export async function skinCatalog(): Promise<CatalogSkin[]> {
+export const SKIN_CATALOG_KEY = "skin-catalog";
+
+/** Каталог стандартных скинов. `force` — как у capeCatalog, обходит кэш. */
+export async function skinCatalog(force = false): Promise<CatalogSkin[]> {
   if (!isTauri) return [];
-  return cached("skin-catalog", 1_800_000, () => withTimeout(invoke<CatalogSkin[]>("skin_catalog")));
+  if (force) cacheBust(SKIN_CATALOG_KEY);
+  return cached(SKIN_CATALOG_KEY, 1_800_000, () =>
+    withTimeout(invoke<CatalogSkin[]>("skin_catalog"))
+  );
 }
 
 export async function skinCatalogApply(id: string): Promise<ApplyResult> {
