@@ -18,6 +18,11 @@ export type SendState = "sending" | "failed";
 export type LocalMessage = ChatMessage & {
 
   state?: SendState;
+
+  // Стабильный React-ключ, переживающий подмену temp→real: id меняется с tmp-… на
+  // серверный, и без этого ключа React ремоунтил пузырь (сообщение «прыгало» при
+  // смене метки «отправляется»→«доставлено»). localId остаётся прежним весь путь.
+  localId?: string;
 };
 
 export type Conversation = {
@@ -163,9 +168,11 @@ export async function send(userId: string, body: string): Promise<void> {
   if (!text) return;
 
   const conv = state.byUser[userId];
+  const tid = tempId();
   const temp: LocalMessage | null = conv
     ? {
-        id: tempId(),
+        id: tid,
+        localId: tid,
         from: "",
         to: userId,
         body: text,
@@ -219,11 +226,14 @@ function replaceTemp(userId: string, tempMessageId: string, real: ChatMessage) {
   const conv = state.byUser[userId];
   if (!conv) return;
 
+  // Сохраняем localId temp-сообщения на реальном — React-ключ не меняется, пузырь
+  // не ремоунтится, метка «отправляется»→«доставлено» сменяется на месте, без прыжка.
+  const localId = conv.messages.find((m) => m.id === tempMessageId)?.localId ?? tempMessageId;
   const already = conv.messages.some((m) => m.id === real.id);
   patch(userId, {
     messages: already
       ? conv.messages.filter((m) => m.id !== tempMessageId)
-      : conv.messages.map((m) => (m.id === tempMessageId ? { ...real } : m)),
+      : conv.messages.map((m) => (m.id === tempMessageId ? { ...real, localId } : m)),
   });
 }
 

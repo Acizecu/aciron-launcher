@@ -163,6 +163,24 @@ body {
   pointer-events: none;
 }
 
+/* ---- появление сообщения: мягко всплывает ---- */
+/* Только opacity + вертикальный сдвиг: без translateX/scale, иначе пузырь у
+   правого края создавал горизонтальное переполнение и мелькание (дёрганье). */
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.msg-in {
+  animation: msg-in 0.18s ease-out;
+  will-change: transform, opacity;
+}
+
 /* ---- удаление строки списка: улетает влево ---- */
 @keyframes row-out {
   from {

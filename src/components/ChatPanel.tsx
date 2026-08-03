@@ -232,6 +232,10 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
 
   const wasAtBottom = useRef(true);
 
+  // Анимируем только сообщения, появившиеся ПОСЛЕ открытия переписки (история при
+  // открытии не должна «влетать»). temp/входящие свежее этого времени → анимация.
+  const mountAt = useRef(Date.now());
+
   const keepHeight = useRef<number | null>(null);
 
   useEffect(() => {
@@ -251,7 +255,10 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       keepHeight.current = null;
       return;
     }
-    if (wasAtBottom.current) bottom.current?.scrollIntoView({ block: "end" });
+    // Прямой scrollTop по самому контейнеру, а не scrollIntoView: последний
+    // скроллит и родительские контейнеры и дёргается, когда новый пузырь ещё
+    // анимируется. Тут — мгновенно и только внутри ленты сообщений.
+    if (wasAtBottom.current) el.scrollTop = el.scrollHeight;
   }, [conv.messages]);
 
   const onScroll = () => {
@@ -368,9 +375,14 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       conv.messages.map((m, i) => {
         const prev = conv.messages[i - 1];
         const mine = m.from !== friend.id;
+        // Группируем по СТОРОНЕ (моё/чужое), а не по сырому from: у temp-сообщения
+        // from пустой, а у подтверждённого — мой id, и сравнение prev.from===m.from
+        // «разгруппировывало» пузырь на подтверждении → менялся верхний отступ →
+        // сообщение прыгало. В личке сторона эквивалентна «тому же отправителю».
+        const prevMine = prev ? prev.from !== friend.id : false;
         const newDay = !prev || dayLabel(prev.at) !== dayLabel(m.at);
         const grouped =
-          !newDay && !!prev && prev.from === m.from && m.at - prev.at < GROUP_WINDOW_MS;
+          !newDay && !!prev && prevMine === mine && m.at - prev.at < GROUP_WINDOW_MS;
         return { m, mine, newDay, grouped };
       }),
     [conv.messages, friend.id]
@@ -472,7 +484,10 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         )}
 
         {rows.map(({ m, mine, newDay, grouped }) => (
-          <div key={m.id}>
+          <div
+            key={m.localId ?? m.id}
+            className={m.at >= mountAt.current ? "msg-in" : undefined}
+          >
             {newDay && (
               <div className="my-3 text-center text-[11px] text-muted">{dayLabel(m.at)}</div>
             )}
