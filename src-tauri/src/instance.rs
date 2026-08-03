@@ -3,7 +3,10 @@
 use std::fs::File;
 use std::sync::OnceLock;
 
-pub const MAX_INSTANCES: usize = 2;
+/// Сколько окон лаунчера разрешено одновременно. 1 — второй запуск просто
+/// завершается. Механика слотов ниже сохранена: она рассчитана на любое N, и
+/// поднять лимит обратно можно одной этой цифрой.
+pub const MAX_INSTANCES: usize = 1;
 
 static SLOT: OnceLock<usize> = OnceLock::new();
 

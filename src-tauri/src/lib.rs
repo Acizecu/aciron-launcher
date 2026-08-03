@@ -29,7 +29,7 @@ pub fn run() {
 
     let Some(slot) = instance::acquire() else {
         eprintln!(
-            "[instance] уже открыто {} окна лаунчера — больше не запускаем",
+            "[instance] лаунчер уже запущен (лимит окон: {}) — выходим",
             instance::MAX_INSTANCES
         );
         return;
