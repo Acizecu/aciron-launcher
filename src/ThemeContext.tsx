@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { t as tr } from "./i18n";
 
 export type Palette = {
   bg: string;
@@ -21,7 +22,7 @@ export type Palette = {
   ctrlHover: string;
 };
 
-export const TOKENS: { key: keyof Palette; label: string; hint: string }[] = [
+const TOKEN_DEFS: { key: keyof Palette; label: string; hint: string }[] = [
   { key: "bg", label: "Фон окна", hint: "самый нижний слой" },
   { key: "panel", label: "Панели", hint: "боковое меню, нижняя панель" },
   { key: "card", label: "Карточки", hint: "карточки, поля ввода" },
@@ -33,6 +34,18 @@ export const TOKENS: { key: keyof Palette; label: string; hint: string }[] = [
   { key: "accentActive", label: "Акцент: нажатие", hint: "" },
   { key: "ctrlHover", label: "Кнопки окна", hint: "заливка при наведении" },
 ];
+
+export const TOKENS: { key: keyof Palette; label: string; hint: string }[] = TOKEN_DEFS.map(
+  (d) => ({
+    key: d.key,
+    get label() {
+      return tr(d.label);
+    },
+    get hint() {
+      return d.hint ? tr(d.hint) : "";
+    },
+  })
+);
 
 function clamp(n: number) {
   return Math.max(0, Math.min(255, Math.round(n)));
@@ -160,6 +173,8 @@ type ThemeState = {
 
   overrides: Partial<Palette>;
   saved: SavedPreset[];
+
+  activeSavedId: string | null;
 };
 
 const STORAGE_KEY = "aciron:theme";
@@ -169,7 +184,18 @@ const DEFAULT_STATE: ThemeState = {
   seed: { accent: "#6366f1", base: "#131315" },
   overrides: {},
   saved: [],
+  activeSavedId: null,
 };
+
+export function splitPalette(p: Palette): { seed: ThemeSeed; overrides: Partial<Palette> } {
+  const seed: ThemeSeed = { accent: p.accent, base: p.bg, text: p.text, muted: p.muted };
+  const derived = buildPalette(seed);
+  const overrides: Partial<Palette> = {};
+  for (const k of Object.keys(p) as (keyof Palette)[]) {
+    if (p[k] !== derived[k]) overrides[k] = p[k];
+  }
+  return { seed, overrides };
+}
 
 export function customPalette(s: ThemeState): Palette {
   return { ...buildPalette(s.seed), ...s.overrides };
@@ -205,11 +231,26 @@ function load(): ThemeState {
 
     const id = ((old.id as string) === "dark" ? "amethyst" : old.id) as ThemeId | undefined;
 
+    const activeSavedId =
+      old.activeSavedId && saved.some((p) => p.id === old.activeSavedId)
+        ? old.activeSavedId
+        : null;
+
+    let overrides = old.overrides ?? {};
+    let seedFinal = seed;
+    const keys = Object.keys(buildPalette(seed)) as (keyof Palette)[];
+    if (keys.every((k) => overrides[k] !== undefined)) {
+      const split = splitPalette(overrides as Palette);
+      seedFinal = split.seed;
+      overrides = split.overrides;
+    }
+
     return {
       id: id && (id === "custom" || id in PRESETS) ? id : DEFAULT_STATE.id,
-      seed,
-      overrides: old.overrides ?? {},
+      seed: seedFinal,
+      overrides,
       saved,
+      activeSavedId,
     };
   } catch {
     return DEFAULT_STATE;
@@ -232,7 +273,9 @@ function applyPalette(p: Palette) {
   };
   for (const [k, v] of Object.entries(map)) root.style.setProperty(k, v);
 
-  root.style.colorScheme = luminance(p.bg) < 0.5 ? "dark" : "light";
+  const light = luminance(p.bg) >= 0.5;
+  root.style.colorScheme = light ? "light" : "dark";
+  root.dataset.scheme = light ? "light" : "dark";
 }
 
 const SHARE_PREFIX = "aciron-theme-1:";
@@ -256,7 +299,7 @@ export function importTheme(code: string): { name: string; palette: Palette } | 
       if (!hex) return null;
       out[key] = hex;
     }
-    return { name: (data.n || "Тема").slice(0, 24), palette: out as Palette };
+    return { name: (data.n || tr("Тема")).slice(0, 24), palette: out as Palette };
   } catch {
     return null;
   }
@@ -291,14 +334,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [palette, state]);
 
-  // Сеттеры используют только updater-форму setState, поэтому не зависят ни от
-  // какого замыкания и стабильны на весь жизненный цикл провайдера (deps []).
-  // Стабилизация нужна, чтобы value ниже не пересоздавался из-за новых ссылок на колбэки.
-  const setTheme = useCallback((id: ThemeId) => setState((s) => ({ ...s, id })), []);
+  const setTheme = useCallback(
+    (id: ThemeId) => setState((s) => ({ ...s, id, activeSavedId: null })),
+    []
+  );
 
   const setSeed = useCallback(
     (patch: Partial<ThemeSeed>) =>
-      setState((s) => ({ ...s, id: "custom", seed: { ...s.seed, ...patch } })),
+      setState((s) => ({
+        ...s,
+        id: "custom",
+        seed: { ...s.seed, ...patch },
+        activeSavedId: null,
+      })),
     []
   );
 
@@ -307,41 +355,53 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const overrides = { ...s.overrides };
       if (val === null) delete overrides[key];
       else overrides[key] = val;
-      return { ...s, id: "custom", overrides };
+      return { ...s, id: "custom", overrides, activeSavedId: null };
     });
   }, []);
 
-  const resetTokens = useCallback(() => setState((s) => ({ ...s, overrides: {} })), []);
+  const resetTokens = useCallback(
+    () => setState((s) => ({ ...s, overrides: {}, activeSavedId: null })),
+    []
+  );
 
   const savePreset = useCallback(
     (name: string, pal?: Palette) =>
-      setState((s) => ({
-        ...s,
-        saved: [
-          ...s.saved,
-          {
-            id: String(Date.now()),
-            name: name.trim().slice(0, 24) || "Без названия",
-            palette: pal ?? paletteOf(s),
-          },
-        ],
-      })),
+      setState((s) => {
+        const id = String(Date.now());
+        return {
+          ...s,
+          saved: [
+            ...s.saved,
+            {
+              id,
+              name: name.trim().slice(0, 24) || tr("Без названия"),
+              palette: pal ?? paletteOf(s),
+            },
+          ],
+
+          activeSavedId: pal ? s.activeSavedId : id,
+        };
+      }),
     []
   );
 
   const applySaved = useCallback(
     (p: SavedPreset) =>
-      setState((s) => ({
-        ...s,
-        id: "custom",
-        seed: { accent: p.palette.accent, base: p.palette.bg },
-        overrides: { ...p.palette },
-      })),
+      setState((s) => {
+        const { seed, overrides } = splitPalette(p.palette);
+        return { ...s, id: "custom", seed, overrides, activeSavedId: p.id };
+      }),
     []
   );
 
   const deleteSaved = useCallback(
-    (id: string) => setState((s) => ({ ...s, saved: s.saved.filter((p) => p.id !== id) })),
+    (id: string) =>
+      setState((s) => ({
+        ...s,
+        saved: s.saved.filter((p) => p.id !== id),
+
+        activeSavedId: s.activeSavedId === id ? null : s.activeSavedId,
+      })),
     []
   );
 
@@ -356,8 +416,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  // value пересоздаётся только когда реально меняется state/palette/saved, а не
-  // на каждый рендер провайдера — потребители useTheme() не ре-рендерятся зря.
   const value = useMemo<Ctx>(
     () => ({
       state,

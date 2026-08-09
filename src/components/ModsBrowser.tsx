@@ -10,9 +10,12 @@ import {
 import ModDetail from "./ModDetail";
 import SourceMenu, { type Source } from "./SourceMenu";
 import Pagination from "./Pagination";
+import ViewToggle from "./ViewToggle";
+import { useViewMode } from "../hooks/useViewMode";
 import { cardInDelay } from "../anim";
 import { startTask, endTask, wasCancelled } from "../downloadTask";
 import { useToast } from "../ToastContext";
+import { t, ts } from "../i18n";
 
 const PER_PAGE = 25;
 
@@ -56,6 +59,7 @@ export default function ModsBrowser({
   onBack: () => void;
   onInstalled: (b: Build) => void;
 }) {
+  const view = useViewMode();
   const [source, setSource] = useState<Source>("modrinth");
   const [ctype, setCtype] = useState<ContentKind>(initialKind);
   const [query, setQuery] = useState(initialQuery);
@@ -97,7 +101,7 @@ export default function ModsBrowser({
         setHits(r.hits);
         setTotal(r.total_hits);
       })
-      .catch((e) => my === seq.current && setError(String(e)))
+      .catch((e) => my === seq.current && setError(ts(String(e))))
       .finally(() => my === seq.current && setLoading(false));
   }, [source, applied, cats, index, page, loaderFilter, build.mc_version, ptype]);
 
@@ -128,10 +132,10 @@ export default function ModsBrowser({
       if (wasCancelled(`mod:${h.project_id}`)) return;
       onInstalled(updated);
       endTask(`mod:${h.project_id}`, true);
-      toast(`«${h.title}» установлен`, "success");
+      toast(t("«{name}» установлен", { name: h.title }), "success");
     } catch (e) {
       endTask(`mod:${h.project_id}`, false);
-      toast(String(e), "error");
+      toast(ts(String(e)), "error");
     } finally {
       setInstalling((prev) => {
         const next = new Set(prev);
@@ -166,10 +170,12 @@ export default function ModsBrowser({
       {}
       <div className="mb-5 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="truncate text-[30px] font-light leading-none text-text">Каталог</h1>
+          <h1 className="truncate text-[30px] font-light leading-none text-text">
+            {t("Каталог")}
+          </h1>
           <div className="mt-2 truncate text-[12px] text-[#818181]">
             {build.name} · {build.mc_version} · {loaderLabel[build.loader] ?? build.loader}
-            {total ? ` · найдено ${total}` : ""}
+            {total ? t(" · найдено {total}", { total }) : ""}
           </div>
         </div>
         <div className="shrink-0">
@@ -187,7 +193,7 @@ export default function ModsBrowser({
               ctype === c.id ? "text-text" : "text-muted hover:text-text"
             }`}
           >
-            {c.label}
+            {t(c.label)}
           </button>
         ))}
       </div>
@@ -198,17 +204,18 @@ export default function ModsBrowser({
             <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-card text-xl text-accent">
               <i className="fa-solid fa-layer-group" />
             </div>
-            <h2 className="text-[15px] font-medium text-text">FTB — это готовые сборки</h2>
+            <h2 className="text-[15px] font-medium text-text">{t("FTB — это готовые сборки")}</h2>
             <p className="mt-1.5 text-sm leading-relaxed text-muted">
-              У Feed The Beast нет отдельных модов — только целые модпаки. Найти их можно во
-              вкладке «Сборки» → «Популярные».
+              {t(
+                "У Feed The Beast нет отдельных модов — только целые модпаки. Найти их можно во вкладке «Сборки» → «Популярные»."
+              )}
             </p>
             <button
               onClick={onBack}
               className="mx-auto mt-4 flex h-10 items-center gap-2 rounded-[8px] bg-card px-3 text-sm text-muted transition-colors hover:text-text"
             >
               <i className="fa-solid fa-arrow-left text-xs" />
-              Назад
+              {t("Назад")}
             </button>
           </div>
         </div>
@@ -218,7 +225,7 @@ export default function ModsBrowser({
           <aside className="flex w-[190px] shrink-0 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <div className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
-              Сортировка
+              {t("Сортировка")}
             </div>
             <div className="space-y-1">
               {SORTS.map((s) => (
@@ -232,7 +239,7 @@ export default function ModsBrowser({
                     index === s.id ? "bg-card text-text" : "text-muted hover:text-text"
                   }`}
                 >
-                  {s.label}
+                  {t(s.label)}
                 </button>
               ))}
             </div>
@@ -241,7 +248,7 @@ export default function ModsBrowser({
               <>
                 <div className="mb-1 mt-4 flex items-center gap-2 px-3">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Категории
+                    {t("Категории")}
                   </span>
                   {cats.length > 0 && (
                     <button
@@ -249,10 +256,10 @@ export default function ModsBrowser({
                         setPage(0);
                         setCats([]);
                       }}
-                      title="Сбросить категории"
+                      title={t("Сбросить категории")}
                       className="ml-auto text-[11px] text-accent transition-colors hover:text-accent-hover"
                     >
-                      сброс
+                      {t("сброс")}
                     </button>
                   )}
                 </div>
@@ -278,7 +285,7 @@ export default function ModsBrowser({
               className="mt-3 flex h-10 items-center gap-2 rounded-[8px] bg-card px-3 text-sm text-muted transition-colors hover:text-text"
             >
               <i className="fa-solid fa-arrow-left text-xs" />
-              Назад
+              {t("Назад")}
             </button>
           </aside>
 
@@ -290,9 +297,10 @@ export default function ModsBrowser({
                 <input
                   autoFocus
                   className="w-full bg-transparent text-sm text-text outline-none placeholder:text-muted"
-                  placeholder={`Поиск: ${CTYPES.find((c) => c.id === ctype)!.label.toLowerCase()} на ${
-                    source === "curseforge" ? "CurseForge" : "Modrinth"
-                  }…`}
+                  placeholder={t("Поиск: {kind} на {source}…", {
+                    kind: t(CTYPES.find((c) => c.id === ctype)!.label).toLowerCase(),
+                    source: source === "curseforge" ? "CurseForge" : "Modrinth",
+                  })}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && doSearch()}
@@ -304,7 +312,7 @@ export default function ModsBrowser({
                       setApplied("");
                       setPage(0);
                     }}
-                    title="Очистить"
+                    title={t("Очистить")}
                     className="shrink-0 text-muted transition-colors hover:text-text"
                   >
                     <i className="fa-solid fa-xmark text-xs" />
@@ -315,8 +323,9 @@ export default function ModsBrowser({
                 onClick={doSearch}
                 className="h-10 shrink-0 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
               >
-                Поиск
+                {t("Поиск")}
               </button>
+              <ViewToggle />
             </div>
 
             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto py-1 pr-1 pb-4">
@@ -332,11 +341,88 @@ export default function ModsBrowser({
                   <i className="fa-solid fa-spinner fa-spin text-2xl" />
                 </div>
               ) : hits.length === 0 ? (
-                <div className="py-16 text-center text-sm text-muted">Ничего не найдено</div>
+                <div className="py-16 text-center text-sm text-muted">{t("Ничего не найдено")}</div>
               ) : (
                 <>
+                  {}
+                  <div
+                    className={
+                      view === "grid"
+                        ? "grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] content-start gap-2.5"
+                        : "space-y-2"
+                    }
+                  >
                   {hits.map((h, i) => {
                     const isInstalled = installedIds.has(h.project_id);
+                    const action = (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          install(h);
+                        }}
+                        disabled={isInstalled || installing.has(h.project_id)}
+                        title={isInstalled ? t("Уже в сборке") : t("Скачать в сборку")}
+                        className={`shrink-0 rounded-[8px] text-sm font-semibold transition-colors ${
+                          view === "grid" ? "h-8 w-[104px] text-[12px]" : "h-9 w-[116px]"
+                        } ${
+                          isInstalled
+                            ? "cursor-default bg-bg text-muted"
+                            : "bg-accent text-bg hover:bg-accent-hover active:bg-accent-active disabled:opacity-60"
+                        }`}
+                      >
+                        {installing.has(h.project_id) ? (
+                          <i className="fa-solid fa-spinner fa-spin" />
+                        ) : isInstalled ? (
+                          t("Установлено")
+                        ) : (
+                          t("Скачать")
+                        )}
+                      </button>
+                    );
+
+                    if (view === "grid") {
+                      return (
+                        <div
+                          key={h.project_id}
+                          onClick={() => setDetailMod(h)}
+                          style={cardInDelay(i)}
+                          className="card-in group flex cursor-pointer flex-col rounded-[16px] border-1 border-[#232427]/65 bg-card p-3 transition-colors hover:border-accent/40"
+                        >
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-bg">
+                              {h.icon_url ? (
+                                <img src={h.icon_url} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                <i className="fa-solid fa-cube text-lg text-muted" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className="truncate text-[15px] font-semibold leading-tight text-text group-hover:text-accent"
+                                title={h.title}
+                              >
+                                {h.title}
+                              </div>
+                              <div className="mt-1 line-clamp-2 text-[12px] leading-tight text-muted">
+                                {h.description}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex items-center justify-between gap-2">
+                            <span className="flex min-w-0 items-center gap-2 text-[11px] text-[#818181]">
+                              {h.author && <span className="truncate">{h.author}</span>}
+                              <span className="shrink-0">
+                                <i className="fa-solid fa-download mr-1" />
+                                {fmt(h.downloads)}
+                              </span>
+                            </span>
+                            {action}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div
                         key={h.project_id}
@@ -359,7 +445,7 @@ export default function ModsBrowser({
                             </span>
                             {h.author && (
                               <span className="shrink-0 text-[11px] text-[#818181]">
-                                от {h.author}
+                                {t("от")} {h.author}
                               </span>
                             )}
                           </div>
@@ -380,30 +466,11 @@ export default function ModsBrowser({
                           </div>
                         </div>
 
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            install(h);
-                          }}
-                          disabled={isInstalled || installing.has(h.project_id)}
-                          title={isInstalled ? "Уже в сборке" : "Скачать в сборку"}
-                          className={`h-9 w-[116px] shrink-0 rounded-[8px] text-sm font-semibold transition-colors ${
-                            isInstalled
-                              ? "cursor-default bg-bg text-muted"
-                              : "bg-accent text-bg hover:bg-accent-hover active:bg-accent-active disabled:opacity-60"
-                          }`}
-                        >
-                          {installing.has(h.project_id) ? (
-                            <i className="fa-solid fa-spinner fa-spin" />
-                          ) : isInstalled ? (
-                            "Установлено"
-                          ) : (
-                            "Скачать"
-                          )}
-                        </button>
+                        {action}
                       </div>
                     );
                   })}
+                  </div>
 
                   {}
                   <Pagination page={page} totalPages={totalPages} onChange={setPage} />

@@ -14,6 +14,7 @@ mod instance;
 mod launcher;
 mod microsoft;
 mod modrinth;
+mod pack;
 mod presence;
 mod realtime;
 mod recents;
@@ -22,16 +23,24 @@ mod servers;
 mod settings;
 mod social;
 mod update;
+mod verify;
 mod wardrobe;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 
+    let arg_pack = pack::scan_argv();
+
     let Some(slot) = instance::acquire() else {
-        eprintln!(
-            "[instance] лаунчер уже запущен (лимит окон: {}) — выходим",
-            instance::MAX_INSTANCES
-        );
+        if let Some(p) = arg_pack {
+            pack::post_to_inbox(&p);
+            eprintln!("[instance] лаунчер уже запущен — передали ему {p}");
+        } else {
+            eprintln!(
+                "[instance] лаунчер уже запущен (лимит окон: {}) — выходим",
+                instance::MAX_INSTANCES
+            );
+        }
         return;
     };
     if slot > 1 {
@@ -45,7 +54,6 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
 
-            // Куда встанет следующее обновление — туда, где лаунчер работает сейчас.
             update::remember_install_dir(app.handle());
 
             std::thread::spawn(discord::init);
@@ -53,6 +61,8 @@ pub fn run() {
             tauri::async_runtime::spawn(presence::heartbeat_loop());
 
             tauri::async_runtime::spawn(realtime::connect_loop(app.handle().clone()));
+
+            pack::watch_inbox(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -68,6 +78,7 @@ pub fn run() {
             settings::total_ram_mb,
             launcher::launch_game,
             launcher::launch_build,
+            launcher::loader_versions,
             launcher::stop_game,
             gamelog::game_log_tail,
             launcher::list_versions,
@@ -91,6 +102,8 @@ pub fn run() {
             social::friend_respond,
             social::friend_cancel,
             social::friend_remove,
+            social::friend_block,
+            social::friend_unblock,
             social::set_presence_status,
             social::set_accept_requests,
             realtime::realtime_connected,
@@ -130,6 +143,13 @@ pub fn run() {
             builds::get_build_image,
             builds::set_build_banner,
             builds::get_build_banner,
+            builds::set_build_favorite,
+            builds::set_build_loader,
+            builds::add_content_files,
+            pack::export_build,
+            pack::build_tree,
+            pack::import_acpack,
+            pack::pending_pack,
             modrinth::modrinth_search,
             modrinth::modrinth_categories,
             modrinth::modrinth_install,
@@ -154,7 +174,7 @@ pub fn run() {
             ftb::ftb_project_versions,
             ftb::ftb_install_modpack,
             servers::server_status,
-            update::check_update,
+            update::build_info,
             importer::scan_external_instances,
             importer::import_external_instance,
             importer::first_run_pending,

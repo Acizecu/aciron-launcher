@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { isTauri } from "../api";
 import { cancelTask, legacyProgress, useTasks, type DlTask } from "../downloadTask";
+import { t as tr } from "../i18n";
 
 type Prog = { op?: string; stage: string; message: string; current: number; total: number };
 
@@ -39,13 +40,17 @@ function TaskLine({ t }: { t: DlTask }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-xs font-medium text-text">{t.name}</div>
         <div className="truncate text-[11px] text-muted">
-          {t.done ? t.message : t.total > 1 ? `${t.current} / ${t.total} файлов` : t.message}
+          {t.done
+            ? t.message
+            : t.total > 1
+            ? tr("{current} / {total} файлов", { current: t.current, total: t.total })
+            : t.message}
         </div>
       </div>
       {!t.done && (
         <button
           onClick={() => cancelTask(t.id)}
-          title="Отменить загрузку"
+          title={t.cancelLabel ?? tr("Отменить загрузку")}
           className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-muted transition-colors hover:bg-[#FF3535]/50 hover:text-white"
         >
           <i className="fa-solid fa-xmark text-[10px]" />
@@ -97,15 +102,11 @@ export default function DownloadOrb({ abovePlayBar = false }: { abovePlayBar?: b
   const allDone = active.length === 0;
 
   const cancelled = tasks.length > 0 ? tasks.every((t) => t.cancelled) : endedCancelled.current;
-  // Ошибка (t.ok===false) тоже красит орб в красный и ставит крест, а не галочку.
+
   const anyError = tasks.some((t) => t.done && t.ok === false);
   const bad = cancelled || anyError;
   const okColor = bad ? "#ef4444" : "#22c55e";
 
-  // Кольцо заполняют ТОЛЬКО реальные многофайловые загрузки (total > 1). Одношаговые
-  // этапы обработки (установка Forge, проверка Java, распаковка natives) идут с total<=1
-  // и НЕ двигают кольцо — вместо этого показывается спиннер + подпись этапа, чтобы орб
-  // не «висел» полным кружком минуту на постобработке. Поэтапность.
   const withTotal = tasks.filter((t) => t.total > 1);
   const cur = withTotal.reduce((s, t) => s + t.current, 0);
   const total = withTotal.reduce((s, t) => s + t.total, 0);

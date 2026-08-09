@@ -28,6 +28,9 @@ RELEASE.md
 
 latest.json
 
+# Эффективный дев-конфиг СОДЕРЖИТ вшитый ACIRON_DEV_UPDATE_TOKEN — не коммитить.
+src-tauri/tauri.dev.effective.conf.json
+
 *.log
 npm-debug.log*
 .cache

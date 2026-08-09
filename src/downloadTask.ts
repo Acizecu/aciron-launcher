@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { t as tr, ts } from "./i18n";
+
 export type DlTask = {
   id: string;
   name: string;
@@ -10,14 +12,13 @@ export type DlTask = {
 
   done?: boolean;
 
-  // Результат завершения: false = ошибка. Нужен, чтобы орб/строка показали
-  // «Ошибку» с красной иконкой, а не молча исчезли (раньше endTask(false)
-  // просто удалял задачу — выглядело как «готово»).
   ok?: boolean;
 
   blocking?: boolean;
 
   cancelled?: boolean;
+
+  cancelLabel?: string;
 };
 
 let tasks: DlTask[] = [];
@@ -28,13 +29,22 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
-export function startTask(id: string, name: string, blocking = false) {
+export function startTask(id: string, name: string, blocking = false, cancelLabel?: string) {
   const t = tasks.find((x) => x.id === id);
   if (t) {
     t.name = name;
     t.done = false;
+    t.cancelLabel = cancelLabel;
   } else {
-    tasks.push({ id, name, current: 0, total: 0, message: "Подготовка…", blocking });
+    tasks.push({
+      id,
+      name,
+      current: 0,
+      total: 0,
+      message: tr("Подготовка…"),
+      blocking,
+      cancelLabel,
+    });
   }
   emit();
 }
@@ -50,16 +60,13 @@ export function endTask(id: string, ok = true) {
   const t = tasks.find((x) => x.id === id);
   if (!t) return;
 
-  // Идемпотентно: если задача уже в терминальном состоянии (отменена/завершена),
-  // повторный вызов игнорируем. Иначе двойной сигнал (Rust "error" + JS-catch
-  // aciron-task-end) переустанавливал бы таймер удаления.
   if (t.cancelled || t.done) return;
 
   t.done = true;
   t.ok = ok;
-  t.message = ok ? "Готово" : "Ошибка";
+  t.message = ok ? tr("Готово") : tr("Ошибка");
   emit();
-  // Ошибку держим на экране дольше, чтобы её успели заметить.
+
   setTimeout(
     () => {
       tasks = tasks.filter((x) => x.id !== id);
@@ -78,7 +85,7 @@ export function cancelTask(id: string) {
     .catch(() => {});
   t.cancelled = true;
   t.done = true;
-  t.message = "Отменено";
+  t.message = tr("Отменено");
   cancelledIds.add(id);
   setTimeout(() => cancelledIds.delete(id), 60_000);
   emit();
@@ -114,7 +121,8 @@ const LEGACY_ID = "legacy";
 
 if (typeof window !== "undefined") {
   window.addEventListener("aciron-task-start", (e) => {
-    startTask(LEGACY_ID, (e as CustomEvent).detail?.name ?? "Загрузка", true);
+    const d = (e as CustomEvent).detail;
+    startTask(LEGACY_ID, d?.name ?? tr("Загрузка"), true, d?.cancelLabel);
   });
   window.addEventListener("aciron-task-end", () => {
 
@@ -129,17 +137,11 @@ export function legacyProgress(
   current: number,
   total: number
 ) {
-  // Орб установки НЕ реагирует на события ЗАПУСКА игры (op="launch"): иначе
-  // "done"/«Игра запущена» от запуска закрывал бы идущую установку прежде времени,
-  // а ошибка запуска молча гасила бы орб. Орб ведут только установка и перенос
-  // данных (op="install"/"migrate"). Пустой op трактуем как launch (совместимость).
+
   if (op === "launch" || op === "") return;
   if (!tasks.some((t) => t.id === LEGACY_ID)) return;
   if (stage === "done") endTask(LEGACY_ID, true);
   else if (stage === "error") endTask(LEGACY_ID, false);
-  // ЛЮБОЙ другой этап (modpack/libraries/java/loader/forge/assets/natives/…) обновляет
-  // задачу — чтобы орб показывал ТЕКУЩИЙ этап, а не застывал на прошлом (раньше
-  // обрабатывался только "modpack", поэтому после докачки файлов орб «висел» полным
-  // кружком всю установку Java/Forge, пока не придёт "done"). Поэтапность.
-  else updateTask(LEGACY_ID, { current, total, message });
+
+  else updateTask(LEGACY_ID, { current, total, message: ts(message) });
 }

@@ -64,6 +64,9 @@ pub struct FriendsData {
     pub incoming: Vec<PendingUser>,
     #[serde(default)]
     pub outgoing: Vec<PendingUser>,
+
+    #[serde(default)]
+    pub blocked: Vec<PendingUser>,
 }
 
 pub(crate) async fn check(resp: reqwest::Response) -> Result<reqwest::Response, String> {
@@ -77,7 +80,7 @@ pub(crate) async fn check(resp: reqwest::Response) -> Result<reqwest::Response, 
     Err(serde_json::from_str::<serde_json::Value>(&body)
         .ok()
         .and_then(|v| v["error"].as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "Aciron ID: не удалось выполнить запрос".into()))
+        .unwrap_or_else(|| "Не удалось выполнить запрос к Aciron ID".into()))
 }
 
 pub(crate) async fn get(path: &str) -> Result<reqwest::Response, String> {
@@ -133,6 +136,18 @@ pub async fn friend_cancel(user_id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn friend_remove(user_id: String) -> Result<(), String> {
     post("/api/friends/remove", json!({ "userId": user_id })).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn friend_block(user_id: String) -> Result<(), String> {
+    post("/api/friends/block", json!({ "userId": user_id })).await?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn friend_unblock(user_id: String) -> Result<(), String> {
+    post("/api/friends/unblock", json!({ "userId": user_id })).await?;
     Ok(())
 }
 

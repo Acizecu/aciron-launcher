@@ -14,6 +14,7 @@ import {
 import { useToast } from "../ToastContext";
 import VersionList from "./VersionList";
 import Lightbox from "./Lightbox";
+import { t, ts } from "../i18n";
 
 const loaderLabel: Record<string, string> = {
   fabric: "Fabric",
@@ -64,9 +65,12 @@ export default function ModDetail({
     try {
       const updated = await installContentVersion(source, build.id, hit.project_id, v.id);
       onInstalled(updated);
-      toast(`«${hit.title}» ${v.version_number} установлен`, "success");
+      toast(
+        t("«{title}» {version} установлен", { title: hit.title, version: v.version_number }),
+        "success"
+      );
     } catch (e) {
-      toast(String(e), "error");
+      toast(ts(String(e)), "error");
     } finally {
       setVerBusy(null);
     }
@@ -78,9 +82,9 @@ export default function ModDetail({
     try {
       const updated = await installContent(source, build.id, hit.project_id);
       onInstalled(updated);
-      toast(`«${hit.title}» установлен`, "success");
+      toast(t("«{title}» установлен", { title: hit.title }), "success");
     } catch (e) {
-      toast(String(e), "error");
+      toast(ts(String(e)), "error");
     } finally {
       setBusy(false);
     }
@@ -97,8 +101,8 @@ export default function ModDetail({
 
   const links: { label: string; url?: string; icon: string }[] = [
     { label: siteLink.label, url: siteLink.url, icon: "fa-arrow-up-right-from-square" },
-    { label: "Исходники", url: project?.source_url, icon: "fa-code" },
-    { label: "Проблемы", url: project?.issues_url, icon: "fa-bug" },
+    { label: t("Исходники"), url: project?.source_url, icon: "fa-code" },
+    { label: t("Проблемы"), url: project?.issues_url, icon: "fa-bug" },
     { label: "Wiki", url: project?.wiki_url, icon: "fa-book" },
     { label: "Discord", url: project?.discord_url, icon: "fa-discord" },
   ];
@@ -118,7 +122,7 @@ export default function ModDetail({
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[30px] font-light leading-none text-text">{hit.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[#818181]">
-            {hit.author && <span>от {hit.author}</span>}
+            {hit.author && <span>{t("от {author}", { author: hit.author })}</span>}
             <span>
               <i className="fa-solid fa-download mr-1 text-[10px]" />
               {fmt(downloads)}
@@ -139,7 +143,7 @@ export default function ModDetail({
           {links.find((l) => l.url) && (
             <button
               onClick={() => openUrl(links.find((l) => l.url)!.url!)}
-              title="Открыть страницу проекта"
+              title={t("Открыть страницу проекта")}
               className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-accent"
             >
               <i className="fa-solid fa-arrow-up-right-from-square text-sm" />
@@ -155,7 +159,7 @@ export default function ModDetail({
             }`}
           >
             {busy && <i className="fa-solid fa-spinner fa-spin text-xs" />}
-            {busy ? "Установка…" : installed ? "Установлено" : "Скачать"}
+            {busy ? t("Установка…") : installed ? t("Установлено") : t("Скачать")}
           </button>
         </div>
       </div>
@@ -175,7 +179,7 @@ export default function ModDetail({
               tab === id ? "text-text" : "text-muted hover:text-text"
             }`}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>
@@ -186,7 +190,7 @@ export default function ModDetail({
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
             <div className="rounded-[16px] border-1 border-[#232427]/65 bg-card p-3">
               <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Установить в
+                {t("Установить в")}
               </div>
               <div className="truncate text-sm text-text">{build.name}</div>
               <div className="mt-0.5 truncate text-[11px] text-[#818181]">
@@ -197,7 +201,7 @@ export default function ModDetail({
             {hit.categories.length > 0 && (
               <div>
                 <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Категории
+                  {t("Категории")}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {hit.categories.map((c) => (
@@ -215,7 +219,7 @@ export default function ModDetail({
             {links.some((l) => l.url) && (
               <div>
                 <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Ссылки
+                  {t("Ссылки")}
                 </div>
                 <div className="space-y-1">
                   {links
@@ -244,7 +248,7 @@ export default function ModDetail({
             className="mt-3 flex h-10 items-center gap-2 rounded-[8px] px-3 text-sm text-muted transition-colors hover:text-text"
           >
             <i className="fa-solid fa-arrow-left text-xs" />
-            Назад
+            {t("Назад")}
           </button>
         </aside>
 
@@ -267,7 +271,7 @@ export default function ModDetail({
                     <button
                       key={i}
                       onClick={() => setLightbox(i)}
-                      title="Открыть"
+                      title={t("Открыть")}
                       className="group relative h-40 shrink-0 overflow-hidden rounded-[16px] border-1 border-[#232427]/65"
                     >
                       <img
@@ -286,8 +290,9 @@ export default function ModDetail({
               <div className="rounded-[16px] border-1 border-[#232427]/65 bg-card p-5">
                 <p className="text-sm leading-relaxed text-text">{hit.description}</p>
                 <p className="mt-5 text-xs text-muted">
-                  Полное описание и список изменений — на странице проекта (кнопка со стрелкой
-                  вверху). Версии — во вкладке «Версии».
+                  {t(
+                    "Полное описание и список изменений — на странице проекта (кнопка со стрелкой вверху). Версии — во вкладке «Версии»."
+                  )}
                 </p>
               </div>
             </>

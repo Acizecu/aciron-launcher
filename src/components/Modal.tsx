@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { t } from "../i18n";
 
 const CLOSE_MS = 180;
+
+const REVIVE_MS = 80;
 
 export default function Modal({
   title,
@@ -12,6 +15,7 @@ export default function Modal({
   width = "max-w-md",
 
   bare = false,
+  dismissible = true,
 }: {
   title: string;
   subtitle?: string;
@@ -21,14 +25,36 @@ export default function Modal({
   footer?: ReactNode;
   width?: string;
   bare?: boolean;
+
+  dismissible?: boolean;
 }) {
 
   const [closing, setClosing] = useState(false);
+  const timers = useRef<number[]>([]);
+
   const close = useCallback(() => {
-    if (closing) return;
+    if (closing || !dismissible) return;
     setClosing(true);
-    setTimeout(onClose, CLOSE_MS);
-  }, [closing, onClose]);
+    timers.current.push(
+      window.setTimeout(() => {
+
+        try {
+          onClose();
+        } catch (e) {
+          console.error("[modal] onClose failed:", e);
+        }
+        timers.current.push(window.setTimeout(() => setClosing(false), REVIVE_MS));
+      }, CLOSE_MS)
+    );
+  }, [closing, dismissible, onClose]);
+
+  useEffect(
+    () => () => {
+      for (const id of timers.current) window.clearTimeout(id);
+      timers.current = [];
+    },
+    []
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
@@ -37,7 +63,12 @@ export default function Modal({
   }, [close]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center p-6 ${
+        closing ? "pointer-events-none" : ""
+      }`}
+    >
       <div
         className={`absolute inset-0 bg-black/60 backdrop-blur-[2px] ${
           closing ? "modal-backdrop-out" : "modal-backdrop"
@@ -51,13 +82,15 @@ export default function Modal({
         }`}
       >
         {}
-        <button
-          onClick={close}
-          aria-label="Закрыть"
-          className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-[10px] bg-card text-muted transition-colors hover:bg-[#FF3535]/50 hover:text-white"
-        >
-          <i className="fa-solid fa-xmark" />
-        </button>
+        {dismissible && (
+          <button
+            onClick={close}
+            aria-label={t("Закрыть")}
+            className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-[10px] bg-card text-muted transition-colors hover:bg-[#FF3535]/50 hover:text-white"
+          >
+            <i className="fa-solid fa-xmark" />
+          </button>
+        )}
 
         <div className="flex items-center gap-3 px-6 pb-4 pt-6 pr-16">
           {icon && (

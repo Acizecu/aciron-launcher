@@ -5,6 +5,7 @@ import ModpackDetail from "./ModpackDetail";
 import VersionPickerModal from "./VersionPickerModal";
 import Pagination from "./Pagination";
 import { cardInDelay } from "../anim";
+import { t, ts } from "../i18n";
 
 function packUrl(source: Source, h: ModHit): string {
   if (source === "curseforge") return `https://www.curseforge.com/minecraft/modpacks/${h.slug}`;
@@ -53,7 +54,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
         setHits(r.hits);
         setTotal(r.total_hits);
       })
-      .catch((e) => my === seq.current && setError(String(e)))
+      .catch((e) => my === seq.current && setError(ts(String(e))))
       .finally(() => my === seq.current && setLoading(false));
   }, [source, applied, cats, index, page]);
 
@@ -93,7 +94,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
       {}
       <aside className="flex w-[190px] shrink-0 flex-col overflow-y-auto pr-1">
         <div className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
-          Сортировка
+          {t("Сортировка")}
         </div>
         <div className="space-y-1">
           {SORTS.map((s) => (
@@ -108,7 +109,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
                 index === s.id ? "bg-card text-text" : "text-muted hover:text-text"
               }`}
             >
-              {s.label}
+              {t(s.label)}
             </button>
           ))}
         </div>
@@ -118,7 +119,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
           <>
             <div className="mb-1 mt-4 flex items-center gap-2 px-3">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Категории
+                {t("Категории")}
               </span>
               {cats.length > 0 && (
                 <button
@@ -126,10 +127,10 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
                     setPage(0);
                     setCats([]);
                   }}
-                  title="Сбросить категории"
+                  title={t("Сбросить категории")}
                   className="ml-auto text-[11px] text-accent transition-colors hover:text-accent-hover"
                 >
-                  сброс
+                  {t("сброс")}
                 </button>
               )}
             </div>
@@ -162,7 +163,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
             <i className="fa-solid fa-magnifying-glass text-xs text-muted" />
             <input
               className="w-full bg-transparent text-sm text-text outline-none placeholder:text-muted"
-              placeholder="Поиск модпаков…"
+              placeholder={t("Поиск модпаков…")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && doSearch()}
@@ -174,7 +175,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
                   setApplied("");
                   setPage(0);
                 }}
-                title="Очистить"
+                title={t("Очистить")}
                 className="shrink-0 text-muted transition-colors hover:text-text"
               >
                 <i className="fa-solid fa-xmark text-xs" />
@@ -185,7 +186,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
             onClick={doSearch}
             className="h-10 shrink-0 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
           >
-            Поиск
+            {t("Поиск")}
           </button>
           <SourceMenu value={source} onChange={pickSource} />
         </div>
@@ -201,7 +202,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
               <i className="fa-solid fa-spinner fa-spin text-2xl" />
             </div>
           ) : hits.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted">Ничего не найдено</div>
+            <div className="py-16 text-center text-sm text-muted">{t("Ничего не найдено")}</div>
           ) : (
             <>
               {hits.map((h, i) => (
@@ -225,7 +226,9 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
                         {h.title}
                       </span>
                       {h.author && (
-                        <span className="shrink-0 text-[11px] text-[#818181]">от {h.author}</span>
+                        <span className="shrink-0 text-[11px] text-[#818181]">
+                          {t("от {name}", { name: h.author })}
+                        </span>
                       )}
                     </div>
                     <div className="truncate text-[12px] text-muted">{h.description}</div>
@@ -250,7 +253,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
                       e.stopPropagation();
                       openUrl(packUrl(source, h));
                     }}
-                    title="Открыть страницу модпака"
+                    title={t("Открыть страницу модпака")}
                     className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-bg text-muted opacity-0 transition hover:text-accent group-hover:opacity-100"
                   >
                     <i className="fa-solid fa-arrow-up-right-from-square text-xs" />
@@ -263,7 +266,7 @@ export default function ModpackBrowser({ onInstalled }: { onInstalled: () => voi
                     }}
                     className="h-9 w-[116px] shrink-0 rounded-[8px] bg-accent text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
                   >
-                    Установить
+                    {t("Установить")}
                   </button>
                 </div>
               ))}

@@ -1,5 +1,6 @@
 
 import type { ReactNode } from "react";
+import { t } from "../../i18n";
 
 export const inputCls =
   "w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent";
@@ -68,10 +69,10 @@ export function PathRow({
   return (
     <div className="flex gap-2">
       <input className={inputCls} value={value} readOnly />
-      <button className={iconBtnCls} title="Выбрать папку" onClick={onPick}>
+      <button className={iconBtnCls} title={t("Выбрать папку")} onClick={onPick}>
         <i className="fa-solid fa-folder-open text-sm" />
       </button>
-      <button className={iconBtnCls} title="Открыть папку" onClick={onOpen}>
+      <button className={iconBtnCls} title={t("Открыть папку")} onClick={onOpen}>
         <i className="fa-solid fa-up-right-from-square text-sm" />
       </button>
     </div>

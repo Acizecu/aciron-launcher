@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { APP_VERSION } from "./config";
 
 export type Settings = {
   java_path: string;
@@ -20,6 +21,22 @@ export type Settings = {
   ui_scale: number;
 
   notify_sound: boolean;
+
+  language: string;
+
+  onboarded: boolean;
+
+  dev_mode_disable_updates: boolean;
+  skipped_update_version: string;
+  defer_update_until: number | null;
+};
+
+export type BuildInfo = {
+  channel: string;
+  version: string;
+  git_sha: string;
+  dirty: boolean;
+  updater_enabled: boolean;
 };
 
 export const isTauri =
@@ -165,6 +182,11 @@ const mockSettings: Settings = {
   fullscreen: false,
   ui_scale: 100,
   notify_sound: true,
+  dev_mode_disable_updates: false,
+  skipped_update_version: "",
+  defer_update_until: null,
+  language: "",
+  onboarded: true,
 };
 
 export async function getSettings(): Promise<Settings> {
@@ -220,6 +242,17 @@ export async function pickFile(
   return typeof res === "string" ? res : null;
 }
 
+export async function saveFile(
+  name: string,
+  extensions: string[],
+  defaultPath?: string
+): Promise<string | null> {
+  if (!isTauri) return null;
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const res = await save({ defaultPath, filters: [{ name, extensions }] });
+  return typeof res === "string" ? res : null;
+}
+
 export async function openFolder(path: string): Promise<void> {
   if (!isTauri) return;
   await invoke("open_folder", { path });
@@ -249,25 +282,18 @@ export async function openUrl(url: string): Promise<void> {
   await openUrl(url);
 }
 
-export type UpdateInfo = {
-  available: boolean;
-  current: string;
-  latest: string;
-  url: string;
-  notes: string;
-};
+export async function buildInfo(): Promise<BuildInfo> {
+  const fallback: BuildInfo = {
+    channel: "local",
+    version: APP_VERSION,
+    git_sha: "",
+    dirty: false,
 
-export async function checkUpdate(): Promise<UpdateInfo> {
-  const fallback: UpdateInfo = {
-    available: false,
-    current: "",
-    latest: "",
-    url: "",
-    notes: "",
+    updater_enabled: false,
   };
   if (!isTauri) return fallback;
   try {
-    return await invoke<UpdateInfo>("check_update");
+    return await invoke<BuildInfo>("build_info");
   } catch {
     return fallback;
   }
@@ -441,6 +467,8 @@ export type PresenceState = "online" | "idle" | "dnd" | "offline";
 export type FriendPresence = {
   state: PresenceState;
 
+  lastSeen?: number | null;
+
   inLauncher?: boolean;
   inGame?: boolean;
   mcVersion?: string | null;
@@ -462,6 +490,8 @@ export type FriendsData = {
   friends: Friend[];
   incoming: PendingUser[];
   outgoing: PendingUser[];
+
+  blocked?: PendingUser[];
 };
 
 const mockFriends: FriendsData = {
@@ -515,6 +545,18 @@ export async function friendRemove(user_id: string): Promise<void> {
   cacheBust("friends");
 }
 
+export async function friendBlock(user_id: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("friend_block", { userId: user_id });
+  cacheBust("friends");
+}
+
+export async function friendUnblock(user_id: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("friend_unblock", { userId: user_id });
+  cacheBust("friends");
+}
+
 export type ChatMessage = {
   id: string;
   from: string;
@@ -554,15 +596,12 @@ export async function chatMarkRead(user_id: string): Promise<void> {
   await invoke("chat_mark_read", { userId: user_id });
 }
 
-// Сообщить собеседнику, что мы печатаем (real-time «печатает…»). Best-effort:
-// уходит в вебсокет через Rust; сервер ретранслирует адресату. Ошибки глушим —
-// индикатор набора некритичен.
 export async function sendTyping(user_id: string): Promise<void> {
   if (!isTauri) return;
   try {
     await invoke("realtime_send_typing", { userId: user_id });
   } catch {
-    /* typing некритичен */
+
   }
 }
 
@@ -739,14 +778,6 @@ export type CatalogCape = { id: string; name: string; url: string; by: string };
 
 export const CAPE_CATALOG_KEY = "cape-catalog";
 
-/**
- * Каталог плащей.
- *
- * `force` — обойти кэш. Он нужен при открытии гардероба: каталог пополняется на
- * стороне сервера (достаточно положить туда PNG), а получасовой кэш ещё и
- * переживает перезапуск лаунчера — без принудительного обновления новые плащи
- * не появлялись бы до полутора десятков минут после старта, а то и дольше.
- */
 export async function capeCatalog(force = false): Promise<CatalogCape[]> {
   if (!isTauri) return [];
   if (force) cacheBust(CAPE_CATALOG_KEY);
@@ -765,7 +796,6 @@ export type CatalogSkin = { id: string; name: string; url: string; model: SkinMo
 
 export const SKIN_CATALOG_KEY = "skin-catalog";
 
-/** Каталог стандартных скинов. `force` — как у capeCatalog, обходит кэш. */
 export async function skinCatalog(force = false): Promise<CatalogSkin[]> {
   if (!isTauri) return [];
   if (force) cacheBust(SKIN_CATALOG_KEY);
@@ -952,6 +982,10 @@ export type Build = {
   image: string;
   icon_url: string;
   playtime_secs: number;
+
+  favorite: boolean;
+
+  last_played: number;
 };
 
 export async function getBuilds(): Promise<Build[]> {
@@ -961,9 +995,93 @@ export async function getBuilds(): Promise<Build[]> {
 
 export async function createBuild(name: string, mc_version: string, loader: Loader): Promise<Build> {
   if (!isTauri) {
-    return { id: String(Date.now()), name, mc_version, loader, loader_version: "", mods: [], created: Date.now() / 1000, dir: "", banner: "", image: "", icon_url: "", playtime_secs: 0 };
+    return { id: String(Date.now()), name, mc_version, loader, loader_version: "", mods: [], created: Date.now() / 1000, dir: "", banner: "", image: "", icon_url: "", playtime_secs: 0, favorite: false, last_played: 0 };
   }
   return invoke<Build>("create_build", { name, mcVersion: mc_version, loader });
+}
+
+export async function setBuildFavorite(build_id: string, favorite: boolean): Promise<Build> {
+  if (!isTauri) throw new Error("нет бэкенда");
+  return invoke<Build>("set_build_favorite", { buildId: build_id, favorite });
+}
+
+export type LoaderVersion = {
+  version: string;
+
+  stable: boolean;
+
+  latest: boolean;
+};
+
+export async function loaderVersions(
+  loader: Loader,
+  mc_version: string
+): Promise<LoaderVersion[]> {
+  if (!isTauri) return [];
+  return invoke<LoaderVersion[]>("loader_versions", { loader, mcVersion: mc_version });
+}
+
+export async function setBuildLoader(
+  build_id: string,
+  loader: Loader,
+  loader_version: string
+): Promise<Build> {
+  if (!isTauri) throw new Error("нет бэкенда");
+  return invoke<Build>("set_build_loader", {
+    buildId: build_id,
+    loader,
+    loaderVersion: loader_version,
+  });
+}
+
+export type PackFormat = "acpack" | "mrpack";
+
+export type TreeEntry = {
+  name: string;
+  is_dir: boolean;
+  size: number;
+  files: number;
+  default_on: boolean;
+};
+
+export async function buildTree(build_id: string): Promise<TreeEntry[]> {
+  if (!isTauri) return [];
+  return invoke<TreeEntry[]>("build_tree", { buildId: build_id });
+}
+
+export async function exportBuild(
+  build_id: string,
+  format: PackFormat,
+  dest: string,
+  include: string[]
+): Promise<number> {
+  if (!isTauri) throw new Error("нет бэкенда");
+  return invoke<number>("export_build", { buildId: build_id, format, dest, include });
+}
+
+export type ImportResult = { build: Build; missing: string[] };
+
+export async function importAcpack(path: string): Promise<ImportResult> {
+  if (!isTauri) throw new Error("нет бэкенда");
+  return invoke<ImportResult>("import_acpack", { path });
+}
+
+export async function pendingPack(): Promise<string | null> {
+  if (!isTauri) return null;
+  return invoke<string | null>("pending_pack");
+}
+
+export async function addContentFiles(
+  build_id: string,
+  paths: string[],
+  hint: ContentKind
+): Promise<[Build, number, number]> {
+  if (!isTauri) throw new Error("нет бэкенда");
+  return invoke<[Build, number, number]>("add_content_files", {
+    buildId: build_id,
+    paths,
+    hint,
+  });
 }
 
 export async function setBuildImage(build_id: string, src_path: string): Promise<Build> {

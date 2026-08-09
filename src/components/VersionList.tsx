@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { contentVersions, type ModVersion, type SourceId } from "../api";
 import Dropdown from "./Dropdown";
+import LoadingDots from "./LoadingDots";
+import { dtf, t } from "../i18n";
 
 const typeMeta: Record<string, { label: string; color: string }> = {
   release: { label: "Релиз", color: "#4ade80" },
@@ -68,7 +70,8 @@ export default function VersionList({
     return (
       <div className="p-8 text-center text-sm text-muted">
         <i className="fa-solid fa-spinner fa-spin mr-2" />
-        Загрузка версий…
+        {t("Загрузка версий")}
+        <LoadingDots className="ml-1" />
       </div>
     );
   }
@@ -82,26 +85,26 @@ export default function VersionList({
           <Dropdown
             value={mcFilter}
             onChange={setMcFilter}
-            options={[{ value: "", label: "Все версии MC" }, ...mcOptions.map((v) => ({ value: v, label: v }))]}
+            options={[{ value: "", label: t("Все версии MC") }, ...mcOptions.map((v) => ({ value: v, label: v }))]}
             className="w-40"
           />
           <Dropdown
             value={typeFilter}
             onChange={setTypeFilter}
             options={[
-              { value: "", label: "Все типы" },
-              { value: "release", label: "Релиз", icon: "fa-circle-check" },
+              { value: "", label: t("Все типы") },
+              { value: "release", label: t("Релиз"), icon: "fa-circle-check" },
               { value: "beta", label: "Beta", icon: "fa-flask" },
               { value: "alpha", label: "Alpha", icon: "fa-triangle-exclamation" },
             ]}
             className="w-40"
           />
-          <span className="ml-auto text-[11px] text-muted">{filtered.length} версий</span>
+          <span className="ml-auto text-[11px] text-muted">{t("{n} версий", { n: filtered.length })}</span>
         </div>
       )}
 
       {filtered.length === 0 ? (
-        <div className="p-8 text-center text-sm text-muted">Версий не найдено.</div>
+        <div className="p-8 text-center text-sm text-muted">{t("Версий не найдено.")}</div>
       ) : (
         shown.map((v) => {
           const meta = typeMeta[v.version_type] ?? { label: v.version_type, color: "var(--color-muted)" };
@@ -128,7 +131,7 @@ export default function VersionList({
                     className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
                     style={{ color: meta.color, background: `color-mix(in srgb, ${meta.color} 14%, transparent)` }}
                   >
-                    {meta.label}
+                    {t(meta.label)}
                   </span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted">
@@ -138,7 +141,7 @@ export default function VersionList({
                   </span>
                   {v.loaders?.length > 0 && <span className="capitalize">· {v.loaders.join(", ")}</span>}
                   {v.date_published && (
-                    <span>· {new Date(v.date_published).toLocaleDateString("ru-RU")}</span>
+                    <span>· {dtf().format(new Date(v.date_published))}</span>
                   )}
                 </div>
               </div>
@@ -152,7 +155,7 @@ export default function VersionList({
                 }`}
               >
                 <i className={`fa-solid ${isBusy ? "fa-spinner fa-spin" : isCurrent ? "fa-check" : "fa-download"}`} />
-                {isBusy ? "…" : isCurrent ? "Текущая" : actionLabel}
+                {isBusy ? "…" : isCurrent ? t("Текущая") : t(actionLabel)}
               </button>
             </div>
           );
@@ -164,7 +167,7 @@ export default function VersionList({
           onClick={() => setShowAll(true)}
           className="w-full rounded-lg border border-border py-2 text-xs text-muted transition-colors hover:text-text"
         >
-          Показать все ({filtered.length})
+          {t("Показать все ({n})", { n: filtered.length })}
         </button>
       )}
     </div>

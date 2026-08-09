@@ -3,6 +3,7 @@ import Modal from "../Modal";
 import Head from "../Head";
 import { friendSkinUrl } from "../../api";
 import { sortFriends, useFriends } from "../../friends";
+import { t } from "../../i18n";
 
 export default function ForwardModal({
   count,
@@ -16,9 +17,6 @@ export default function ForwardModal({
   const { data } = useFriends();
   const [query, setQuery] = useState("");
 
-  // Сортировку (O(n log n) с localeCompare) считаем один раз на изменение списка,
-  // а не на каждое нажатие клавиши; toLowerCase(query) вычисляем один раз, а не на
-  // каждом элементе. Результат фильтрации/порядок идентичны прежним.
   const sorted = useMemo(() => sortFriends(data?.friends ?? []), [data?.friends]);
   const q = query.trim().toLowerCase();
   const friends = useMemo(
@@ -28,8 +26,10 @@ export default function ForwardModal({
 
   return (
     <Modal
-      title="Переслать"
-      subtitle={`${count} ${count === 1 ? "сообщение" : "сообщений"}`}
+      title={t("Переслать")}
+      subtitle={
+        count === 1 ? t("{n} сообщение", { n: count }) : t("{n} сообщений", { n: count })
+      }
       icon="fa-share"
       onClose={onClose}
     >
@@ -38,13 +38,13 @@ export default function ForwardModal({
           value={query}
           autoFocus
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Кому переслать"
+          placeholder={t("Кому переслать")}
           className="mb-3 w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none"
         />
         <div className="max-h-[320px] space-y-1 overflow-y-auto">
           {friends.length === 0 ? (
             <div className="px-3 py-6 text-center text-xs text-muted">
-              {data?.friends.length ? "Никого не нашлось" : "Друзей пока нет"}
+              {data?.friends.length ? t("Никого не нашлось") : t("Друзей пока нет")}
             </div>
           ) : (
             friends.map((f) => (

@@ -3,6 +3,7 @@ import { serverStatus, cachedServerStatus, type ServerStatus } from "../api";
 import { cardInDelay } from "../anim";
 import { useLauncherCtx } from "../LauncherContext";
 import { useToast } from "../ToastContext";
+import { locale, t } from "../i18n";
 
 type GameServer = {
   name: string;
@@ -16,7 +17,7 @@ const SERVERS: GameServer[] = [
 ];
 
 function fmt(n: number): string {
-  return n.toLocaleString("ru-RU");
+  return n.toLocaleString(locale());
 }
 
 function initials(name: string): string {
@@ -51,7 +52,7 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
     try {
       await navigator.clipboard.writeText(s.ip);
       setCopied(true);
-      toast(`Адрес ${s.ip} скопирован`, "info");
+      toast(t("Адрес {ip} скопирован", { ip: s.ip }), "info");
       setTimeout(() => setCopied(false), 1500);
     } catch {
 
@@ -61,7 +62,7 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
   const connect = () => {
     if (busy) return;
     launch(s.version, s.ip);
-    toast(`Запуск ${s.version} и подключение к ${s.name}…`, "success");
+    toast(t("Запуск {version} и подключение к {name}…", { version: s.version, name: s.name }), "success");
   };
 
   return (
@@ -92,7 +93,7 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
                 st?.online ? "bg-[#22c55e]/15 text-[#22c55e]" : "bg-muted/15 text-muted"
               }`}
             >
-              {st?.online ? "онлайн" : "оффлайн"}
+              {st?.online ? t("онлайн") : t("оффлайн")}
             </span>
           )}
         </div>
@@ -122,15 +123,15 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
       <button
         onClick={connect}
         disabled={busy}
-        title={`Запустить ${s.version} и зайти на сервер`}
+        title={t("Запустить {version} и зайти на сервер", { version: s.version })}
         className="h-9 w-[92px] shrink-0 rounded-[8px] bg-accent text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {busy ? <i className="fa-solid fa-spinner fa-spin" /> : "Играть"}
+        {busy ? <i className="fa-solid fa-spinner fa-spin" /> : t("Играть")}
       </button>
 
       <button
         onClick={copy}
-        title="Скопировать адрес"
+        title={t("Скопировать адрес")}
         className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-bg text-muted transition-colors hover:text-accent"
       >
         <i className={`fa-solid ${copied ? "fa-check text-[#22c55e]" : "fa-copy"} text-sm`} />
@@ -156,19 +157,21 @@ export default function ServersPage() {
     <div className="flex h-full min-h-0 flex-col px-8 py-6">
       {}
       <div className="mb-5 flex items-baseline gap-3">
-        <h1 className="text-[30px] font-light leading-none text-text">Сервера</h1>
+        <h1 className="text-[30px] font-light leading-none text-text">
+          {t("Сервера")}
+        </h1>
         <div className="ml-auto flex h-10 w-[260px] items-center gap-2 rounded-xl border border-border bg-card px-3">
           <i className="fa-solid fa-magnifying-glass text-xs text-muted" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск сервера"
+            placeholder={t("Поиск сервера")}
             className="w-full bg-transparent text-sm text-text outline-none placeholder:text-muted"
           />
           {query && (
             <button
               onClick={() => setQuery("")}
-              title="Очистить"
+              title={t("Очистить")}
               className="shrink-0 text-muted transition-colors hover:text-text"
             >
               <i className="fa-solid fa-xmark text-xs" />
@@ -185,13 +188,13 @@ export default function ServersPage() {
                 <i className="fa-solid fa-server" />
               </div>
               <p className="text-sm text-muted">
-                Список пуст. Хочешь попасть сюда? Покупай слот на https:
+                {t("Список пуст. Хочешь попасть сюда? Покупай слот на https:")}
               </p>
             </div>
           </div>
         ) : list.length === 0 ? (
           <div className="rounded-[16px] bg-card p-4 text-center text-xs text-muted">
-            Ничего не нашлось
+            {t("Ничего не нашлось")}
           </div>
         ) : (
           list.map((s, i) => <ServerRow key={s.ip} s={s} index={i} />)

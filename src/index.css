@@ -54,6 +54,40 @@ body {
   color: var(--color-text);
 }
 
+/* ---- вуаль поверх обложек ----
+   Обложка сборки и картинка версии — фон, по которому идёт текст. Чтобы текст
+   читался, поверх картинки лежит полупрозрачный слой. На тёмной теме он
+   чёрный, на светлой обязан быть светлым: иначе карточка становится чёрным
+   пятном на белом экране, а сама картинка не видна совсем.
+
+   Держим это переменными, а не условиями в компонентах: мест с обложками много,
+   и каждое из них иначе пришлось бы подписывать на тему. */
+:root {
+  --veil: rgb(0 0 0 / 0.78);
+  --veil-btn: rgb(0 0 0 / 0.5);
+  --veil-text: #fff;
+  --veil-text-dim: rgb(255 255 255 / 0.62);
+}
+:root[data-scheme="light"] {
+  --veil: rgb(255 255 255 / 0.72);
+  --veil-btn: rgb(255 255 255 / 0.72);
+  --veil-text: var(--color-text);
+  --veil-text-dim: var(--color-muted);
+}
+
+/* Интерфейс не выделяется — это приложение, а не страница: случайное
+   протаскивание не должно подсвечивать подписи кнопок. Но содержимое —
+   сообщения, вывод игры, имена файлов — это именно текст, и запрещать его
+   копирование бессмысленно. Такие места помечаем явно. */
+.selectable {
+  user-select: text;
+  cursor: text;
+}
+.selectable::selection,
+.selectable *::selection {
+  background: color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
 /* ---- кастомный скролл под палитру ---- */
 ::-webkit-scrollbar {
   width: 10px;
@@ -182,8 +216,11 @@ body {
   animation: msg-in 0.2s ease-out backwards;
 }
 
-/* ---- «печатает…»: три точки, набегающие по очереди ---- */
-@keyframes typing-dot {
+/* ---- три точки, набегающие по очереди ----
+   Общая анимация для «печатает…» в чате (TypingDots) и для индикатора
+   загрузки (LoadingDots). Цвет берётся из currentColor, поэтому точки
+   подхватывают цвет текста рядом. */
+@keyframes dot-bounce {
   0%,
   70%,
   100% {
@@ -195,18 +232,18 @@ body {
     transform: translateY(-2px);
   }
 }
-.typing-dot {
+.dot-bounce {
   display: inline-block;
   width: 3px;
   height: 3px;
   border-radius: 999px;
   background: currentColor;
-  animation: typing-dot 1.1s ease-in-out infinite backwards;
+  animation: dot-bounce 1.1s ease-in-out infinite backwards;
 }
-.typing-dot:nth-child(2) {
+.dot-bounce:nth-child(2) {
   animation-delay: 0.15s;
 }
-.typing-dot:nth-child(3) {
+.dot-bounce:nth-child(3) {
   animation-delay: 0.3s;
 }
 
@@ -356,21 +393,6 @@ body {
   animation: modal-panel-out 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
-/* ---- лайтбокс галереи ---- */
-@keyframes lightbox-in {
-  from {
-    opacity: 0;
-    transform: scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-.lightbox-img {
-  animation: lightbox-in 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
 /* ---- зелёный анимированный градиент прогресс-бара ---- */
 @keyframes progress-slide {
   0% {
@@ -437,4 +459,182 @@ body {
   );
   animation: progress-shine 1.5s ease-in-out infinite;
   z-index: 1;
+}
+
+/* ============================================================
+   Мастер первоначальной настройки
+   ============================================================ */
+
+/* Живой фон: три размытых пятна акцентного цвета медленно плывут.
+   Медленно и с большим размытием — чтобы это читалось как свет, а не как
+   анимация, которая просит на себя смотреть. */
+@keyframes aurora-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(6vw, -4vh, 0) scale(1.12);
+  }
+  66% {
+    transform: translate3d(-5vw, 5vh, 0) scale(0.94);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.aurora {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(90px);
+  will-change: transform;
+  pointer-events: none;
+}
+.aurora-1 {
+  animation: aurora-drift 26s ease-in-out infinite;
+}
+.aurora-2 {
+  animation: aurora-drift 34s ease-in-out infinite reverse;
+}
+.aurora-3 {
+  animation: aurora-drift 44s ease-in-out infinite;
+}
+
+/* Появление шага мастера */
+@keyframes wizard-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+.wizard-in {
+  animation: wizard-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* Появление элемента внутри шага (заголовок → текст → карточки → кнопки) */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise-in {
+  animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* Финальная «галочка» */
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.pop-in {
+  animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+
+/* Мягкое свечение вокруг активной карточки выбора */
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 32%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent);
+  }
+}
+.glow-pulse {
+  animation: glow-pulse 2.4s ease-out infinite;
+}
+
+/* Свечение для знака. box-shadow здесь не годится: он обвёл бы SVG
+   прямоугольником, а drop-shadow повторяет саму форму логотипа. */
+@keyframes logo-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 10px rgba(245, 169, 107, 0.28));
+  }
+  50% {
+    filter: drop-shadow(0 0 26px rgba(245, 169, 107, 0.5));
+  }
+}
+.logo-glow {
+  animation: logo-glow 3s ease-in-out infinite;
+}
+
+/* Приём перетаскивания файлов в сборку */
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(3px);
+  }
+}
+.drop-overlay {
+  animation: drop-in 0.16s ease-out both;
+}
+
+/* ---- просмотр картинок галереи ---- */
+@keyframes lightbox-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.lightbox-img {
+  animation: lightbox-in 0.22s ease-out;
+}
+
+/* ---- своя подсказка (вместо системного title) ----
+   Позиционирование живёт на внешнем контейнере, анимация — на внутреннем:
+   иначе transform анимации затирал бы transform центрирования. */
+@keyframes tooltip-pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.tooltip-pop {
+  animation: tooltip-pop 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center bottom;
+}
+
+/* Учитываем системную настройку «меньше движения» */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-1,
+  .aurora-2,
+  .aurora-3,
+  .glow-pulse {
+    animation: none;
+  }
+  .wizard-in,
+  .rise-in,
+  .pop-in {
+    animation-duration: 0.01ms;
+  }
 }

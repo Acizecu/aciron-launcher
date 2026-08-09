@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { DEV } from "./config";
+import { t as tr } from "./i18n";
 
 export type ToastType = "success" | "error" | "info" | "warning";
 type Toast = { id: number; message: string; type: ToastType; leaving?: boolean };
@@ -76,7 +77,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
               <button
                 onClick={() => drop(t.id)}
-                title="Закрыть"
+                title={tr("Закрыть")}
                 className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] text-muted transition-colors hover:text-text"
               >
                 <i className="fa-solid fa-xmark text-xs" />

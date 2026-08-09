@@ -4,8 +4,10 @@ import FriendsPanel from "./FriendsPanel";
 import { getRecents, removeRecent, type Recent } from "../api";
 import { CARD_FALL_MS } from "../anim";
 import { useFlip } from "../hooks/useFlip";
+import { useLang } from "../i18n";
 
 export default function Home() {
+  const { t } = useLang();
   const [recents, setRecents] = useState<Recent[]>([]);
   const [dying, setDying] = useState<string[]>([]);
   const gridRef = useRef<HTMLDivElement>(null);
@@ -37,7 +39,7 @@ export default function Home() {
     <div className="flex h-full min-h-0 gap-6 px-8 py-6">
       <section className="flex min-w-0 flex-1 flex-col">
         <h1 className="mb-5 text-[30px] font-light leading-none text-text">
-          Последние запуски
+          {t("Последние запуски")}
         </h1>
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
@@ -48,7 +50,9 @@ export default function Home() {
                   <i className="fa-solid fa-clock-rotate-left" />
                 </div>
                 <p className="text-sm text-muted">
-                  Здесь появятся версии и сборки, в которые вы играли. Запустите игру снизу.
+                  {t(
+                    "Здесь появятся версии и сборки, в которые вы играли. Запустите игру снизу."
+                  )}
                 </p>
               </div>
             </div>

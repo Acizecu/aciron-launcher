@@ -13,6 +13,7 @@ import {
   type WardrobeData,
 } from "../../api";
 import { ORIGIN_LABEL, type CapeEntry } from "./types";
+import { t, useLang } from "../../i18n";
 
 export const cardCls = (active: boolean) =>
   `group relative flex flex-col items-center gap-2 rounded-2xl border p-3 transition-colors ${
@@ -81,7 +82,7 @@ export function SectionHeader({ label }: { label: string }) {
   );
 }
 
-export function ActiveBadge({ text = "Используется" }: { text?: string }) {
+export function ActiveBadge({ text = t("Используется") }: { text?: string }) {
   return (
     <span className="absolute left-2 top-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-bg">
       {text}
@@ -96,7 +97,7 @@ export function CardTools({ onEdit, onDelete }: { onEdit?: () => void; onDelete?
       {onEdit && (
         <button
           onClick={onEdit}
-          title="Переименовать"
+          title={t("Переименовать")}
           className="grid h-7 w-7 place-items-center rounded-lg text-muted transition-colors hover:text-accent"
         >
           <i className="fa-solid fa-pen text-xs" />
@@ -105,7 +106,7 @@ export function CardTools({ onEdit, onDelete }: { onEdit?: () => void; onDelete?
       {onDelete && (
         <button
           onClick={onDelete}
-          title="Удалить"
+          title={t("Удалить")}
           className="grid h-7 w-7 place-items-center rounded-lg text-muted transition-colors hover:text-[#ef4444]"
         >
           <i className="fa-solid fa-trash-can text-xs" />
@@ -115,11 +116,6 @@ export function CardTools({ onEdit, onDelete }: { onEdit?: () => void; onDelete?
   );
 }
 
-// memo: сетка карточек ре-рендерится на любое из 20+ useState в WardrobePage
-// (busy/instant/edit/...). Тяжёлый WebGL уже за useEffect[url,model,shot], но memo
-// убирает лишний VDOM-дифф карточек при несвязанных изменениях состояния родителя.
-// Пропсы примитивны/стабильны на уровне item, поэтому дефолтное поверхностное
-// сравнение корректно (колбэки инлайновые — при их смене карточка честно обновится).
 function SkinCardImpl({
   name,
   url,
@@ -139,6 +135,9 @@ function SkinCardImpl({
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
+
+  useLang();
+
   return (
     <div style={{ animationDelay: `${cardInDelay(index)}ms` }} className={`card-in ${cardCls(active)}`}>
       <button onClick={onApply} className="flex w-full flex-col items-center gap-2">
@@ -165,6 +164,9 @@ function CapeCardImpl({
   index: number;
   onApply: () => void;
 }) {
+
+  useLang();
+
   return (
     <div style={{ animationDelay: `${cardInDelay(index)}ms` }} className={`card-in ${cardCls(active)}`}>
       <button onClick={onApply} className="flex w-full flex-col items-center gap-2">
@@ -180,7 +182,7 @@ function CapeCardImpl({
           </div>
         </div>
       </button>
-      {active && <ActiveBadge text="в игре" />}
+      {active && <ActiveBadge text={t("в игре")} />}
       <CardTools onDelete={entry.remove} />
     </div>
   );
@@ -207,6 +209,8 @@ function OutfitCardImpl({
   onDelete: () => void;
 }) {
 
+  useLang();
+
   const ownSkin = data.skins.find((s) => s.id === outfit.skinId);
   const catSkin = outfit.skinCatalogId ? stock?.find((s) => s.id === outfit.skinCatalogId) : undefined;
   const skinUrl = ownSkin ? textureUrl(ownSkin) : catSkin ? `${ACIRON_ID_API}${catSkin.url}` : null;
@@ -216,7 +220,7 @@ function OutfitCardImpl({
   const capeUrl = ownCape ? textureUrl(ownCape) : catCape ? `${ACIRON_ID_API}${catCape.url}` : null;
   const capeName = ownCape?.name ?? catCape?.name ?? null;
 
-  const modelLabel = outfit.model === "slim" ? "Тонкие руки" : "Классика";
+  const modelLabel = outfit.model === "slim" ? t("Тонкие руки") : t("Классика");
 
   return (
     <div style={{ animationDelay: `${cardInDelay(index)}ms` }} className={`card-in ${cardCls(false)}`}>
@@ -230,10 +234,11 @@ function OutfitCardImpl({
             <i className="fa-solid fa-shirt text-2xl text-muted" />
           )}
           {}
+          {}
           {capeUrl && !busy && (
             <div
               title={capeName ?? undefined}
-              className="absolute bottom-0 right-0 overflow-hidden rounded-md border border-border bg-bg p-0.5"
+              className="absolute bottom-0 right-0 overflow-hidden rounded-[3px]"
             >
               <TexturePreview url={capeUrl} kind="cape" scale={2} />
             </div>
@@ -247,9 +252,9 @@ function OutfitCardImpl({
           <span className="opacity-40">·</span>
           <i className={`fa-solid ${capeUrl ? "fa-check text-accent" : "fa-xmark opacity-70"}`} />
           {capeUrl ? (
-            <span className="line-clamp-1">{capeName ?? "Плащ"}</span>
+            <span className="line-clamp-1">{capeName ?? t("Плащ")}</span>
           ) : (
-            <span>Без плаща</span>
+            <span>{t("Без плаща")}</span>
           )}
         </span>
       </button>

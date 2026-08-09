@@ -54,15 +54,9 @@ function stage(): Shared {
   return shared;
 }
 
-// Кэш готовых снимков по (url,model,shot). Один и тот же url всегда даёт то же
-// изображение (та же naturalHeight -> та же legacy-ветка UV в buildPlayer), поэтому
-// dataURL детерминирован по этому ключу. Это убирает повторную сборку рига при
-// ре-маунтах (переключение вкладок гардероба, скролл-ремаунт) и дедуплицирует
-// одинаковые скины, используемые в нескольких образах.
 const thumbCache = new Map<string, string>();
 const cacheKey = (url: string, model: SkinModel, shot: ThumbShot) => `${url}|${model}|${shot}`;
 
-// Рисует уже готовый dataURL в целевой canvas без построения рига (мгновенно).
 function paintCached(target: HTMLCanvasElement, dataUrl: string) {
   const ctx = target.getContext("2d");
   if (!ctx) return;
@@ -74,8 +68,6 @@ function paintCached(target: HTMLCanvasElement, dataUrl: string) {
   img.src = dataUrl;
 }
 
-// Строит риг, делает снимок общим рендерером и возвращает dataURL для кэша.
-// Визуальный результат идентичен прежней версии (тот же рендер + drawImage).
 function snapshot(
   target: HTMLCanvasElement,
   skin: HTMLImageElement,
@@ -100,8 +92,7 @@ function snapshot(
       ctx.clearRect(0, 0, target.width, target.height);
       ctx.drawImage(s.renderer.domElement, 0, 0);
     }
-    // Снимаем dataURL с общего рендерера (preserveDrawingBuffer:true уже включён),
-    // чтобы закэшировать результат для последующих маунтов/дублей.
+
     try {
       return s.renderer.domElement.toDataURL("image/png");
     } catch {
@@ -135,7 +126,6 @@ export default function SkinThumb({
 
     const key = cacheKey(url, model, shot);
 
-    // Быстрый путь: результат уже посчитан — рисуем его без риг/WebGL-работы.
     const cached = thumbCache.get(key);
     if (cached) {
       paintCached(canvas, cached);
@@ -145,9 +135,6 @@ export default function SkinThumb({
     let alive = true;
     let started = false;
 
-    // Строим снимок лениво — только когда карточка реально видна во вьюпорте.
-    // Это размазывает всплеск синхронной GPU-работы при монтировании всей сетки
-    // и не тратит ресурсы на карточки ниже сгиба, которые пользователь не видит.
     const build = () => {
       if (started || !alive) return;
       started = true;
@@ -161,7 +148,6 @@ export default function SkinThumb({
       img.src = url;
     };
 
-    // IntersectionObserver может быть недоступен в редких средах — тогда строим сразу.
     if (typeof IntersectionObserver === "undefined") {
       build();
       return () => {

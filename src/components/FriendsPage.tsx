@@ -5,26 +5,30 @@ import TypingDots from "./chat/TypingDots";
 import { friendSkinUrl, type Friend } from "../api";
 import { PRESENCE_COLOR, presenceText, sortFriends, useFriends } from "../friends";
 import { useChat, useTyping } from "../chat";
+import { cardInDelay } from "../anim";
+import { useLang } from "../i18n";
 
 function ChatRow({
   f,
   active,
   unread,
+  index,
   onClick,
 }: {
   f: Friend;
   active: boolean;
   unread: number;
+  index: number;
   onClick: () => void;
 }) {
-  // Пока человек печатает — вместо присутствия («Не активен») показываем бегущие
-  // точки: строка списка и так самое заметное место, где ждут ответа.
+
   const typing = useTyping(f.id);
 
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition-colors ${
+      style={cardInDelay(index)}
+      className={`card-in flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition-colors ${
         active ? "bg-accent/10" : "hover:bg-card"
       }`}
     >
@@ -66,9 +70,16 @@ function ChatRow({
 }
 
 export default function FriendsPage() {
+  const { t } = useLang();
   const { data, error, loading } = useFriends();
   const { unread, last } = useChat();
-  const [openId, setOpenId] = useState<string | null>(null);
+
+  const [openId, setOpenId] = useState<string | null>(() => {
+    const w = window as unknown as { __acironOpenChat?: string };
+    const id = w.__acironOpenChat ?? null;
+    w.__acironOpenChat = undefined;
+    return id;
+  });
 
   const friends = useMemo(() => {
     const base = sortFriends(data?.friends ?? []);
@@ -86,7 +97,10 @@ export default function FriendsPage() {
   useEffect(() => {
     const open = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
-      if (id) setOpenId(id);
+      if (!id) return;
+
+      (window as unknown as { __acironOpenChat?: string }).__acironOpenChat = undefined;
+      setOpenId(id);
     };
     window.addEventListener("aciron-open-chat", open);
     return () => window.removeEventListener("aciron-open-chat", open);
@@ -109,11 +123,11 @@ export default function FriendsPage() {
           <div className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-3xl bg-card text-3xl text-accent">
             <i className="fa-solid fa-user-group" />
           </div>
-          <h2 className="text-xl font-bold text-text">Друзья</h2>
+          <h2 className="text-xl font-bold text-text">{t("Друзья")}</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
             {error === "NO_ACIRON"
-              ? "Переписка доступна с аккаунтом Aciron ID — войдите в него на главной."
-              : "Сессия Aciron ID истекла — войдите заново."}
+              ? t("Переписка доступна с аккаунтом Aciron ID — войдите в него на главной.")
+              : t("Сессия Aciron ID истекла — войдите заново.")}
           </p>
         </div>
       </div>
@@ -123,17 +137,18 @@ export default function FriendsPage() {
   return (
     <div className="flex h-full min-h-0">
       <aside className="flex w-[260px] shrink-0 flex-col border-r border-border/70">
-        <div className="px-4 pb-2 pt-4 text-[20px] font-light text-text">Переписки</div>
+        <div className="px-4 pb-2 pt-4 text-[20px] font-light text-text">{t("Переписки")}</div>
         <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-3">
           {friends.length === 0 ? (
             <div className="px-3 py-6 text-center text-xs leading-relaxed text-muted">
-              Друзей пока нет. Добавить можно на главной — в панели справа.
+              {t("Друзей пока нет. Добавить можно на главной — в панели справа.")}
             </div>
           ) : (
-            friends.map((f) => (
+            friends.map((f, i) => (
               <ChatRow
                 key={f.id}
                 f={f}
+                index={i}
                 active={f.id === openId}
                 unread={unread[f.id] ?? 0}
                 onClick={() => setOpenId(f.id)}
@@ -150,7 +165,7 @@ export default function FriendsPage() {
         <div className="grid flex-1 place-items-center px-6 text-center">
           <div>
             <i className="fa-regular fa-comments mb-3 block text-4xl text-muted/40" />
-            <div className="text-sm text-muted">Выберите, с кем поговорить</div>
+            <div className="text-sm text-muted">{t("Выберите, с кем поговорить")}</div>
           </div>
         </div>
       )}

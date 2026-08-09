@@ -1,9 +1,10 @@
 import Modal from "./Modal";
+import { t } from "../i18n";
 
 export default function ConfirmModal({
-  title = "Подтверждение",
+  title,
   message,
-  confirmLabel = "Удалить",
+  confirmLabel,
   confirmIcon = "fa-trash-can",
   danger = true,
   onConfirm,
@@ -18,7 +19,8 @@ export default function ConfirmModal({
   onClose: () => void;
 }) {
   return (
-    <Modal title={title} icon="fa-triangle-exclamation" onClose={onClose}>
+
+    <Modal title={title ?? t("Подтверждение")} icon="fa-triangle-exclamation" onClose={onClose}>
       <div className="p-5">
         <p className="text-sm text-text">{message}</p>
         <div className="mt-5 flex justify-end gap-2">
@@ -26,7 +28,7 @@ export default function ConfirmModal({
             onClick={onClose}
             className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
           >
-            Отмена
+            {t("Отмена")}
           </button>
           <button
             onClick={() => {
@@ -40,7 +42,7 @@ export default function ConfirmModal({
             }`}
           >
             <i className={`fa-solid ${confirmIcon} text-xs`} />
-            {confirmLabel}
+            {confirmLabel ?? t("Удалить")}
           </button>
         </div>
       </div>

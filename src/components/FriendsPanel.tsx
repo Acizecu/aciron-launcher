@@ -9,6 +9,8 @@ import FriendSettingsModal, {
   type FriendPrefs,
 } from "./FriendSettingsModal";
 import { useToast } from "../ToastContext";
+import { t, useLang, ts } from "../i18n";
+import { isMuted, onMutesChange } from "../mutes";
 import {
   friendCancel,
   friendRemove,
@@ -34,9 +36,9 @@ import { useChat } from "../chat";
 const NICK_RE = /^[A-Za-z0-9_]{3,16}$/;
 
 function human(e: unknown): string {
-  const m = String(e).replace(/^Error:\s*/, "");
-  if (m === "SESSION_EXPIRED") return "Сессия Aciron ID истекла — войдите заново";
-  if (m === "NO_ACIRON") return "Для друзей нужен вход в Aciron ID";
+  const m = ts(String(e));
+  if (m === "SESSION_EXPIRED") return t("Сессия Aciron ID истекла — войдите заново");
+  if (m === "NO_ACIRON") return t("Для друзей нужен вход в Aciron ID");
   return m;
 }
 
@@ -63,10 +65,6 @@ const IconBtn = memo(function IconBtn({
   );
 });
 
-// memo + колбэки принимают f/f.id, поэтому родитель передаёт ОДИН стабильный
-// набор хендлеров вместо трёх свежих inline-стрелок на строку каждый рендер.
-// Так строки не перерисовываются на каждое нажатие в поиске / событие чата,
-// если сами пропсы строки (f, unread) не изменились.
 const FriendRow = memo(function FriendRow({
   f,
   unread,
@@ -80,6 +78,11 @@ const FriendRow = memo(function FriendRow({
   onProfile: (f: Friend) => void;
   onRemove: (f: Friend) => void;
 }) {
+
+  useLang();
+
+  const [muted, setMutedState] = useState(() => isMuted(f.id));
+  useEffect(() => onMutesChange(() => setMutedState(isMuted(f.id))), [f.id]);
   const color = PRESENCE_COLOR[f.presence.state];
   const playing = f.presence.inGame;
   return (
@@ -87,7 +90,7 @@ const FriendRow = memo(function FriendRow({
       {}
       <button
         onClick={() => onProfile(f)}
-        title="Открыть профиль"
+        title={t("Открыть профиль")}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
         <Head
@@ -101,6 +104,12 @@ const FriendRow = memo(function FriendRow({
             <span className="truncate text-sm font-semibold text-text group-hover:text-accent">
               {f.username}
             </span>
+            {muted && (
+              <i
+                className="fa-solid fa-bell-slash shrink-0 text-[9px] text-muted"
+                title={t("Заглушён")}
+              />
+            )}
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
           </div>
           <div
@@ -120,17 +129,19 @@ const FriendRow = memo(function FriendRow({
         </span>
       )}
       {}
+      {}
       <div className="hidden shrink-0 gap-1 group-hover:flex">
-        <IconBtn icon="fa-comment" title="Написать" onClick={() => onChat(f.id)} />
-        <IconBtn icon="fa-user-minus" title="Удалить из друзей" onClick={() => onRemove(f)} />
+        <IconBtn icon="fa-comment" title={t("Написать")} onClick={() => onChat(f.id)} />
+        <IconBtn
+          icon="fa-user-minus"
+          title={t("Удалить из друзей")}
+          onClick={() => onRemove(f)}
+        />
       </div>
     </div>
   );
 });
 
-// memo + колбэки принимают u -> родитель передаёт стабильные хендлеры вместо
-// свежих inline-стрелок на строку. Строки заявок не перерисовываются на
-// нажатия в поиске / churn чата, если их пропсы не менялись.
 const PendingRow = memo(function PendingRow({
   u,
   incoming,
@@ -142,26 +153,27 @@ const PendingRow = memo(function PendingRow({
   onAccept: (u: PendingUser) => void;
   onDecline: (u: PendingUser) => void;
 }) {
+  useLang();
   return (
     <div className="flex items-center gap-3 rounded-xl bg-card p-2.5">
       <Head skin={friendSkinUrl(u)} name={u.username} size={40} className="shrink-0 rounded-lg" />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="truncate text-sm font-semibold text-text">{u.username}</div>
-        <div className="text-[11px] text-muted">{incoming ? "Хочет добавить вас" : "Заявка отправлена"}</div>
+        <div className="text-[11px] text-muted">{incoming ? t("Хочет добавить вас") : t("Заявка отправлена")}</div>
       </div>
       {incoming ? (
         <>
           <button
-            title="Принять"
+            title={t("Принять")}
             onClick={() => onAccept(u)}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent text-bg transition-colors hover:bg-accent-hover"
           >
             <i className="fa-solid fa-check text-xs" />
           </button>
-          <IconBtn icon="fa-xmark" title="Отклонить" onClick={() => onDecline(u)} />
+          <IconBtn icon="fa-xmark" title={t("Отклонить")} onClick={() => onDecline(u)} />
         </>
       ) : (
-        <IconBtn icon="fa-xmark" title="Отменить заявку" onClick={() => onDecline(u)} />
+        <IconBtn icon="fa-xmark" title={t("Отменить заявку")} onClick={() => onDecline(u)} />
       )}
     </div>
   );
@@ -172,13 +184,13 @@ function Empty({ text }: { text: string }) {
 }
 
 export default function FriendsPanel() {
+
+  useLang();
   const [tab, setTab] = useState<"friends" | "requests">("friends");
   const { unread } = useChat();
 
   const [profile, setProfile] = useState<Friend | null>(null);
 
-  // Стабильный хендлер — чтобы memo-строки не перерисовывались из-за нового
-  // inline-колбэка на каждый рендер панели.
   const openChat = useCallback(
     (userId: string) => window.dispatchEvent(new CustomEvent("aciron-open-chat", { detail: userId })),
     []
@@ -197,11 +209,7 @@ export default function FriendsPanel() {
   }, [prefs.showGame, prefs.showServer]);
 
   const nick = query.trim();
-  // Мемоизируем сортировку/фильтрацию: раньше sortFriends (аллокация+sort),
-  // .filter и .some прогонялись на КАЖДЫЙ рендер — а панель ре-рендерится на
-  // каждое нажатие в поиске и на любое событие чата (useChat подписан на весь
-  // стор). Теперь sorted пересчитывается только при смене data.friends, а
-  // list/canInvite — при смене sorted или nick. Результат тот же.
+
   const friends = useMemo(() => (data ? sortFriends(data.friends) : []), [data?.friends]);
   const list = useMemo(
     () => friends.filter((f) => f.username.toLowerCase().includes(nick.toLowerCase())),
@@ -215,8 +223,6 @@ export default function FriendsPanel() {
     [friends, nick]
   );
 
-  // useCallback (toast стабилен из контекста) — чтобы производные стабильные
-  // хендлеры строк ниже не пересоздавались каждый рендер.
   const actOpt = useCallback(
     async (
       mutate: (d: FriendsData) => FriendsData,
@@ -236,15 +242,12 @@ export default function FriendsPanel() {
     [toast]
   );
 
-  // Стабильные хендлеры строк-заявок: те же оптимистичные мутации, что и раньше
-  // (фильтр по u.id из incoming/outgoing), но одна ссылка на все строки, чтобы
-  // memo(PendingRow) реально срезал ре-рендеры. Поведение 1-в-1.
   const acceptIncoming = useCallback(
     (u: PendingUser) =>
       actOpt(
         (d) => ({ ...d, incoming: d.incoming.filter((x) => x.id !== u.id) }),
         () => friendRespond(u.id, true),
-        `${u.username} теперь у вас в друзьях`
+        t("{name} теперь у вас в друзьях", { name: u.username })
       ),
     [actOpt]
   );
@@ -272,7 +275,9 @@ export default function FriendsPanel() {
     try {
       const status = await friendRequest(nick);
       toast(
-        status === "accepted" ? `${nick} теперь у вас в друзьях` : `Заявка отправлена ${nick}`,
+        status === "accepted"
+          ? t("{name} теперь у вас в друзьях", { name: nick })
+          : t("Заявка отправлена {name}", { name: nick }),
         "success"
       );
       setQuery("");
@@ -305,7 +310,7 @@ export default function FriendsPanel() {
               tab === id ? "text-text" : "text-muted hover:text-text"
             }`}
           >
-            {label}
+            {t(label)}
             {id === "requests" && incoming.length > 0 && (
               <span className="ml-1.5 rounded-full bg-accent px-1.5 py-0.5 align-middle text-[10px] font-bold text-bg">
                 {incoming.length}
@@ -321,12 +326,12 @@ export default function FriendsPanel() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && invite()}
-          placeholder="Найти друзей"
+          placeholder={t("Найти друзей")}
           className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-card px-3 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none"
         />
         <button
           onClick={() => setSettings(true)}
-          title="Профиль: статус и приватность"
+          title={t("Профиль: статус и приватность")}
           className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-card text-muted transition-colors hover:text-accent"
         >
           <i className="fa-solid fa-user-gear text-sm" />
@@ -346,14 +351,14 @@ export default function FriendsPanel() {
             </div>
             <p className="text-xs leading-relaxed text-muted">
               {error === "SESSION_EXPIRED"
-                ? "Сессия Aciron ID истекла — войдите заново, чтобы вернуть список друзей."
-                : "Друзья работают с аккаунтом Aciron ID — войдите, чтобы видеть, кто в игре."}
+                ? t("Сессия Aciron ID истекла — войдите заново, чтобы вернуть список друзей.")
+                : t("Друзья работают с аккаунтом Aciron ID — войдите, чтобы видеть, кто в игре.")}
             </p>
             <button
               onClick={() => setSignIn(true)}
               className="mt-3 w-full rounded-lg bg-accent px-4 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover"
             >
-              Войти в Aciron ID
+              {t("Войти в Aciron ID")}
             </button>
           </div>
         ) : error && !data ? (
@@ -363,7 +368,7 @@ export default function FriendsPanel() {
               onClick={refreshFriends}
               className="mt-3 w-full rounded-lg border border-border px-4 py-2 text-xs text-muted transition-colors hover:text-text"
             >
-              Повторить
+              {t("Повторить")}
             </button>
           </div>
         ) : loading && !data ? (
@@ -372,7 +377,7 @@ export default function FriendsPanel() {
           </div>
         ) : tab === "requests" ? (
           incoming.length === 0 && outgoing.length === 0 ? (
-            <Empty text="Заявок пока нет" />
+            <Empty text={t("Заявок пока нет")} />
           ) : (
             <>
               {incoming.map((u) => (
@@ -408,7 +413,7 @@ export default function FriendsPanel() {
               />
             ))}
             {list.length === 0 && !canInvite && (
-              <Empty text={nick ? "Никого не нашлось" : "Пока никого — найдите друзей по нику"} />
+              <Empty text={nick ? t("Никого не нашлось") : t("Пока никого — найдите друзей по нику")} />
             )}
             {}
             {canInvite && (
@@ -422,7 +427,7 @@ export default function FriendsPanel() {
                 </span>
                 <span className="min-w-0 flex-1 leading-tight">
                   <span className="block truncate text-sm font-semibold text-text">{nick}</span>
-                  <span className="block text-[11px] text-muted">Отправить заявку в друзья</span>
+                  <span className="block text-[11px] text-muted">{t("Отправить заявку в друзья")}</span>
                 </span>
               </button>
             )}
@@ -434,6 +439,14 @@ export default function FriendsPanel() {
         <ProfileModal
           userId={profile.id}
           username={profile.username}
+
+          onBlocked={() => {
+            patchFriends((d) => ({
+              ...d,
+              friends: d.friends.filter((x) => x.id !== profile.id),
+            }));
+            refreshFriends();
+          }}
           onClose={() => setProfile(null)}
         />
       )}
@@ -450,15 +463,17 @@ export default function FriendsPanel() {
 
       {confirm && (
         <ConfirmModal
-          title="Удалить из друзей"
-          message={`Удалить ${confirm.username} из друзей? Вернуться можно будет только новой заявкой.`}
-          confirmLabel="Удалить"
+          title={t("Удалить из друзей")}
+          message={t("Удалить {name} из друзей? Вернуться можно будет только новой заявкой.", {
+            name: confirm.username,
+          })}
+          confirmLabel={t("Удалить")}
           confirmIcon="fa-user-minus"
           onConfirm={() =>
             actOpt(
               (d) => ({ ...d, friends: d.friends.filter((x) => x.id !== confirm.id) }),
               () => friendRemove(confirm.id),
-              `${confirm.username} удалён из друзей`
+              t("{name} удалён из друзей", { name: confirm.username })
             )
           }
           onClose={() => setConfirm(null)}

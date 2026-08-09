@@ -2,7 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capabilities for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main",
+    "splash"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-minimize",
@@ -25,8 +28,11 @@
     "opener:allow-reveal-item-in-dir",
     "dialog:default",
     "dialog:allow-open",
+    "dialog:allow-save",
     "updater:default",
     "process:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "process:allow-exit",
+    "core:window:allow-create"
   ]
 }

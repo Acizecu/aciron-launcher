@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { t } from "../i18n";
 
 export type DropdownOption = { value: string; label: string; icon?: string; node?: ReactNode };
 
@@ -18,7 +19,7 @@ export default function Dropdown({
   options,
   onChange,
   className = "",
-  placeholder = "Выбрать",
+  placeholder,
   disabled = false,
   align = "left",
 }: {
@@ -76,12 +77,18 @@ export default function Dropdown({
           open ? "border-accent/60 bg-card" : "border-border bg-card hover:border-accent/40"
         }`}
       >
-        {(cur?.node || cur?.icon) && (
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] bg-bg text-accent">
-            {cur?.node ?? <i className={`fa-solid ${cur!.icon} text-[11px]`} />}
-          </span>
+        {}
+        {cur?.node ? (
+          <span className="grid shrink-0 place-items-center">{cur.node}</span>
+        ) : (
+          cur?.icon && (
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] bg-bg text-accent">
+              <i className={`fa-solid ${cur.icon} text-[11px]`} />
+            </span>
+          )
         )}
-        <span className="flex-1 truncate text-left">{cur?.label ?? placeholder}</span>
+        {}
+        <span className="flex-1 truncate text-left">{cur?.label ?? placeholder ?? t("Выбрать")}</span>
         <i
           className={`fa-solid fa-chevron-down text-[10px] text-muted transition-transform ${
             open ? "rotate-180" : ""
@@ -123,14 +130,18 @@ export default function Dropdown({
                     o.value === value ? "bg-card text-accent" : "text-muted hover:bg-card hover:text-text"
                   }`}
                 >
-                  {(o.node || o.icon) && (
-                    <span
-                      className={`grid h-7 w-7 shrink-0 place-items-center rounded-[8px] ${
-                        o.value === value ? "bg-accent/15 text-accent" : "bg-bg text-muted"
-                      }`}
-                    >
-                      {o.node ?? <i className={`fa-solid ${o.icon} text-[11px]`} />}
-                    </span>
+                  {o.node ? (
+                    <span className="grid shrink-0 place-items-center">{o.node}</span>
+                  ) : (
+                    o.icon && (
+                      <span
+                        className={`grid h-7 w-7 shrink-0 place-items-center rounded-[8px] ${
+                          o.value === value ? "bg-accent/15 text-accent" : "bg-bg text-muted"
+                        }`}
+                      >
+                        <i className={`fa-solid ${o.icon} text-[11px]`} />
+                      </span>
+                    )
                   )}
                   <span className="flex-1 truncate pr-2">{o.label}</span>
                   {o.value === value && <i className="fa-solid fa-check text-xs text-accent" />}

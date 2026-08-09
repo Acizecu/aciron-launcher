@@ -11,6 +11,7 @@ import {
 import { useToast } from "../ToastContext";
 import VersionList from "./VersionList";
 import Lightbox from "./Lightbox";
+import { t, ts } from "../i18n";
 
 function fmt(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
@@ -52,10 +53,16 @@ export default function ModpackDetail({
     window.dispatchEvent(new CustomEvent("aciron-task-start", { detail: { name: pack.title } }));
     try {
       await installModpackContent(source, pack.project_id, v.id);
-      toast(`Сборка «${pack.title}» (${v.version_number}) установлена`, "success");
+      toast(
+        t("Сборка «{title}» ({version}) установлена", {
+          title: pack.title,
+          version: v.version_number,
+        }),
+        "success",
+      );
       onInstalled();
     } catch (e) {
-      toast(String(e), "error");
+      toast(ts(String(e)), "error");
       window.dispatchEvent(new Event("aciron-task-end"));
     } finally {
       setBusy(null);
@@ -73,8 +80,8 @@ export default function ModpackDetail({
       url: project?.website_url || packUrl(source, slug),
       icon: "fa-arrow-up-right-from-square",
     },
-    { label: "Исходники", url: project?.source_url, icon: "fa-code" },
-    { label: "Проблемы", url: project?.issues_url, icon: "fa-bug" },
+    { label: t("Исходники"), url: project?.source_url, icon: "fa-code" },
+    { label: t("Проблемы"), url: project?.issues_url, icon: "fa-bug" },
     { label: "Discord", url: project?.discord_url, icon: "fa-discord" },
   ];
 
@@ -92,7 +99,7 @@ export default function ModpackDetail({
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[30px] font-light leading-none text-text">{pack.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[#818181]">
-            {pack.author && <span>от {pack.author}</span>}
+            {pack.author && <span>{t("от")} {pack.author}</span>}
             <span>
               <i className="fa-solid fa-download mr-1 text-[10px]" />
               {fmt(downloads)}
@@ -105,7 +112,7 @@ export default function ModpackDetail({
         <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={onBack}
-            title="Назад"
+            title={t("Назад")}
             className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-text"
           >
             <i className="fa-solid fa-arrow-left text-sm" />
@@ -114,7 +121,7 @@ export default function ModpackDetail({
             onClick={() => setTab("versions")}
             className="h-11 rounded-[8px] bg-accent px-7 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
           >
-            Установить
+            {t("Установить")}
           </button>
         </div>
       </div>
@@ -122,8 +129,8 @@ export default function ModpackDetail({
       {}
       <div className="mb-4 flex items-baseline gap-4">
         {([
-          ["about", "Описание"],
-          ["versions", "Версии"],
+          ["about", t("Описание")],
+          ["versions", t("Версии")],
         ] as const).map(([id, label]) => (
           <button
             key={id}
@@ -141,12 +148,12 @@ export default function ModpackDetail({
         {tab === "versions" ? (
           <div className="p-4">
             <p className="mb-3 text-xs text-muted">
-              Выберите версию — она установится как отдельная сборка.
+              {t("Выберите версию — она установится как отдельная сборка.")}
             </p>
             <VersionList
               source={source}
               projectId={pack.project_id}
-              actionLabel="Скачать"
+              actionLabel={t("Скачать")}
               showFilters
               busyId={busy}
               onPick={install}
@@ -207,7 +214,7 @@ export default function ModpackDetail({
               </div>
 
               <p className="mt-6 text-xs text-muted">
-                Список версий и установка — во вкладке «Версии».
+                {t("Список версий и установка — во вкладке «Версии».")}
               </p>
             </div>
           </>

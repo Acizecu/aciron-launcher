@@ -33,15 +33,25 @@ pub async fn install(
     vanilla_dir: &Path,
     java: &Path,
     app: &AppHandle,
+    // pinned — закреплённая за сборкой версия ядра. None/пусто = рекомендованная
+    // (Forge) или самая свежая (NeoForge), то есть прежнее поведение.
+    pinned: Option<&str>,
 ) -> Result<LoaderProfile, String> {
+    let pinned = pinned.filter(|s| !s.is_empty());
     let (version, url) = if kind == "neoforge" {
-        let v = resolve_neoforge_version(client, mc_version).await?;
+        let v = match pinned {
+            Some(v) => v.to_string(),
+            None => resolve_neoforge_version(client, mc_version).await?,
+        };
         let u = format!(
             "https://maven.neoforged.net/releases/net/neoforged/neoforge/{v}/neoforge-{v}-installer.jar"
         );
         (v, u)
     } else {
-        let v = resolve_forge_version(client, mc_version).await?;
+        let v = match pinned {
+            Some(v) => v.to_string(),
+            None => resolve_forge_version(client, mc_version).await?,
+        };
         let u = format!(
             "https://maven.minecraftforge.net/net/minecraftforge/forge/{mc}-{v}/forge-{mc}-{v}-installer.jar",
             mc = mc_version
@@ -60,7 +70,7 @@ pub async fn install(
         .map_err(|e| e.to_string())?;
     download_file(&installer_client, &url, &installer)
         .await
-        .map_err(|e| format!("Не удалось скачать установщик {kind} {version}: {e}"))?;
+        .map_err(|e| format!("Не удалось скачать установщик: {kind} {version} — {e}"))?;
 
     // SEC-06: перед запуском проверяем целостность установщика. Промоушны/metadata,
     // которые лаунчер уже забирает (promotions_slim.json / maven-metadata.xml), НЕ
@@ -86,7 +96,7 @@ pub async fn install(
         run_installer(java, &installer, root, app).await?;
         if !forge_json.exists() {
             return Err(format!(
-                "Установщик {kind} не создал профиль версии {id}. Проверьте Java и интернет."
+                "Установщик не создал профиль версии — проверьте Java и интернет: {kind} {id}"
             ));
         }
     }
@@ -120,7 +130,7 @@ pub async fn install(
     let profile = build_profile(client, &read_profile(&forge_json)?, libraries_dir, mc_version).await?;
     if let Some((_, p)) = profile.libraries.iter().find(|(_, p)| !p.exists()) {
         return Err(format!(
-            "Установщик {kind} не создал файл {}. Удалите папку versions/{id} и попробуйте снова.",
+            "Установщик не создал нужный файл — удалите папку версии и попробуйте снова: {kind} · {} · versions/{id}",
             p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
         ));
     }
@@ -145,7 +155,10 @@ fn mirror_vanilla(root: &Path, vanilla_dir: &Path, mc_version: &str) {
 }
 
 /// Последняя (recommended, иначе latest) версия Forge под версию игры.
-async fn resolve_forge_version(client: &reqwest::Client, mc: &str) -> Result<String, String> {
+pub(crate) async fn resolve_forge_version(
+    client: &reqwest::Client,
+    mc: &str,
+) -> Result<String, String> {
     let promos = get_json(
         client,
         "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json",
@@ -156,7 +169,7 @@ async fn resolve_forge_version(client: &reqwest::Client, mc: &str) -> Result<Str
         .and_then(|v| v.as_str())
         .or_else(|| p.get(format!("{mc}-latest")).and_then(|v| v.as_str()))
         .map(|s| s.to_string())
-        .ok_or_else(|| format!("Нет сборки Forge под Minecraft {mc}"))
+        .ok_or_else(|| format!("Нет сборки Forge под эту версию Minecraft: {mc}"))
 }
 
 /// Префикс версии NeoForge по версии игры: 1.20.4 → "20.4.", 1.21 → "21.0.".
@@ -168,7 +181,10 @@ fn neoforge_prefix(mc: &str) -> Result<String, String> {
 }
 
 /// Последняя версия NeoForge под версию игры (из maven-metadata).
-async fn resolve_neoforge_version(client: &reqwest::Client, mc: &str) -> Result<String, String> {
+pub(crate) async fn resolve_neoforge_version(
+    client: &reqwest::Client,
+    mc: &str,
+) -> Result<String, String> {
     let xml = client
         .get("https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml")
         .send()
@@ -185,7 +201,7 @@ async fn resolve_neoforge_version(client: &reqwest::Client, mc: &str) -> Result<
         .filter(|v| v.starts_with(&prefix))
         .last()
         .map(|s| s.to_string())
-        .ok_or_else(|| format!("Нет сборки NeoForge под Minecraft {mc}"))
+        .ok_or_else(|| format!("Нет сборки NeoForge под эту версию Minecraft: {mc}"))
 }
 
 /// Читает JSON-файл по имени из jar-архива.
@@ -194,7 +210,7 @@ fn read_json_from_jar(jar: &Path, name: &str) -> Result<Value, String> {
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
     let mut entry = archive
         .by_name(name)
-        .map_err(|_| format!("{name} не найден в установщике"))?;
+        .map_err(|_| format!("В установщике нет нужного файла: {name}"))?;
     let mut s = String::new();
     std::io::Read::read_to_string(&mut entry, &mut s).map_err(|e| e.to_string())?;
     serde_json::from_str(&s).map_err(|e| e.to_string())

@@ -4,54 +4,61 @@ import ProfileModal from "./ProfileModal";
 import MessageMenu, { type MenuItem } from "./chat/MessageMenu";
 import ForwardModal from "./chat/ForwardModal";
 import TypingDots from "./chat/TypingDots";
+import LoadingDots from "./LoadingDots";
+import EmojiPicker from "./chat/EmojiPicker";
+import Twemoji from "./chat/Twemoji";
 import { friendSkinUrl, getAccounts, MAX_MESSAGE, type Friend } from "../api";
 import { PRESENCE_COLOR, presenceText } from "../friends";
+import ReactionPicker from "./chat/ReactionPicker";
 import {
   discard,
   encodeForward,
+  encodeReply,
   loadOlder,
+  myReaction,
   notifyTyping,
   openConversation,
   parseForward,
+  parseReply,
+  react,
   remove,
   retry,
   send,
   setOpenConversation,
+  splitReactions,
   useConversation,
   useTyping,
   type LocalMessage,
+  type Reaction,
 } from "../chat";
 import { useToast } from "../ToastContext";
+import { dtf, t, useLang, ts } from "../i18n";
+
+type ReplyTarget = { id: string; author: string; text: string };
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
-// Форматтеры Intl создаём один раз на модуль: toLocaleTimeString/toLocaleDateString
-// заново конструируют форматтер на каждый вызов, а в списке они дёргаются N раз за
-// рендер. Результат вывода идентичен прежним вызовам с теми же опциями.
-const TIME_FMT = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
-const DATE_FMT = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
-
-const time = (ms: number) => TIME_FMT.format(ms);
+const time = (ms: number) => dtf({ hour: "2-digit", minute: "2-digit" }).format(ms);
 
 function dayLabel(ms: number): string {
   const d = new Date(ms);
   const today = new Date();
   const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-  if (sameDay(d, today)) return "Сегодня";
+  if (sameDay(d, today)) return t("Сегодня");
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (sameDay(d, yesterday)) return "Вчера";
-  return DATE_FMT.format(d);
+  if (sameDay(d, yesterday)) return t("Вчера");
+  return dtf({ day: "numeric", month: "long" }).format(d);
 }
 
 function Ticks({ msg }: { msg: LocalMessage }) {
-  if (msg.state === "sending") return <i className="fa-regular fa-clock" title="Отправляется" />;
+  if (msg.state === "sending") return <i className="fa-regular fa-clock" title={t("Отправляется")} />;
   if (msg.state === "failed")
-    return <i className="fa-solid fa-triangle-exclamation" title="Не отправлено" />;
+    return <i className="fa-solid fa-triangle-exclamation" title={t("Не отправлено")} />;
   return (
     <i
       className={`fa-solid ${msg.read ? "fa-check-double" : "fa-check"}`}
-      title={msg.read ? "Прочитано" : "Доставлено"}
+      title={msg.read ? t("Прочитано") : t("Доставлено")}
     />
   );
 }
@@ -79,11 +86,6 @@ function MessagesSkeleton() {
   );
 }
 
-// memo + стабильные пропсы: набор текста в composer'е больше не ре-рендерит список
-// сообщений (draft вынесен в отдельный Composer ниже), а при легитимном ре-рендере
-// панели перерисовываются только те Bubble, чьи пропсы реально изменились. Колбэки
-// приходят из useCallback родителя и вызываются с msg.id/msg, поэтому идентичны по
-// ссылке между рендерами — иначе memo был бы бесполезен.
 const Bubble = memo(function Bubble({
   msg,
   mine,
@@ -92,6 +94,9 @@ const Bubble = memo(function Bubble({
   selecting,
   onToggle,
   onMenu,
+  onReply,
+  reactions,
+  onReact,
 }: {
   msg: LocalMessage;
   mine: boolean;
@@ -100,17 +105,28 @@ const Bubble = memo(function Bubble({
   selecting: boolean;
   onToggle: (id: string) => void;
   onMenu: (e: React.MouseEvent, msg: LocalMessage) => void;
+  onReply: (msg: LocalMessage) => void;
+  reactions?: Reaction[];
+  onReact: (msg: LocalMessage, emoji: string) => void;
 }) {
-  // Разбор маркера пересылки: forwardedFrom → шапка «Переслано от…», text → тело.
+
+  useLang();
+
   const fwd = parseForward(msg.body);
+  const rep = parseReply(fwd.text);
   return (
     <div
       onContextMenu={(e) => onMenu(e, msg)}
       onClick={() => selecting && onToggle(msg.id)}
-      className={`flex ${mine ? "justify-end" : "justify-start"} ${grouped ? "mt-0.5" : "mt-2"} ${
-        selecting ? "cursor-pointer" : ""
-      } ${selected ? "rounded-lg bg-accent/10" : ""}`}
+      onDoubleClick={() => !selecting && onReply(msg)}
+      className={`group flex items-center ${mine ? "justify-end" : "justify-start"} ${
+        grouped ? "mt-0.5" : "mt-2"
+      } ${selecting ? "cursor-pointer" : ""} ${selected ? "rounded-lg bg-accent/10" : ""}`}
     >
+      {}
+      {mine && !selecting && (
+        <ReactionPicker current={myReaction(reactions)} onPick={(e) => onReact(msg, e)} />
+      )}
       {selecting && (
         <span
           className={`mr-2 mt-2 grid h-4 w-4 shrink-0 place-items-center self-start rounded-full border ${
@@ -135,10 +151,28 @@ const Bubble = memo(function Bubble({
             }`}
           >
             <i className="fa-solid fa-share text-[9px]" />
-            Переслано от {fwd.forwardedFrom}
+            {t("Переслано от {name}", { name: fwd.forwardedFrom })}
           </div>
         )}
-        <div className="whitespace-pre-wrap break-words text-sm leading-snug">{fwd.text}</div>
+        {}
+        {rep.replyTo && (
+          <div
+            className={`mb-1.5 rounded-md border-l-2 px-2 py-1 text-[11px] leading-tight ${
+              mine ? "border-bg/40 bg-bg/10 text-bg/75" : "border-accent/60 bg-bg/40 text-muted"
+            }`}
+          >
+            <div className={`font-semibold ${mine ? "text-bg/90" : "text-accent"}`}>
+              {rep.replyTo.author}
+            </div>
+            <div className="selectable truncate">
+              <Twemoji text={rep.replyTo.text} />
+            </div>
+          </div>
+        )}
+        {}
+        <div className="selectable whitespace-pre-wrap break-words text-sm leading-snug">
+          <Twemoji text={rep.text} />
+        </div>
         <div
           className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${
             mine ? "text-bg/60" : "text-muted"
@@ -147,32 +181,81 @@ const Bubble = memo(function Bubble({
           {time(msg.at)}
           {mine && <Ticks msg={msg} />}
         </div>
+
+        {}
+        {reactions && reactions.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {reactions.map((r) => (
+              <button
+                key={r.emoji}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReact(msg, r.emoji);
+                }}
+                title={r.mine ? t("Убрать свою реакцию") : t("Поставить такую же")}
+                className={`flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] leading-none transition-colors ${
+                  r.mine
+                    ? mine
+                      ? "bg-bg/25 text-bg"
+                      : "bg-accent/20 text-accent"
+                    : mine
+                    ? "bg-bg/10 text-bg/80 hover:bg-bg/20"
+                    : "bg-bg/60 text-muted hover:bg-bg"
+                }`}
+              >
+                <Twemoji text={r.emoji} />
+                {r.count > 1 && <span className="tabular-nums">{r.count}</span>}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {!mine && !selecting && (
+        <ReactionPicker current={myReaction(reactions)} onPick={(e) => onReact(msg, e)} />
+      )}
     </div>
   );
 });
 
-// Композер вынесен в отдельный компонент: draft живёт здесь, поэтому нажатия клавиш
-// ре-рендерят только этот маленький компонент, а не весь ChatPanel со списком
-// сообщений. onSubmit получает готовый текст, ввод/лимит считаются локально —
-// поведение (Enter=отправить, Shift+Enter=перенос, дизейбл при пустом/переполнении,
-// очистка после отправки) сохранено 1-в-1.
 const Composer = memo(function Composer({
   username,
   sending,
+  reply,
   onSubmit,
   onTyping,
+  onCancelReply,
 }: {
   username: string;
   sending: boolean;
+  reply: ReplyTarget | null;
   onSubmit: (text: string) => void | Promise<void>;
   onTyping?: () => void;
+  onCancelReply: () => void;
 }) {
+
+  useLang();
   const [draft, setDraft] = useState("");
+  const [picker, setPicker] = useState(false);
+  const area = useRef<HTMLTextAreaElement | null>(null);
   const over = draft.length > MAX_MESSAGE;
 
-  // Внимание: submit НЕ проверяет `over` — как и раньше, Enter отправляет даже
-  // сообщение сверх лимита (лимитом заблокирована только кнопка). Поведение 1-в-1.
+  useEffect(() => {
+    if (reply) area.current?.focus();
+  }, [reply]);
+
+  const insert = (emoji: string) => {
+    const el = area.current;
+    const at = el ? el.selectionStart : draft.length;
+    setDraft((d) => d.slice(0, at) + emoji + d.slice(el ? el.selectionEnd : d.length));
+
+    requestAnimationFrame(() => {
+      el?.focus();
+      const pos = at + emoji.length;
+      el?.setSelectionRange(pos, pos);
+    });
+  };
+
   const submit = () => {
     const text = draft.trim();
     if (!text || sending) return;
@@ -182,28 +265,63 @@ const Composer = memo(function Composer({
 
   return (
     <div className="border-t border-border/70 px-5 py-3">
-      <div className="flex items-end gap-2">
+      {}
+      {reply && (
+        <div className="msg-in mb-2 flex items-center gap-2 rounded-lg border-l-2 border-accent bg-card/70 px-2.5 py-1.5">
+          <i className="fa-solid fa-reply text-[10px] text-accent" />
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="text-[11px] font-semibold text-accent">{reply.author}</div>
+            <div className="truncate text-[11px] text-muted">{reply.text || "…"}</div>
+          </div>
+          <button
+            onClick={onCancelReply}
+            title={t("Отменить ответ")}
+            className="shrink-0 text-muted transition-colors hover:text-text"
+          >
+            <i className="fa-solid fa-xmark text-xs" />
+          </button>
+        </div>
+      )}
+      <div className="relative flex items-end gap-2">
         <textarea
+          ref={area}
           value={draft}
           rows={1}
           onChange={(e) => {
             setDraft(e.target.value);
-            // Сообщаем собеседнику о наборе (внутри троттлинг ~2.5с).
+
             if (e.target.value.trim()) onTyping?.();
           }}
           onKeyDown={(e) => {
+            if (e.key === "Escape" && reply) {
+              e.preventDefault();
+              onCancelReply();
+              return;
+            }
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               submit();
             }
           }}
-          placeholder={`Сообщение для ${username}`}
+          placeholder={t("Сообщение для {name}", { name: username })}
           className="max-h-32 min-h-[42px] flex-1 resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none"
         />
         <button
+          onClick={() => setPicker((v) => !v)}
+          title={t("Эмодзи")}
+          className={`grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl transition-colors ${
+            picker ? "text-accent" : "text-muted hover:text-text"
+          }`}
+        >
+          <i className="fa-regular fa-face-smile text-base" />
+        </button>
+        {picker && (
+          <EmojiPicker onPick={insert} onClose={() => setPicker(false)} />
+        )}
+        <button
           onClick={submit}
           disabled={!draft.trim() || over}
-          title="Отправить"
+          title={t("Отправить")}
           className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-accent text-bg transition-colors hover:bg-accent-hover disabled:opacity-40"
         >
           <i className="fa-solid fa-paper-plane text-sm" />
@@ -211,7 +329,7 @@ const Composer = memo(function Composer({
       </div>
       {over && (
         <div className="mt-1.5 text-[11px] text-[#fca5a5]">
-          Слишком длинное: {draft.length} из {MAX_MESSAGE}
+          {t("Слишком длинное: {n} из {max}", { n: draft.length, max: MAX_MESSAGE })}
         </div>
       )}
     </div>
@@ -219,9 +337,11 @@ const Composer = memo(function Composer({
 });
 
 export default function ChatPanel({ friend }: { friend: Friend }) {
+  const { t } = useLang();
   const conv = useConversation(friend.id);
   const typing = useTyping(friend.id);
   const [sending, setSending] = useState(false);
+  const [reply, setReply] = useState<ReplyTarget | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const [forward, setForward] = useState<string[] | null>(null);
@@ -233,23 +353,29 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
 
   const wasAtBottom = useRef(true);
 
-  // Анимируем только сообщения, появившиеся ПОСЛЕ открытия переписки (история при
-  // открытии не должна «влетать»). temp/входящие свежее этого времени → анимация.
   const mountAt = useRef(Date.now());
 
   const keepHeight = useRef<number | null>(null);
 
+  const [myName, setMyName] = useState(t("Вы"));
   useEffect(() => {
+    void getAccounts()
+      .then((acc) => {
+        const me = acc.accounts.find((a) => a.id === acc.active);
+        if (me) setMyName(me.aciron_name || me.username);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setReply(null);
     setOpenConversation(friend.id);
     void openConversation(friend.id);
-    // draft теперь живёт в <Composer key={friend.id}>: смена собеседника ремонтит
-    // композер и очищает поле ввода так же, как раньше делал setDraft("").
+
     setSelected(new Set());
     return () => setOpenConversation(null);
   }, [friend.id]);
 
-  // Высота ленты на прошлой отрисовке — по её приросту понятно, доехало одно
-  // сообщение или подгрузилась пачка истории.
   const prevHeight = useRef(0);
 
   useLayoutEffect(() => {
@@ -269,17 +395,6 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
     const grew = el.scrollHeight - prevHeight.current;
     prevHeight.current = el.scrollHeight;
 
-    /*
-     * Плавно докручиваем ленту сами — но силами браузера, а не из JS.
-     * Раньше здесь был скролл каждый кадр вдогонку растущей высоте: JS ставит
-     * scrollTop до пересчёта раскладки, анимация подрастает уже после — и низ
-     * каждый кадр промахивался на пару пикселей. Это и была дрожь.
-     *
-     * Нативная плавная прокрутка идёт на композиторе: содержимое неподвижно,
-     * едет только вьюпорт. Мгновенно — когда доехала не пара сообщений, а
-     * сразу много (открытие переписки, пересылка пачкой): такой «проезд» через
-     * всю историю смотрелся бы долго и странно.
-     */
     const smooth = grew > 0 && grew < 320;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   }, [conv.messages]);
@@ -299,15 +414,31 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       if (!text || sending) return;
       setSending(true);
       wasAtBottom.current = true;
+
+      const body = reply ? encodeReply(reply.author, reply.text, text) : text;
+      setReply(null);
       try {
-        await send(friend.id, text);
+        await send(friend.id, body);
       } catch {
-        toast("Сообщение не отправлено", "error");
+        toast(t("Сообщение не отправлено"), "error");
       } finally {
         setSending(false);
       }
     },
-    [friend.id, sending, toast]
+    [friend.id, reply, sending, toast]
+  );
+
+  const startReply = useCallback(
+    (msg: LocalMessage) => {
+      const shown = parseForward(msg.body);
+      const author = msg.from === friend.id ? friend.username : myName;
+      setReply({
+        id: msg.id,
+        author,
+        text: parseReply(shown.text).text.replace(/\s+/g, " ").trim(),
+      });
+    },
+    [friend.id, friend.username, myName]
   );
 
   const copy = useCallback(
@@ -317,7 +448,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         .map((m) => m.body)
         .join("\n");
       void navigator.clipboard.writeText(text);
-      toast(ids.length > 1 ? "Сообщения скопированы" : "Скопировано", "success");
+      toast(ids.length > 1 ? t("Сообщения скопированы") : t("Скопировано"), "success");
     },
     [conv.messages, toast]
   );
@@ -327,28 +458,26 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       try {
         const n = await remove(friend.id, ids);
         setSelected(new Set());
-        if (n === 0) toast("Удалять можно только свои сообщения", "error");
+        if (n === 0) toast(t("Удалять можно только свои сообщения"), "error");
       } catch (e) {
-        toast(String(e).replace(/^Error:\s*/, ""), "error");
+        toast(ts(String(e)), "error");
       }
     },
     [friend.id, toast]
   );
 
-  // useCallback, чтобы onMenu приходил в мемоизированный Bubble стабильной ссылкой.
-  // Зависит от selected (меняет пункты/множество для действий) — при смене выделения
-  // список ре-рендерится осознанно (нужно показать галочки), но не при наборе текста.
   const openMenu = useCallback((e: React.MouseEvent, msg: LocalMessage) => {
     e.preventDefault();
 
     const ids = selected.has(msg.id) ? [...selected] : [msg.id];
     const mine = msg.from !== friend.id;
     const items: MenuItem[] = [
-      { icon: "fa-copy", label: ids.length > 1 ? "Копировать выбранные" : "Копировать", onClick: () => copy(ids) },
-      { icon: "fa-share", label: "Переслать", onClick: () => setForward(ids) },
+      { icon: "fa-reply", label: t("Ответить"), onClick: () => startReply(msg) },
+      { icon: "fa-copy", label: ids.length > 1 ? t("Копировать выбранные") : t("Копировать"), onClick: () => copy(ids) },
+      { icon: "fa-share", label: t("Переслать"), onClick: () => setForward(ids) },
       {
         icon: "fa-check-double",
-        label: selected.has(msg.id) ? "Снять выделение" : "Выделить",
+        label: selected.has(msg.id) ? t("Снять выделение") : t("Выделить"),
         onClick: () =>
           setSelected((s) => {
             const n = new Set(s);
@@ -361,23 +490,21 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
     if (msg.state === "failed") {
       items.push({
         icon: "fa-rotate-right",
-        label: "Отправить снова",
-        onClick: () => void retry(friend.id, msg.id).catch(() => toast("Снова не вышло", "error")),
+        label: t("Отправить снова"),
+        onClick: () => void retry(friend.id, msg.id).catch(() => toast(t("Снова не вышло"), "error")),
       });
-      items.push({ icon: "fa-xmark", label: "Убрать", danger: true, onClick: () => discard(friend.id, msg.id) });
+      items.push({ icon: "fa-xmark", label: t("Убрать"), danger: true, onClick: () => discard(friend.id, msg.id) });
     } else if (mine) {
       items.push({
         icon: "fa-trash",
-        label: ids.length > 1 ? `Удалить (${ids.length})` : "Удалить",
+        label: ids.length > 1 ? t("Удалить ({n})", { n: ids.length }) : t("Удалить"),
         danger: true,
         onClick: () => void del(ids),
       });
     }
     setMenu({ x: e.clientX, y: e.clientY, items });
-  }, [selected, friend.id, copy, del, toast]);
+  }, [selected, friend.id, copy, del, startReply, toast]);
 
-  // Стабильный переключатель выделения (функциональный setSelected → пустые deps),
-  // передаётся мемоизированному Bubble по ссылке, поэтому не рушит memo.
   const onToggle = useCallback((id: string) => {
     setSelected((s) => {
       const n = new Set(s);
@@ -389,26 +516,33 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
 
   const selecting = selected.size > 0;
 
-  // Группировку/подписи дня считаем один раз на изменение сообщений, а не N*3 раз
-  // за каждый рендер панели: at сообщений неизменны, вывод чисто производный, поэтому
-  // useMemo по conv.messages даёт тот же результат без пересчёта на посторонних
-  // ре-рендерах (выделение, отправка). Логика newDay/grouped идентична прежней.
+  const { visible, reactions } = useMemo(
+    () => splitReactions(conv.messages, friend.id),
+    [conv.messages, friend.id]
+  );
+
+  const onReact = useCallback(
+    (msg: LocalMessage, emoji: string) => {
+      void react(friend.id, msg.id, emoji, myReaction(reactions[msg.id])).catch((e) =>
+        toast(ts(String(e)), "error")
+      );
+    },
+    [friend.id, reactions, toast]
+  );
+
   const rows = useMemo(
     () =>
-      conv.messages.map((m, i) => {
-        const prev = conv.messages[i - 1];
+      visible.map((m, i) => {
+        const prev = visible[i - 1];
         const mine = m.from !== friend.id;
-        // Группируем по СТОРОНЕ (моё/чужое), а не по сырому from: у temp-сообщения
-        // from пустой, а у подтверждённого — мой id, и сравнение prev.from===m.from
-        // «разгруппировывало» пузырь на подтверждении → менялся верхний отступ →
-        // сообщение прыгало. В личке сторона эквивалентна «тому же отправителю».
+
         const prevMine = prev ? prev.from !== friend.id : false;
         const newDay = !prev || dayLabel(prev.at) !== dayLabel(m.at);
         const grouped =
           !newDay && !!prev && prevMine === mine && m.at - prev.at < GROUP_WINDOW_MS;
         return { m, mine, newDay, grouped };
       }),
-    [conv.messages, friend.id]
+    [visible, friend.id]
   );
 
   return (
@@ -417,7 +551,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       <div className="flex items-center gap-3 border-b border-border/70 px-5 py-3">
         <button
           onClick={() => setProfile(true)}
-          title="Открыть профиль"
+          title={t("Открыть профиль")}
           className="flex min-w-0 items-center gap-3 text-left"
         >
           <Head
@@ -448,31 +582,33 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
 
         {selecting && (
           <div className="ml-auto flex items-center gap-1.5">
-            <span className="mr-1 text-[11px] text-muted">Выбрано: {selected.size}</span>
+            <span className="mr-1 text-[11px] text-muted">
+              {t("Выбрано: {n}", { n: selected.size })}
+            </span>
             <button
               onClick={() => copy([...selected])}
-              title="Копировать"
+              title={t("Копировать")}
               className="grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:text-accent"
             >
               <i className="fa-solid fa-copy text-xs" />
             </button>
             <button
               onClick={() => setForward([...selected])}
-              title="Переслать"
+              title={t("Переслать")}
               className="grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:text-accent"
             >
               <i className="fa-solid fa-share text-xs" />
             </button>
             <button
               onClick={() => void del([...selected])}
-              title="Удалить свои из выбранных"
+              title={t("Удалить свои из выбранных")}
               className="grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:text-[#f87171]"
             >
               <i className="fa-solid fa-trash text-xs" />
             </button>
             <button
               onClick={() => setSelected(new Set())}
-              title="Снять выделение"
+              title={t("Снять выделение")}
               className="grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:text-text"
             >
               <i className="fa-solid fa-xmark text-xs" />
@@ -482,8 +618,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       </div>
 
       {}
-      {/* overflow-anchor: none — иначе браузер подкручивает прокрутку сам, и его
-          поправка накладывается на нашу; получается двойное движение. */}
+      {}
       <div
         ref={scroller}
         onScroll={onScroll}
@@ -501,7 +636,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
             <div>
               <i className="fa-regular fa-comments mb-3 block text-3xl text-muted/50" />
               <div className="text-sm text-muted">
-                Здесь пока пусто. Напишите {friend.username} первым.
+                {t("Здесь пока пусто. Напишите {who} первым.", { who: friend.username })}
               </div>
             </div>
           </div>
@@ -509,7 +644,14 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
 
         {conv.more && conv.messages.length > 0 && (
           <div className="pb-2 text-center text-[11px] text-muted">
-            {conv.loading ? "Загружаем…" : "Прокрутите вверх, чтобы показать раннее"}
+            {conv.loading ? (
+              <>
+                {t("Загружаем")}
+                <LoadingDots className="ml-1" />
+              </>
+            ) : (
+              t("Прокрутите вверх, чтобы показать раннее")
+            )}
           </div>
         )}
 
@@ -529,6 +671,9 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
               selecting={selecting}
               onToggle={onToggle}
               onMenu={openMenu}
+              onReply={startReply}
+              reactions={reactions[m.id]}
+              onReact={onReact}
             />
           </div>
         ))}
@@ -540,8 +685,10 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         key={friend.id}
         username={friend.username}
         sending={sending}
+        reply={reply}
         onSubmit={submit}
         onTyping={() => notifyTyping(friend.id)}
+        onCancelReply={() => setReply(null)}
       />
 
       {menu && <MessageMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
@@ -553,26 +700,16 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
             const msgs = conv.messages.filter((m) => forward.includes(m.id));
             setForward(null);
             setSelected(new Set());
-            // Моё отображаемое имя (для пересылки СВОИХ сообщений) — один раз.
-            let myName = "Вы";
-            try {
-              const acc = await getAccounts();
-              const me = acc.accounts.find((a) => a.id === acc.active);
-              if (me) myName = me.aciron_name || me.username;
-            } catch {
-              /* имя не критично — оставим «Вы» */
-            }
+
             try {
               for (const m of msgs) {
-                // Автор: сообщение собеседника → его ник; иначе моё → myName.
-                // Пересылка пересланного сохранит ПЕРВОГО автора (encodeForward
-                // не оборачивает уже помеченное тело повторно).
+
                 const author = m.from === friend.id ? friend.username : myName;
                 await send(to, encodeForward(author, m.body));
               }
-              toast(`Переслано: ${msgs.length}`, "success");
+              toast(t("Переслано: {n}", { n: msgs.length }), "success");
             } catch (e) {
-              toast(String(e).replace(/^Error:\s*/, ""), "error");
+              toast(ts(String(e)), "error");
             }
           }}
         />

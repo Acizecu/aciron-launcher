@@ -123,7 +123,7 @@ async fn check(resp: reqwest::Response) -> Result<reqwest::Response, String> {
     Err(serde_json::from_str::<serde_json::Value>(&body)
         .ok()
         .and_then(|v| v["error"].as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "Aciron ID: не удалось выполнить запрос".into()))
+        .unwrap_or_else(|| "Не удалось выполнить запрос к Aciron ID".into()))
 }
 
 async fn send(req: reqwest::RequestBuilder) -> Result<reqwest::Response, String> {

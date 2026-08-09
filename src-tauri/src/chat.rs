@@ -101,8 +101,7 @@ fn urlencode(s: &str) -> String {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
                 out.push(b as char)
             }
-            // write! пишет hex прямо в буфер без промежуточного format!-String на
-            // каждый байт. Вывод байт-в-байт тот же; write! в String инфаллибелен.
+
             _ => {
                 let _ = write!(out, "%{b:02X}");
             }

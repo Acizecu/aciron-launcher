@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Modal from "./Modal";
 import { listVersions, type VersionInfo } from "../api";
+import { t } from "../i18n";
 
 export default function InstallModal({
   onClose,
@@ -29,7 +30,7 @@ export default function InstallModal({
   }, [versions, query, showSnapshots]);
 
   return (
-    <Modal title="Установить версию" icon="fa-download" onClose={onClose} width="max-w-lg">
+    <Modal title={t("Установить версию")} icon="fa-download" onClose={onClose} width="max-w-lg">
       <div className="flex flex-col">
         {}
         <div className="flex items-center gap-2 border-b border-border p-3">
@@ -38,7 +39,7 @@ export default function InstallModal({
             <input
               autoFocus
               className="w-full bg-transparent py-2 text-sm text-text outline-none placeholder:text-muted/60"
-              placeholder="Поиск версии…"
+              placeholder={t("Поиск версии…")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -52,7 +53,7 @@ export default function InstallModal({
             }`}
           >
             <i className="fa-solid fa-flask text-xs" />
-            Снапшоты
+            {t("Снапшоты")}
           </button>
         </div>
 
@@ -63,7 +64,7 @@ export default function InstallModal({
               <i className="fa-solid fa-spinner fa-spin text-2xl" />
             </div>
           ) : filtered.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted">Ничего не найдено</div>
+            <div className="py-12 text-center text-sm text-muted">{t("Ничего не найдено")}</div>
           ) : (
             filtered.map((v) => (
               <div
@@ -91,7 +92,7 @@ export default function InstallModal({
                   className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-bg opacity-0 transition-opacity hover:bg-accent-hover group-hover:opacity-100"
                 >
                   <i className="fa-solid fa-download" />
-                  Выбрать
+                  {t("Выбрать")}
                 </button>
               </div>
             ))

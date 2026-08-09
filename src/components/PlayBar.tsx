@@ -5,8 +5,10 @@ import AddAccountModal from "./AddAccountModal";
 import { getAccounts } from "../api";
 import { useLauncherCtx } from "../LauncherContext";
 import { useDownloadActive } from "../downloadTask";
+import { useLang } from "../i18n";
 
 export default function PlayBar() {
+  const { t } = useLang();
   const [versionId, setVersionId] = useState<string | null>(null);
   const [hasAccount, setHasAccount] = useState(true);
   const [addAccount, setAddAccount] = useState(false);
@@ -41,18 +43,18 @@ export default function PlayBar() {
           className="group flex h-14 min-w-[168px] items-center justify-center gap-3 rounded-xl bg-[#ef4444] px-9 font-bold text-white transition-colors hover:bg-[#dc2626] active:bg-[#b91c1c]"
         >
           <i className="fa-solid fa-stop text-base" />
-          <span className="text-lg tracking-wide">Закрыть</span>
+          <span className="text-lg tracking-wide">{t("Закрыть")}</span>
         </button>
       ) : (
         <button
           onClick={onPlay}
           disabled={busy || !versionId}
-          title={!versionId ? "Сначала установите версию" : undefined}
+          title={!versionId ? t("Сначала установите версию") : undefined}
           className="group flex h-14 min-w-[168px] items-center justify-center gap-3 rounded-xl bg-accent px-9 font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
         >
           <i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-play"} text-base`} />
           <span className="text-lg tracking-wide">
-            {downloading ? "Скачивание…" : busy ? "Загрузка…" : "Играть"}
+            {downloading ? t("Скачивание…") : busy ? t("Загрузка…") : t("Играть")}
           </span>
         </button>
       )}

@@ -5,7 +5,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REPO = "Acizecu/aciron-launcher";
+
+const REPO = process.env.ACIRON_RELEASE_REPO || "Acizecu/aciron-launcher";
+const TAG = process.env.ACIRON_RELEASE_TAG || "";
+const PRIVATE = process.env.ACIRON_PRIVATE_REPO === "1";
 
 const conf = JSON.parse(fs.readFileSync(path.join(ROOT, "src-tauri/tauri.conf.json"), "utf8"));
 const version = conf.version;
@@ -24,8 +27,18 @@ if (!fs.existsSync(sigPath)) {
 }
 const signature = fs.readFileSync(sigPath, "utf8").trim();
 
-const assetName = exe.replace(/ /g, ".");
-const url = `https://github.com/${REPO}/releases/latest/download/${assetName}`;
+const assetName = process.env.ACIRON_ASSET_NAME || exe.replace(/ /g, ".");
+
+let url;
+if (PRIVATE) {
+
+  const ref = TAG || "dev-latest";
+  url = `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(assetName)}?ref=${encodeURIComponent(ref)}`;
+} else if (TAG) {
+  url = `https://github.com/${REPO}/releases/download/${TAG}/${assetName}`;
+} else {
+  url = `https://github.com/${REPO}/releases/latest/download/${assetName}`;
+}
 
 const manifest = {
   version,
@@ -39,8 +52,11 @@ const manifest = {
 const out = path.join(ROOT, "latest.json");
 fs.writeFileSync(out, JSON.stringify(manifest, null, 2) + "\n");
 console.log("Готово →", out);
-console.log(`Версия: ${version}`);
-console.log(`URL:    ${url}`);
-console.log("\nВ GitHub Release (тег v" + version + ") залей:");
+console.log(`Репо:    ${REPO}${PRIVATE ? " (private)" : ""}`);
+console.log(`Тег:     ${TAG || "(latest)"}`);
+console.log(`Версия:  ${version}`);
+console.log(`URL:     ${url}`);
+console.log("\nВ GitHub Release залей:");
 console.log(`  • ${exe}`);
+console.log(`  • ${exe}.sig`);
 console.log("  • latest.json");

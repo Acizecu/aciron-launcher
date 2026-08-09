@@ -1,5 +1,6 @@
 import Dropdown from "./Dropdown";
 import { ModrinthIcon, CurseForgeIcon, FtbIcon } from "./Icons";
+import { t } from "../i18n";
 
 export type Source = "modrinth" | "curseforge" | "ftb";
 
@@ -51,11 +52,14 @@ export function SourceComingSoon({ source }: { source: Source }) {
         </div>
         <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
           <i className="fa-solid fa-hammer text-[10px]" />
-          В разработке
+          {t("В разработке")}
         </div>
         <h2 className="text-lg font-bold text-text">{s.label}</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted">
-          Загрузка из {s.label} появится в одном из ближайших обновлений. Пока используйте Modrinth.
+          {t(
+            "Загрузка из {source} появится в одном из ближайших обновлений. Пока используйте Modrinth.",
+            { source: s.label }
+          )}
         </p>
       </div>
     </div>

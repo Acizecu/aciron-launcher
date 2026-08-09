@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   type Settings,
+  type BuildInfo,
   getSettings,
   saveSettings,
   defaultSettings,
@@ -11,12 +12,17 @@ import {
   moveDirectories,
   hardwareCapable,
   totalRamMb,
+  buildInfo,
 } from "../api";
 import Modal from "./Modal";
 import ThemeSettings from "./settings/ThemeSettings";
 import { Card, Field, PathRow, Toggle, iconBtnCls, inputCls } from "./settings/controls";
+import Dropdown from "./Dropdown";
+import { LangFlag } from "./FlagIcons";
+import { DEBUG_TOOLS } from "../config";
 import { getSfxPrefs, setSfxPrefs } from "../sfx";
 import { useToast } from "./../ToastContext";
+import { LANGS, setLang, t, ts, useLang, type Lang } from "../i18n";
 
 const FOLDER_FIELDS: { key: "game_dir" | "versions_dir" | "builds_dir"; label: string }[] = [
   { key: "game_dir", label: "Папка игры" },
@@ -32,7 +38,7 @@ const CATS: { id: CatId; label: string; icon: string }[] = [
   { id: "theme", label: "Тема", icon: "fa-palette" },
   { id: "java", label: "Java", icon: "fa-mug-hot" },
   { id: "game", label: "Игра", icon: "fa-gamepad" },
-  { id: "behavior", label: "Поведение", icon: "fa-sliders" },
+  { id: "behavior", label: "Лаунчер", icon: "fa-sliders" },
   { id: "folders", label: "Папки", icon: "fa-folder-tree" },
 ];
 
@@ -44,6 +50,8 @@ export default function SettingsPage({
   const [s, setS] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(true);
 
+  const { lang } = useLang();
+
   useEffect(() => {
     onDirtyChange?.(!saved);
   }, [saved, onDirtyChange]);
@@ -52,6 +60,8 @@ export default function SettingsPage({
   const [hwCap, setHwCap] = useState(true);
 
   const [ramMax, setRamMax] = useState(16384);
+
+  const [bi, setBi] = useState<BuildInfo | null>(null);
 
   const [sfx, setSfx] = useState(getSfxPrefs);
   const [cat, setCat] = useState<CatId>("theme");
@@ -71,6 +81,7 @@ export default function SettingsPage({
     });
     hardwareCapable().then(setHwCap);
     totalRamMb().then(setRamMax);
+    buildInfo().then(setBi).catch(() => {});
   }, []);
 
   if (!s) {
@@ -98,13 +109,13 @@ export default function SettingsPage({
 
     if (move && moves.length > 0) {
       window.dispatchEvent(
-        new CustomEvent("aciron-task-start", { detail: { name: "Перенос файлов" } })
+        new CustomEvent("aciron-task-start", { detail: { name: t("Перенос файлов") } })
       );
       moveDirectories(moves.map((m) => ({ from: m.from, to: m.to })))
-        .then(() => toast("Файлы перенесены в новое место", "success"))
+        .then(() => toast(t("Файлы перенесены в новое место"), "success"))
         .catch((e) => {
           window.dispatchEvent(new CustomEvent("aciron-task-end"));
-          toast(`Перенос файлов: ${String(e)}`, "error");
+          toast(t("Перенос файлов: {e}", { e: ts(String(e)) }), "error");
         });
     }
   };
@@ -158,7 +169,7 @@ export default function SettingsPage({
             }`}
           >
             <i className={`fa-solid ${c.icon} w-4 text-center ${cat === c.id ? "text-accent" : ""}`} />
-            {c.label}
+            {t(c.label)}
           </button>
         ))}
         <div className="mt-auto space-y-1 pt-3">
@@ -167,7 +178,7 @@ export default function SettingsPage({
             className="flex w-full items-center gap-3 rounded-[8px] px-3 py-2 text-sm text-muted transition-colors hover:text-text"
           >
             <i className="fa-solid fa-arrow-rotate-left w-4 text-center" />
-            Сбросить
+            {t("Сбросить")}
           </button>
         </div>
       </nav>
@@ -187,25 +198,25 @@ export default function SettingsPage({
                       <input
                         className={inputCls}
                         value={s.java_path}
-                        placeholder="Путь к java.exe"
+                        placeholder={t("Путь к java.exe")}
                         onChange={(e) => update({ java_path: e.target.value })}
                       />
-                      <button className={iconBtnCls} title="Обзор" onClick={browseJava}>
+                      <button className={iconBtnCls} title={t("Обзор")} onClick={browseJava}>
                         <i className="fa-solid fa-folder-open text-sm" />
                       </button>
                       <button
                         className={iconBtnCls}
-                        title="Определить автоматически"
+                        title={t("Определить автоматически")}
                         onClick={onDetectJava}
                       >
                         <i className="fa-solid fa-wand-magic-sparkles text-sm" />
                       </button>
                     </div>
                     <p className="mt-2 text-[11px] text-muted">
-                      Путь к Java дирректории
+                      {t("Путь к Java дирректории")}
                     </p>
                   </Field>
-                  <Field label="JVM-аргументы" hint="Доп. флаги виртуальной машины при запуске (через пробел)" column>
+                  <Field label={t("JVM-аргументы")} hint={t("Доп. флаги виртуальной машины при запуске (через пробел)")} column>
                     <input
                       className={`${inputCls} font-mono`}
                       value={s.jvm_args}
@@ -219,11 +230,11 @@ export default function SettingsPage({
 
             {cat === "game" && (
               <>
-                <h2 className="text-lg font-bold text-text">Игра</h2>
+                <h2 className="text-lg font-bold text-text">{t("Игра")}</h2>
                 <Card>
-                  <Field label="Оперативная память" hint="Сколько ОЗУ выделять игре">
+                  <Field label={t("Оперативная память")} hint={t("Сколько ОЗУ выделять игре")}>
                     <span className="rounded-md bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
-                      {ramGb} ГБ
+                      {ramGb} {t("ГБ")}
                     </span>
                   </Field>
                   <div className="px-4 pb-4">
@@ -244,17 +255,19 @@ export default function SettingsPage({
                       }
                     />
                     <div className="mt-1 flex justify-between text-[11px] text-muted">
-                      <span>1 ГБ</span>
-                      <span>{Math.round(ramMax / 1024)} ГБ</span>
+                      <span>{t("1 ГБ")}</span>
+                      <span>
+                        {Math.round(ramMax / 1024)} {t("ГБ")}
+                      </span>
                     </div>
                   </div>
                   <Field
-                    label="Запуск в полноэкранном режиме"
-                    hint="Игра будет открываться на весь экран"
+                    label={t("Запуск в полноэкранном режиме")}
+                    hint={t("Игра будет открываться на весь экран")}
                   >
                     <Toggle value={s.fullscreen} onChange={(v) => update({ fullscreen: v })} />
                   </Field>
-                  <Field label="Размер окна игры" hint="Если полноэкранный режим выключен">
+                  <Field label={t("Размер окна игры")} hint={t("Если полноэкранный режим выключен")}>
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
@@ -279,10 +292,33 @@ export default function SettingsPage({
 
             {cat === "behavior" && (
               <>
-                <h2 className="text-lg font-bold text-text">Поведение лаунчера</h2>
+                <h2 className="text-lg font-bold text-text">{t("Поведение лаунчера")}</h2>
                 <Card>
                   {}
-                  <Field label="Звук нажатия" hint="Щелчок при нажатии на кнопки">
+                  <Field
+                    label={t("Язык интерфейса")}
+                    hint={t("Язык игры от этого не зависит")}
+                  >
+                    <Dropdown
+                      className="w-[190px]"
+                      align="right"
+                      value={lang}
+                      onChange={(v) => {
+                        setLang(v as Lang);
+
+                        setS((p) => (p ? { ...p, language: v as Lang } : p));
+                      }}
+                      options={LANGS.map((l) => ({
+                        value: l.id,
+                        label: l.label,
+                        node: <LangFlag lang={l.id} size={16} />,
+                      }))}
+                    />
+                  </Field>
+                </Card>
+                <Card>
+                  {}
+                  <Field label={t("Звук нажатия")} hint={t("Щелчок при нажатии на кнопки")}>
                     <Toggle
                       value={sfx.click}
                       onChange={(v) => {
@@ -291,7 +327,7 @@ export default function SettingsPage({
                       }}
                     />
                   </Field>
-                  <Field label="Звук наведения" hint="Тихий отклик при наведении на кнопку">
+                  <Field label={t("Звук наведения")} hint={t("Тихий отклик при наведении на кнопку")}>
                     <Toggle
                       value={sfx.hover}
                       onChange={(v) => {
@@ -303,8 +339,8 @@ export default function SettingsPage({
                 </Card>
                 <Card>
                   <Field
-                    label="Размер интерфейса"
-                    hint="Масштаб окна лаунчера — работает и в развёрнутом/полноэкранном окне"
+                    label={t("Размер интерфейса")}
+                    hint={t("Масштаб окна лаунчера — работает и в развёрнутом/полноэкранном окне")}
                   >
                     <span className="rounded-md bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
                       {s.ui_scale}%
@@ -332,14 +368,14 @@ export default function SettingsPage({
                     </div>
                   </div>
                   <Field
-                    label="Скрывать лаунчер при запуске игры"
-                    hint="Спрячется, пока игра открыта, и вернётся после её закрытия"
+                    label={t("Скрывать лаунчер при запуске игры")}
+                    hint={t("Спрячется, пока игра открыта, и вернётся после её закрытия")}
                   >
                     <Toggle value={s.hide_on_launch} onChange={(v) => update({ hide_on_launch: v })} />
                   </Field>
                   <Field
-                    label="Анимация фона"
-                    hint={"Плавающие кубики на фоне лаунчера"}
+                    label={t("Анимация фона")}
+                    hint={t("Плавающие кубики на фоне лаунчера")}
                   >
                     <Toggle
                       value={s.background_anim ?? hwCap}
@@ -348,25 +384,25 @@ export default function SettingsPage({
                   </Field>
                   <Field
                     label="Discord Rich Presence"
-                    hint="Показывать в Discord, во что вы играете"
+                    hint={t("Показывать в Discord, во что вы играете")}
                   >
                     <Toggle value={s.discord_rpc} onChange={(v) => update({ discord_rpc: v })} />
                   </Field>
                   <Field
-                    label="Авто добавление серверов"
-                    hint="Добавляет топ 5 серверов из категории Сервера в список серверов"
+                    label={t("Авто добавление серверов")}
+                    hint={t("Добавляет топ 5 серверов из категории Сервера в список серверов")}
                   >
                     <Toggle value={s.autoadd_server} onChange={(v) => update({ autoadd_server: v })} />
                   </Field>
                   <Field
-                    label="Звук уведомлений"
-                    hint="Сигнал при заявке в друзья и других всплывающих уведомлениях"
+                    label={t("Звук уведомлений")}
+                    hint={t("Сигнал при заявке в друзья и других всплывающих уведомлениях")}
                   >
                     <Toggle value={s.notify_sound} onChange={(v) => update({ notify_sound: v })} />
                   </Field>
                   <Field
-                    label="Проверять обновления при запуске"
-                    hint=""
+                    label={t("Проверять обновления при запуске")}
+                    hint={t("Только уведомляет о доступном обновлении. Установка — всегда вручную.")}
                   >
                     <Toggle
                       value={s.auto_update_check}
@@ -374,20 +410,70 @@ export default function SettingsPage({
                     />
                   </Field>
                 </Card>
+
+                {}
+                {DEBUG_TOOLS && (
+                <Card>
+                  <Field
+                    label={t("Канал сборки")}
+                    hint={
+                      bi && bi.channel !== "local" && !bi.dirty
+                        ? t("Опубликованный канал автообновления")
+                        : t("Локальная сборка: автообновление недоступно")
+                    }
+                  >
+                    <span className="rounded-md bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
+                      {!bi
+                        ? "…"
+                        : bi.channel === "dev"
+                        ? `Dev · v${bi.version}${bi.dirty ? "+dirty" : ""}`
+                        : bi.channel === "stable"
+                        ? `Stable · v${bi.version}`
+                        : t("Локальная · v{version}", {
+                            version: `${bi.version}${bi.dirty ? "+dirty" : "+local"}`,
+                          })}
+                    </span>
+                  </Field>
+                  <Field
+                    label={t("Dev Mode — отключить автообновление")}
+                    hint={t("Полностью отключает проверку/установку. Рекомендуется, пока правите код.")}
+                  >
+                    <Toggle
+                      value={s.dev_mode_disable_updates}
+                      onChange={(v) => update({ dev_mode_disable_updates: v })}
+                    />
+                  </Field>
+                  {s.skipped_update_version && (
+                    <Field
+                      label={t("Пропущенная версия")}
+                      hint={t("Не спрашивать про v{version}", {
+                        version: s.skipped_update_version,
+                      })}
+                    >
+                      <button
+                        onClick={() => update({ skipped_update_version: "" })}
+                        className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:text-text"
+                      >
+                        {t("Сбросить")}
+                      </button>
+                    </Field>
+                  )}
+                </Card>
+                )}
               </>
             )}
 
             {cat === "folders" && (
               <>
-                <h2 className="text-lg font-bold text-text">Папки лаунчера</h2>
+                <h2 className="text-lg font-bold text-text">{t("Папки лаунчера")}</h2>
                 <Card>
-                  <Field label="Папка игры" column>
+                  <Field label={t("Папка игры")} column>
                     <PathRow value={s.game_dir} onPick={() => pick("game_dir")} onOpen={() => openFolder(s.game_dir)} />
                   </Field>
-                  <Field label="Папка версий" column>
+                  <Field label={t("Папка версий")} column>
                     <PathRow value={s.versions_dir} onPick={() => pick("versions_dir")} onOpen={() => openFolder(s.versions_dir)} />
                   </Field>
-                  <Field label="Папка сборок" column>
+                  <Field label={t("Папка сборок")} column>
                     <PathRow value={s.builds_dir} onPick={() => pick("builds_dir")} onOpen={() => openFolder(s.builds_dir)} />
                   </Field>
                 </Card>
@@ -405,7 +491,7 @@ export default function SettingsPage({
         >
             <span className="flex items-center gap-2 text-sm text-muted">
               <i className="fa-solid fa-circle-info text-accent" />
-              Есть несохранённые изменения
+              {t("Есть несохранённые изменения")}
             </span>
             <div className="ml-auto flex items-center gap-2">
               <button
@@ -426,34 +512,34 @@ export default function SettingsPage({
                 }}
                 className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
               >
-                Отменить
+                {t("Отменить")}
               </button>
               <button
                 onClick={onSave}
                 className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
               >
                 <i className="fa-solid fa-floppy-disk" />
-                Сохранить
+                {t("Сохранить")}
               </button>
             </div>
         </div>
       </div>
 
       {folderPrompt && (
-        <Modal title="Папки изменены" icon="fa-folder-tree" onClose={() => setFolderPrompt(null)}>
+        <Modal title={t("Папки изменены")} icon="fa-folder-tree" onClose={() => setFolderPrompt(null)}>
           <div className="p-5">
             <p className="text-sm text-text">
-              Вы изменили расположение папок. Перенести существующие файлы в новое место?
+              {t("Вы изменили расположение папок. Перенести существующие файлы в новое место?")}
             </p>
             <ul className="mt-3 space-y-1.5">
               {folderPrompt.map((m) => (
                 <li key={m.label} className="rounded-lg bg-card px-3 py-2 text-xs">
-                  <div className="font-semibold text-text">{m.label}</div>
+                  <div className="font-semibold text-text">{t(m.label)}</div>
                   <div className="mt-0.5 truncate text-muted" title={m.from}>
-                    из: {m.from}
+                    {t("из:")} {m.from}
                   </div>
                   <div className="truncate text-muted" title={m.to}>
-                    в: {m.to}
+                    {t("в:")} {m.to}
                   </div>
                 </li>
               ))}
@@ -463,20 +549,20 @@ export default function SettingsPage({
                 onClick={() => setFolderPrompt(null)}
                 className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
               >
-                Отмена
+                {t("Отмена")}
               </button>
               <button
                 onClick={() => persist(false, folderPrompt)}
                 className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-text transition-colors hover:border-accent/50"
               >
-                Просто сохранить
+                {t("Просто сохранить")}
               </button>
               <button
                 onClick={() => persist(true, folderPrompt)}
                 className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
               >
                 <i className="fa-solid fa-truck-fast" />
-                Перенести и сохранить
+                {t("Перенести и сохранить")}
               </button>
             </div>
           </div>

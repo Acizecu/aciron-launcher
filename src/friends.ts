@@ -1,5 +1,6 @@
 
 import { useSyncExternalStore } from "react";
+import { dtf, t, ts } from "./i18n";
 import {
   cachePeek,
   friendsList,
@@ -35,7 +36,7 @@ async function fetchOnce() {
   try {
     emit({ data: await friendsList(), error: "", loading: false });
   } catch (e) {
-    const msg = String(e).replace(/^Error:\s*/, "");
+    const msg = ts(String(e));
 
     emit({ data: msg === "NO_ACIRON" ? null : snap.data, error: msg, loading: false });
   } finally {
@@ -50,11 +51,7 @@ export function refreshFriends() {
 export function patchFriends(fn: (d: FriendsData) => FriendsData): FriendsData | null {
   if (!snap.data) return null;
   const prev = snap.data;
-  // Все вызывающие (FriendsPanel/FriendRequestToast/FriendSettingsModal) — чистые
-  // иммутабельные апдейтеры ({...d, ...}/.filter()), они не мутируют d на месте,
-  // поэтому глубокий structuredClone(prev) был лишней работой на каждое действие.
-  // Передаём prev напрямую: результат идентичен, а контракт отката сохранён —
-  // prev остаётся нетронутым оригиналом для restoreFriends(prev).
+
   emit({ data: fn(prev) });
   return prev;
 }
@@ -133,17 +130,31 @@ export const PRESENCE_COLOR: Record<PresenceState, string> = {
   offline: "#6b7280",
 };
 
+function lastSeenText(at: number): string {
+  const mins = Math.floor((Date.now() - at) / 60000);
+  if (mins < 1) return t("только что");
+  if (mins < 60) return t("{n} мин. назад", { n: mins });
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return t("{n} ч. назад", { n: hours });
+  const days = Math.floor(hours / 24);
+  if (days === 1) return t("вчера");
+  if (days < 7) return t("{n} дн. назад", { n: days });
+  return dtf({ day: "numeric", month: "long" }).format(at);
+}
+
 export function presenceText(p: FriendPresence): string {
-  if (p.state === "offline") return "Не в сети";
-  if (p.inGame) {
-    if (p.server) return `На сервере ${p.server}`;
-    if (p.buildName) return `Играет: ${p.buildName}`;
-    if (p.mcVersion) return `Играет в ${p.mcVersion}`;
-    return "В игре";
+  if (p.state === "offline") {
+    return p.lastSeen ? t("Был в сети {when}", { when: lastSeenText(p.lastSeen) }) : t("Не в сети");
   }
-  if (p.state === "dnd") return "Не беспокоить";
-  if (p.state === "idle") return "Нет на месте";
-  return p.inLauncher ? "В лаунчере" : "В сети";
+  if (p.inGame) {
+    if (p.server) return t("На сервере {server}", { server: p.server });
+    if (p.buildName) return t("Играет: {name}", { name: p.buildName });
+    if (p.mcVersion) return t("Играет в {version}", { version: p.mcVersion });
+    return t("В игре");
+  }
+  if (p.state === "dnd") return t("Не беспокоить");
+  if (p.state === "idle") return t("Нет на месте");
+  return p.inLauncher ? t("В лаунчере") : t("В сети");
 }
 
 const RANK: Record<PresenceState, number> = { online: 1, idle: 2, dnd: 3, offline: 4 };

@@ -80,6 +80,46 @@ pub struct Build {
     /// Суммарное время игры на сборке в секундах.
     #[serde(default)]
     pub playtime_secs: u64,
+    /// Сборка закреплена пользователем — идёт первой в списке.
+    #[serde(default)]
+    pub favorite: bool,
+    /// Когда сборку запускали в последний раз (epoch-секунды, 0 = никогда).
+    /// Хранится здесь, а не только в recents.json: список сборок сортируется по
+    /// нему, а recents живёт своей жизнью (его чистят, он обрезается до 12).
+    #[serde(default)]
+    pub last_played: u64,
+}
+
+/// Отмечает сборку как запущенную только что. Вызывается из launcher.rs рядом с
+/// recents::touch — чтобы порядок карточек на странице «Сборки» не зависел от
+/// того, не вычистили ли запись из «Последних запусков».
+pub fn touch_launch(build_id: &str) {
+    // Под локом: чтение-правка-запись должны быть атомарны относительно
+    // параллельной установки мода или сохранения другой сборки — иначе этот
+    // вызов запишет устаревший список и затрёт чужие изменения.
+    let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
+    let mut list = load_builds();
+    if let Some(b) = list.iter_mut().find(|b| b.id == build_id) {
+        b.last_played = now_secs();
+        let _ = save_builds(&list);
+    }
+}
+
+/// Закрепляет/открепляет сборку.
+#[tauri::command]
+pub fn set_build_favorite(build_id: String, favorite: bool) -> Result<Build, String> {
+    // Тоже целиком под локом: get_build + upsert_build по отдельности дают окно,
+    // в котором параллельная запись успевает вклиниться между чтением и записью.
+    let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
+    let mut list = load_builds();
+    let b = list
+        .iter_mut()
+        .find(|b| b.id == build_id)
+        .ok_or("Сборка не найдена")?;
+    b.favorite = favorite;
+    let updated = b.clone();
+    save_builds(&list)?;
+    Ok(updated)
 }
 
 /// Добавляет секунды к наигранному времени сборки.
@@ -104,6 +144,32 @@ pub fn rename_build(build_id: String, name: String) -> Result<Build, String> {
     }
     let mut b = get_build(&build_id).ok_or("Сборка не найдена")?;
     b.name = name;
+    upsert_build(b.clone())?;
+    Ok(b)
+}
+
+/// Меняет ядро сборки и/или закреплённую версию ядра.
+///
+/// Файлы модов не трогаем намеренно. Мод под Fabric не заработает на Forge, но
+/// выкидывать их за человека — значит решать за него: часть модов существует под
+/// оба ядра, а что-то он мог положить руками. Предупредить об этом — дело
+/// интерфейса; дело команды — записать выбор.
+///
+/// Пустая `loader_version` = «ставить самую свежую»: так же ведут себя все
+/// сборки, у которых версию ядра не закрепляли.
+#[tauri::command]
+pub fn set_build_loader(
+    build_id: String,
+    loader: String,
+    loader_version: String,
+) -> Result<Build, String> {
+    if !matches!(loader.as_str(), "fabric" | "quilt" | "forge" | "neoforge") {
+        return Err(format!("Этот загрузчик не поддерживается: {loader}"));
+    }
+    let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
+    let mut b = get_build(&build_id).ok_or("Сборка не найдена")?;
+    b.loader = loader;
+    b.loader_version = loader_version.trim().to_string();
     upsert_build(b.clone())?;
     Ok(b)
 }
@@ -193,10 +259,6 @@ fn builds_lock() -> &'static std::sync::Mutex<()> {
     L.get_or_init(|| std::sync::Mutex::new(()))
 }
 
-/// Уникальное ОТОБРАЖАЕМОЕ имя сборки: если такое имя уже есть, добавляем
-/// " (2)", " (3)"… По решению владельца повторная установка того же модпака НЕ
-/// переиспользует и НЕ затирает существующую сборку (это исключает потерю данных),
-/// а создаётся отдельная с числовым суффиксом — чтобы их было видно раздельно.
 fn unique_name(name: &str) -> String {
     let taken: Vec<String> = load_builds().into_iter().map(|b| b.name).collect();
     if !taken.iter().any(|n| n == name) {
@@ -212,7 +274,6 @@ fn unique_name(name: &str) -> String {
     }
 }
 
-/// Папка данных конкретной сборки: <builds_dir>/<dir|id>.
 pub fn build_dir(id: &str) -> PathBuf {
     let s = settings::load_settings();
     let folder = get_build(id)
@@ -221,10 +282,6 @@ pub fn build_dir(id: &str) -> PathBuf {
     PathBuf::from(&s.builds_dir).join(folder)
 }
 
-/// Как build_dir, но по уже загруженной сборке — без повторного load_settings /
-/// load_builds. Поведение идентично build_dir(&b.id): при пустом b.dir берётся
-/// b.id (совпадает с get_build(id) для той же записи). Используется в командах,
-/// которые уже держат Build на руках, чтобы убрать N+1 чтения builds.json.
 fn build_dir_for(builds_dir: &str, b: &Build) -> PathBuf {
     let folder = if b.dir.is_empty() { &b.id } else { &b.dir };
     PathBuf::from(builds_dir).join(folder)
@@ -234,7 +291,6 @@ pub fn mods_dir(id: &str) -> PathBuf {
     build_dir(id).join("mods")
 }
 
-/// Папка контента конкретного типа внутри сборки.
 pub fn content_dir(id: &str, kind: &str) -> PathBuf {
     build_dir(id).join(kind_subdir(kind))
 }
@@ -251,12 +307,28 @@ fn gen_id() -> String {
 }
 
 fn fastrand_suffix() -> String {
-    // немного энтропии, чтобы id не совпадали при быстром создании
+
     format!("{:?}", SystemTime::now())
 }
 
 pub fn get_build(id: &str) -> Option<Build> {
     load_builds().into_iter().find(|b| b.id == id)
+}
+
+pub fn add_installed(build_id: &str, mods: Vec<InstalledMod>) -> Result<Build, String> {
+    let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
+    let mut list = load_builds();
+    let b = list
+        .iter_mut()
+        .find(|b| b.id == build_id)
+        .ok_or("Сборка не найдена")?;
+    for m in mods {
+        b.mods.retain(|x| x.project_id != m.project_id);
+        b.mods.push(m);
+    }
+    let updated = b.clone();
+    save_builds(&list)?;
+    Ok(updated)
 }
 
 pub fn upsert_build(build: Build) -> Result<(), String> {
@@ -284,9 +356,7 @@ pub fn create_build(name: String, mc_version: String, loader: String) -> Result<
     if mc_version.is_empty() {
         return Err("Выберите версию Minecraft".into());
     }
-    // Под локом: подбор уникального имени/папки и запись атомарны относительно
-    // параллельных create/upsert/delete — иначе две установки могли бы выбрать
-    // одинаковый суффикс или затереть список друг друга.
+
     let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
     let name = unique_name(&name);
     let dir = unique_dir(&name);
@@ -304,6 +374,8 @@ pub fn create_build(name: String, mc_version: String, loader: String) -> Result<
         icon_url: String::new(),
         source_id: String::new(),
         playtime_secs: 0,
+        favorite: false,
+        last_played: 0,
     };
     let s = settings::load_settings();
     let base = PathBuf::from(&s.builds_dir).join(&dir);
@@ -318,10 +390,10 @@ pub fn create_build(name: String, mc_version: String, loader: String) -> Result<
 
 #[tauri::command]
 pub fn delete_build(id: String) -> Result<(), String> {
-    // Папку определяем ПОКА сборка ещё в списке (build_dir резолвит слаг через get_build).
+
     let dir = build_dir(&id);
     {
-        // Мутацию списка держим под локом; медленный remove_dir_all — вне лока.
+
         let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
         let mut list = load_builds();
         list.retain(|b| b.id != id);
@@ -339,12 +411,10 @@ pub fn open_build_folder(id: String) -> Result<(), String> {
     open_folder(dir.to_string_lossy().into_owned())
 }
 
-/// Ставит широкий баннер сборки (шапка на странице сборки). Копируется в папку
-/// сборки как `banner.<ext>`; пустой src_path — убрать баннер.
 #[tauri::command]
 pub fn set_build_banner(build_id: String, src_path: String) -> Result<Build, String> {
     let mut build = get_build(&build_id).ok_or("Сборка не найдена")?;
-    // Папку резолвим по загруженной сборке — без повторного load_builds.
+
     let dir = build_dir_for(&settings::load_settings().builds_dir, &build);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if !build.banner.is_empty() {
@@ -368,7 +438,6 @@ pub fn set_build_banner(build_id: String, src_path: String) -> Result<Build, Str
     Ok(build)
 }
 
-/// Баннер сборки как data-URL (base64), либо None.
 #[tauri::command]
 pub fn get_build_banner(build_id: String) -> Option<String> {
     let build = get_build(&build_id)?;
@@ -379,7 +448,6 @@ pub fn get_build_banner(build_id: String) -> Option<String> {
     file_data_url(&base.join(&build.banner))
 }
 
-/// Читает картинку с диска и отдаёт как data-URL.
 fn file_data_url(path: &std::path::Path) -> Option<String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
     let bytes = std::fs::read(path).ok()?;
@@ -397,7 +465,6 @@ fn file_data_url(path: &std::path::Path) -> Option<String> {
     Some(format!("data:{mime};base64,{}", STANDARD.encode(&bytes)))
 }
 
-/// Ставит обложку сборки (копирует картинку в папку сборки).
 #[tauri::command]
 pub fn set_build_image(build_id: String, src_path: String) -> Result<Build, String> {
     let mut build = get_build(&build_id).ok_or("Сборка не найдена")?;
@@ -408,7 +475,7 @@ pub fn set_build_image(build_id: String, src_path: String) -> Result<Build, Stri
         .unwrap_or("png")
         .to_lowercase();
     let filename = format!("cover.{ext}");
-    // Папку резолвим по загруженной сборке — без повторного load_builds.
+
     let dir = build_dir_for(&settings::load_settings().builds_dir, &build);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if !build.image.is_empty() {
@@ -420,7 +487,6 @@ pub fn set_build_image(build_id: String, src_path: String) -> Result<Build, Stri
     Ok(build)
 }
 
-/// Возвращает обложку сборки как data-URL (base64), либо None.
 #[tauri::command]
 pub fn get_build_image(build_id: String) -> Option<String> {
     use base64::{engine::general_purpose::STANDARD, Engine};
@@ -444,11 +510,10 @@ pub fn get_build_image(build_id: String) -> Option<String> {
     Some(format!("data:{mime};base64,{}", STANDARD.encode(&bytes)))
 }
 
-/// Включает/выключает мод (переименовывает файл, добавляя/убирая .disabled).
 #[tauri::command]
 pub fn toggle_mod(build_id: String, project_id: String) -> Result<Build, String> {
     let mut build = get_build(&build_id).ok_or("Сборка не найдена")?;
-    // Резолвим папку по уже загруженной сборке — без повторного чтения builds.json.
+
     let build_base = build_dir_for(&settings::load_settings().builds_dir, &build);
     if let Some(m) = build.mods.iter_mut().find(|m| m.project_id == project_id) {
         let dir = build_base.join(kind_subdir(&m.kind));
@@ -469,11 +534,10 @@ pub fn toggle_mod(build_id: String, project_id: String) -> Result<Build, String>
     Ok(build)
 }
 
-/// Удаляет мод из сборки и его файл.
 #[tauri::command]
 pub fn remove_mod(build_id: String, project_id: String) -> Result<Build, String> {
     let mut build = get_build(&build_id).ok_or("Сборка не найдена")?;
-    // Резолвим папку по уже загруженной сборке — без повторного чтения builds.json.
+
     let build_base = build_dir_for(&settings::load_settings().builds_dir, &build);
     if let Some(m) = build.mods.iter().find(|m| m.project_id == project_id) {
         let file = build_base.join(kind_subdir(&m.kind)).join(&m.filename);
@@ -482,6 +546,100 @@ pub fn remove_mod(build_id: String, project_id: String) -> Result<Build, String>
     build.mods.retain(|m| m.project_id != project_id);
     upsert_build(build.clone())?;
     Ok(build)
+}
+
+fn sniff_zip_kind(path: &std::path::Path) -> Option<&'static str> {
+    let file = std::fs::File::open(path).ok()?;
+    let mut zip = zip::ZipArchive::new(file).ok()?;
+    let mut looks_resourcepack = false;
+    for i in 0..zip.len() {
+        let Ok(entry) = zip.by_index(i) else { continue };
+        let name = entry.name().replace('\\', "/");
+        // Обрезаем возможную единственную папку-обёртку внутри архива.
+        let rel = match name.split_once('/') {
+            Some((_, rest)) if !rest.is_empty() && !name.starts_with("shaders/") && !name.starts_with("assets/") => rest,
+            _ => name.as_str(),
+        };
+        if rel.starts_with("shaders/") || name.starts_with("shaders/") {
+            return Some("shader");
+        }
+        if rel.starts_with("pack.mcmeta") || rel.starts_with("assets/") || name.starts_with("assets/") {
+            looks_resourcepack = true;
+        }
+    }
+    if looks_resourcepack {
+        Some("resourcepack")
+    } else {
+        None
+    }
+}
+
+/// Копирует в сборку файлы, которые перетащили мышью.
+///
+/// `hint` — вкладка, на которую бросили (mod | resourcepack | shader): она решает
+/// судьбу .zip, если по содержимому не опознали. .jar всегда уходит в моды —
+/// ресурспаков и шейдеров в .jar не бывает.
+///
+/// Возвращает обновлённую сборку; список контента пересобирается с диска, поэтому
+/// новые файлы сразу появляются в интерфейсе.
+#[tauri::command]
+pub fn add_content_files(
+    build_id: String,
+    paths: Vec<String>,
+    hint: String,
+) -> Result<(Build, u32, u32), String> {
+    let build = get_build(&build_id).ok_or("Сборка не найдена")?;
+    let base = build_dir_for(&settings::load_settings().builds_dir, &build);
+    let mut added = 0u32;
+    let mut skipped = 0u32;
+
+    for p in &paths {
+        let src = PathBuf::from(p);
+        if !src.is_file() {
+            skipped += 1;
+            continue;
+        }
+        let ext = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let kind = match ext.as_str() {
+            "jar" => "mod",
+            "zip" => sniff_zip_kind(&src).unwrap_or(match hint.as_str() {
+                "shader" => "shader",
+                "mod" => "resourcepack", // на вкладке модов .zip модом не станет
+                _ => "resourcepack",
+            }),
+            _ => {
+                skipped += 1;
+                continue;
+            }
+        };
+        let dir = base.join(kind_subdir(kind));
+        if std::fs::create_dir_all(&dir).is_err() {
+            skipped += 1;
+            continue;
+        }
+        let Some(name) = src.file_name().and_then(|n| n.to_str()) else {
+            skipped += 1;
+            continue;
+        };
+        let dest = dir.join(name);
+        // Уже лежит ровно этот файл — не копируем сам в себя и не плодим дублей.
+        if dest.exists() {
+            skipped += 1;
+            continue;
+        }
+        if std::fs::copy(&src, &dest).is_ok() {
+            added += 1;
+        } else {
+            skipped += 1;
+        }
+    }
+
+    let updated = refresh_build_content(build_id)?;
+    Ok((updated, added, skipped))
 }
 
 /// Синхронизирует список контента сборки с файлами на диске: подхватывает

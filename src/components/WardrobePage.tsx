@@ -7,6 +7,8 @@ import AddAccountModal from "./AddAccountModal";
 import { useToast } from "../ToastContext";
 import { human, type CapeEntry, type CapeOrigin, type Instant } from "./wardrobe/types";
 import { CapeCard, Loading, Notice, OutfitCard, SectionHeader, SkinCard, TileButton } from "./wardrobe/cards";
+
+import { t, t as tr, ts } from "../i18n";
 import {
   ACIRON_ID_API,
   activeCapeUrl,
@@ -51,6 +53,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "capes", label: "Плащи" },
   { id: "outfits", label: "Образы" },
 ];
+
+function licenseError(raw: string): string {
+  if (/fetch failed|ECONNRESET|ETIMEDOUT|ENETUNREACH/i.test(raw))
+    return t("сервер Aciron сейчас не отвечает от Mojang, попробуйте позже");
+  if (/401|403|token/i.test(raw)) return t("истёк вход в Microsoft — перепривяжите лицензию");
+  return raw;
+}
 
 export default function WardrobePage() {
   const [tab, setTab] = useState<Tab>("skins");
@@ -105,7 +114,7 @@ export default function WardrobePage() {
       setError("");
       setStale(false);
     } catch (e) {
-      const msg = String(e).replace(/^Error:\s*/, "");
+      const msg = ts(String(e));
 
       if (msg === "NO_ACIRON" || msg === "SESSION_EXPIRED" || !cachePeek<WardrobeData>("wardrobe")) {
         setError(msg);
@@ -127,23 +136,18 @@ export default function WardrobePage() {
     void load();
   }, [load]);
 
-  // Каталоги показываем сразу из кэша, но тут же перезапрашиваем: список
-  // пополняется на сервере, а кэш живёт полчаса и переживает перезапуск —
-  // иначе новые плащи и скины доезжают до людей с большой задержкой.
   useEffect(() => {
     let alive = true;
     setStock((s) => s ?? cachePeek<CatalogSkin[]>(SKIN_CATALOG_KEY) ?? null);
     skinCatalog(true)
       .then((list) => alive && setStock(list))
-      // Оставляем показанное: моргнувшая сеть — не повод стирать каталог.
+
       .catch(() => alive && setStock((s) => s ?? []));
     return () => {
       alive = false;
     };
   }, []);
 
-  // Зависимость только от вкладки. Раньше здесь был ещё и `catalog`, но эффект
-  // сам его и меняет — получался бесконечный круг запросов.
   useEffect(() => {
     if (tab !== "capes") return;
     let alive = true;
@@ -159,9 +163,7 @@ export default function WardrobePage() {
       })
       .catch((e) => {
         if (!alive) return;
-        // Плащи с лицензии оставляем на месте: сорванное обновление сессии
-        // Microsoft не означает, что плащей больше нет — только что их сейчас
-        // не спросить. Иначе они «пропадали» на ровном месте.
+
         setLic((l) => l ?? { linked: false, capes: [] });
         setLicError(human(e));
       });
@@ -196,13 +198,14 @@ export default function WardrobePage() {
     try {
       if (p.skin) {
         const r = (await p.skin()) as ApplyResult | undefined;
-        if (r && r.error) toast(`На лицензию не применилось: ${r.error}`, "warning");
+        if (r && r.error)
+          toast(t("На лицензию не применилось: {msg}", { msg: licenseError(r.error) }), "warning");
       }
       if (p.cape) await p.cape();
       await load();
       setBust(Date.now());
       setDirty(false);
-      toast("Сохранено", "success");
+      toast(t("Сохранено"), "success");
     } catch (e) {
       setInstant(null);
       setBust(Date.now());
@@ -216,17 +219,13 @@ export default function WardrobePage() {
   const patchData = (mut: (d: WardrobeData) => WardrobeData): WardrobeData | null => {
     if (!data) return null;
     const prev = data;
-    // Без structuredClone: оба вызывающих (saveEdit, delete confirm) строят полностью
-    // новый объект через {...d} + новые массивы (.map/.filter) и никогда не мутируют
-    // существующие элементы на месте, поэтому исходный граф (prev) остаётся нетронутым
-    // и годится для отката. Глубокое клонирование было лишней работой поверх новых
-    // иммутабельных копий, которые mut всё равно создаёт.
+
     setData(mut(prev));
     return prev;
   };
 
   const pickSkinFile = async () => {
-    const path = await pickFile("Текстура PNG", ["png"]);
+    const path = await pickFile(t("Текстура PNG"), ["png"]);
     if (!path) return;
     const name = (path.split(/[\\/]/).pop() || "skin.png").replace(/\.png$/i, "");
     setAddSkin((s) => ({
@@ -246,16 +245,16 @@ export default function WardrobePage() {
   const saveNewSkin = () => {
     if (!addSkin?.path) return;
     const { path, name, model } = addSkin;
-    void act("upload", () => wardrobeAdd(path, "skin", name.trim() || "Скин", model), "Скин добавлен").then(
+    void act("upload", () => wardrobeAdd(path, "skin", name.trim() || t("Скин"), model), t("Скин добавлен")).then(
       () => setAddSkin(null)
     );
   };
 
   const uploadCape = async () => {
-    const path = await pickFile("Текстура плаща PNG 64×32", ["png"]);
+    const path = await pickFile(t("Текстура плаща PNG 64×32"), ["png"]);
     if (!path) return;
     const name = (path.split(/[\\/]/).pop() || "cape.png").replace(/\.png$/i, "");
-    await act("upload", () => wardrobeAdd(path, "cape", name, "classic"), "Плащ добавлен");
+    await act("upload", () => wardrobeAdd(path, "cape", name, "classic"), t("Плащ добавлен"));
   };
 
   const wearSkin = (key: string, url: string, model: SkinModelId, apply: () => Promise<ApplyResult>) => {
@@ -309,14 +308,14 @@ export default function WardrobePage() {
       "outfit",
       () =>
         outfitAdd(
-          outfitName.trim() || "Образ",
+          outfitName.trim() || t("Образ"),
           data?.active.skinId ?? null,
           data?.active.capeId ?? null,
           data?.active.skinCatalogId ?? null,
           data?.active.capeCatalogId ?? null,
           data?.active.model ?? "classic"
         ),
-      "Образ сохранён"
+      t("Образ сохранён")
     ).then(() => {
       setNewOutfit(false);
       setOutfitName("");
@@ -428,17 +427,17 @@ export default function WardrobePage() {
           <div className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-3xl bg-card text-3xl text-accent">
             <i className="fa-solid fa-shirt" />
           </div>
-          <h2 className="text-xl font-light text-text">Гардероб</h2>
+          <h2 className="text-xl font-light text-text">{t("Гардероб")}</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
             {error === "SESSION_EXPIRED"
-              ? "Сессия Aciron ID истекла — войдите заново, чтобы вернуть свои скины и плащи."
-              : "Скины и плащи хранятся в аккаунте Aciron ID. Войдите, чтобы собрать свой гардероб."}
+              ? tr("Сессия Aciron ID истекла — войдите заново, чтобы вернуть свои скины и плащи.")
+              : tr("Скины и плащи хранятся в аккаунте Aciron ID. Войдите, чтобы собрать свой гардероб.")}
           </p>
           <button
             onClick={() => setSignIn(true)}
             className="mt-4 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover"
           >
-            Войти в Aciron ID
+            {t("Войти в Aciron ID")}
           </button>
         </div>
         {signIn && (
@@ -454,7 +453,9 @@ export default function WardrobePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col px-8 py-6">
-      <h1 className="mb-5 text-[30px] font-light leading-none text-text">Гардероб</h1>
+      <h1 className="mb-5 text-[30px] font-light leading-none text-text">
+        {t("Гардероб")}
+      </h1>
 
       <div className="flex min-h-0 flex-1 gap-6">
         {}
@@ -468,7 +469,7 @@ export default function WardrobePage() {
                 className="h-full w-full"
               />
             ) : (
-              <div className="grid h-full place-items-center text-sm text-muted">Нет аккаунта</div>
+              <div className="grid h-full place-items-center text-sm text-muted">{t("Нет аккаунта")}</div>
             )}
           </div>
 
@@ -484,7 +485,7 @@ export default function WardrobePage() {
                     : "border-none bg-transparent text-text hover:border-accent/40 hover:bg-accent/10"
                 }`}
               >
-                {m === "classic" ? "Клаcсический" : "Тонкий"}
+                {m === "classic" ? tr("Клаcсический") : tr("Тонкий")}
               </button>
             ))}
           </div>
@@ -502,17 +503,17 @@ export default function WardrobePage() {
             {busy === "save" ? (
               <>
                 <i className="fa-solid fa-spinner fa-spin mr-2" />
-                Сохранение…
+                {t("Сохранение…")}
               </>
             ) : dirty ? (
               <>
                 <i className="fa-solid fa-floppy-disk mr-2" />
-                Сохранить
+                {t("Сохранить")}
               </>
             ) : (
               <>
                 <i className="fa-solid fa-check mr-2" />
-                Сохранено
+                {t("Сохранено")}
               </>
             )}
           </button>
@@ -529,7 +530,7 @@ export default function WardrobePage() {
                   tab === t.id ? "text-text" : "text-muted hover:text-text"
                 }`}
               >
-                {t.label}
+                {tr(t.label)}
               </button>
             ))}
           </div>
@@ -544,12 +545,12 @@ export default function WardrobePage() {
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4 pb-2">
                 {stale && (
-                  <Notice text="Не удалось обновить данные — показаны сохранённые. Проверьте соединение с Aciron ID." />
+                  <Notice text={t("Не удалось обновить данные — показаны сохранённые. Проверьте соединение с Aciron ID.")} />
                 )}
                 {tab === "skins" && (
                   <>
-                    <Notice text="Скины видны только игрокам, зашедшим в игру через лаунчер Aciron." />
-                    {(stock?.length ?? 0) > 0 && <SectionHeader label="Каталог Aciron" />}
+                    <Notice text={t("Скины видны только игрокам, зашедшим в игру через лаунчер Aciron.")} />
+                    {(stock?.length ?? 0) > 0 && <SectionHeader label={t("Каталог Aciron")} />}
                     {(stock ?? []).map((s, i) => (
                       <SkinCard
                         key={`stock:${s.id}`}
@@ -565,7 +566,7 @@ export default function WardrobePage() {
                         }
                       />
                     ))}
-                    <SectionHeader label="Мои скины" />
+                    <SectionHeader label={t("Мои скины")} />
                     {(data?.skins ?? []).map((it, i) => (
                       <SkinCard
                         key={it.id}
@@ -583,11 +584,11 @@ export default function WardrobePage() {
                     ))}
                     <TileButton
                       icon={skinsFull ? "fa-solid fa-lock" : "fa-solid fa-plus"}
-                      label={skinsFull ? `Максимум ${MAX_SKINS} скинов` : "Добавить скин"}
+                      label={skinsFull ? tr("Максимум {n} скинов", { n: MAX_SKINS }) : tr("Добавить скин")}
                       index={(stock?.length ?? 0) + skinCount}
                       disabled={skinsFull}
                       title={
-                        skinsFull ? "Удалите один из своих скинов, чтобы добавить новый" : undefined
+                        skinsFull ? t("Удалите один из своих скинов, чтобы добавить новый") : undefined
                       }
                       onClick={() => setAddSkin({ path: "", name: "", model: "classic", preview: "" })}
                     />
@@ -597,15 +598,15 @@ export default function WardrobePage() {
                 {tab === "capes" && (
                   <>
                     {}
-                    <SectionHeader label="С лицензии Minecraft" />
+                    <SectionHeader label={t("С лицензии Minecraft")} />
                     {lic && (licError || !lic.linked) && (
                       <Notice
                         text={
                           licError
-                            ? `Плащи с аккаунта Minecraft не загрузились: ${licError}`
+                            ? t("Плащи с аккаунта Minecraft не загрузились: {msg}", { msg: licError })
                             : data?.licensed
-                            ? "Плащи с аккаунта Minecraft не видны: лицензия привязана без доступа к профилю — переподключите её в меню аккаунта."
-                            : "Плащей с аккаунта Minecraft нет: лицензия не привязана к Aciron ID. Привязать можно в меню аккаунта."
+                            ? t("Плащи с аккаунта Minecraft не видны: лицензия привязана без доступа к профилю — переподключите её в меню аккаунта.")
+                            : t("Плащей с аккаунта Minecraft нет: лицензия не привязана к Aciron ID. Привязать можно в меню аккаунта.")
                         }
                       />
                     )}
@@ -621,22 +622,22 @@ export default function WardrobePage() {
                         />
                       ))}
                     {lic?.linked && !licError && !capes.some((c) => c.origin === "license") && (
-                      <Notice text="На аккаунте Minecraft нет плащей." />
+                      <Notice text={t("На аккаунте Minecraft нет плащей.")} />
                     )}
 
                     {}
-                    <SectionHeader label="Кастом (Aciron)" />
-                    <Notice text="Кастомные плащи видят только игроки, зашедшие в игру через лаунчер Aciron." />
+                    <SectionHeader label={t("Кастом (Aciron)")} />
+                    <Notice text={t("Кастомные плащи видят только игроки, зашедшие в игру через лаунчер Aciron.")} />
                     <TileButton
                       icon="fa-solid fa-ban"
-                      label="Без плаща"
+                      label={t("Без плаща")}
                       index={0}
                       active={noCape}
                       onClick={() => void capeOff()}
                     />
                     <TileButton
                       icon="fa-solid fa-arrow-up-from-bracket"
-                      label="Загрузить"
+                      label={t("Загрузить")}
                       index={1}
                       onClick={() => void uploadCape()}
                     />
@@ -672,7 +673,7 @@ export default function WardrobePage() {
                     ))}
                     <TileButton
                       icon="fa-solid fa-plus"
-                      label="Сохранить текущий образ"
+                      label={t("Сохранить текущий образ")}
                       index={(data?.outfits.length ?? 0) + 1}
                       onClick={() => setNewOutfit(true)}
                     />
@@ -686,8 +687,8 @@ export default function WardrobePage() {
 
       {confirm && (
         <ConfirmModal
-          title={confirm.kind === "outfit" ? "Удалить образ" : "Удалить из гардероба"}
-          message={`Удалить «${confirm.name}»? Файл текстуры будет стёрт с сервера.`}
+          title={confirm.kind === "outfit" ? tr("Удалить образ") : tr("Удалить из гардероба")}
+          message={tr("Удалить «{name}»? Файл текстуры будет стёрт с сервера.", { name: confirm.name })}
           onConfirm={() => {
 
             if (instant?.skinKey === confirm.id || instant?.capeKey === `own:${confirm.id}`)
@@ -712,8 +713,8 @@ export default function WardrobePage() {
 
       {addSkin && (
         <Modal
-          title="Новый скин"
-          subtitle="PNG 64×64 или 64×32"
+          title={t("Новый скин")}
+          subtitle={t("PNG 64×64 или 64×32")}
           onClose={() => setAddSkin(null)}
         >
           <div className="space-y-4 p-5">
@@ -729,13 +730,13 @@ export default function WardrobePage() {
                   />
                 ) : (
                   <span className="px-3 text-center text-[11px] leading-snug text-muted">
-                    {addSkin.path ? "Читаю файл…" : "Выберите PNG, чтобы увидеть скин"}
+                    {addSkin.path ? t("Читаю файл…") : t("Выберите PNG, чтобы увидеть скин")}
                   </span>
                 )}
               </div>
 
               <div className="flex min-w-0 flex-1 flex-col justify-center">
-                <span className="mb-1.5 block text-xs text-muted">Файл</span>
+                <span className="mb-1.5 block text-xs text-muted">{t("Файл")}</span>
                 <button
                   onClick={() => void pickSkinFile()}
                   className={`flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
@@ -746,14 +747,14 @@ export default function WardrobePage() {
                 >
                   <i className="fa-solid fa-file-image shrink-0" />
                   <span className="truncate">
-                    {addSkin.path ? addSkin.path.split(/[\\/]/).pop() : "Выбрать PNG…"}
+                    {addSkin.path ? addSkin.path.split(/[\\/]/).pop() : t("Выбрать PNG…")}
                   </span>
                 </button>
               </div>
             </div>
 
             <div>
-              <span className="mb-1.5 block text-xs text-muted">Тип рук</span>
+              <span className="mb-1.5 block text-xs text-muted">{t("Тип рук")}</span>
               <div className="flex gap-2">
                 {(["classic", "slim"] as SkinModelId[]).map((m) => (
                   <button
@@ -765,19 +766,19 @@ export default function WardrobePage() {
                         : "border-border text-muted hover:text-text"
                     }`}
                   >
-                    {m === "classic" ? "Стив — 4 px" : "Алекс — 3 px"}
+                    {m === "classic" ? tr("Стив — 4 px") : tr("Алекс — 3 px")}
                   </button>
                 ))}
               </div>
             </div>
 
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">Название</span>
+              <span className="mb-1.5 block text-xs text-muted">{t("Название")}</span>
               <input
                 value={addSkin.name}
                 onChange={(e) => setAddSkin({ ...addSkin, name: e.target.value })}
                 onKeyDown={(e) => e.key === "Enter" && saveNewSkin()}
-                placeholder="Например: зимний"
+                placeholder={t("Например: зимний")}
                 maxLength={64}
                 className="w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent"
               />
@@ -788,14 +789,14 @@ export default function WardrobePage() {
                 onClick={() => setAddSkin(null)}
                 className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
               >
-                Отмена
+                {t("Отмена")}
               </button>
               <button
                 onClick={saveNewSkin}
                 disabled={!addSkin.path || busy === "upload"}
                 className="rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
               >
-                Добавить
+                {t("Добавить")}
               </button>
             </div>
           </div>
@@ -804,13 +805,13 @@ export default function WardrobePage() {
 
       {edit && (
         <Modal
-          title={edit.item.kind === "cape" ? "Плащ" : "Скин"}
-          subtitle="Название видно только вам"
+          title={edit.item.kind === "cape" ? tr("Плащ") : tr("Скин")}
+          subtitle={t("Название видно только вам")}
           onClose={() => setEdit(null)}
         >
           <div className="space-y-4 p-5">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">Название</span>
+              <span className="mb-1.5 block text-xs text-muted">{t("Название")}</span>
               <input
                 autoFocus
                 value={edit.name}
@@ -823,7 +824,7 @@ export default function WardrobePage() {
 
             {edit.item.kind === "skin" && (
               <div>
-                <span className="mb-1.5 block text-xs text-muted">Тип рук</span>
+                <span className="mb-1.5 block text-xs text-muted">{t("Тип рук")}</span>
                 <div className="flex gap-2">
                   {(["classic", "slim"] as SkinModelId[]).map((m) => (
                     <button
@@ -835,7 +836,7 @@ export default function WardrobePage() {
                           : "border-border text-muted hover:text-text"
                       }`}
                     >
-                      {m === "classic" ? "Стив — 4 px" : "Алекс — 3 px"}
+                      {m === "classic" ? tr("Стив — 4 px") : tr("Алекс — 3 px")}
                     </button>
                   ))}
                 </div>
@@ -847,14 +848,14 @@ export default function WardrobePage() {
                 onClick={() => setEdit(null)}
                 className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
               >
-                Отмена
+                {t("Отмена")}
               </button>
               <button
                 onClick={saveEdit}
                 disabled={busy === edit.item.id}
                 className="rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
               >
-                Сохранить
+                {t("Сохранить")}
               </button>
             </div>
           </div>
@@ -862,16 +863,16 @@ export default function WardrobePage() {
       )}
 
       {newOutfit && (
-        <Modal title="Новый образ" subtitle="Запомнит текущий скин, плащ и модель" onClose={() => setNewOutfit(false)}>
+        <Modal title={t("Новый образ")} subtitle={t("Запомнит текущий скин, плащ и модель")} onClose={() => setNewOutfit(false)}>
           <div className="space-y-4 p-5">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">Название</span>
+              <span className="mb-1.5 block text-xs text-muted">{t("Название")}</span>
               <input
                 autoFocus
                 value={outfitName}
                 onChange={(e) => setOutfitName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && saveOutfit()}
-                placeholder="Например: зимний"
+                placeholder={t("Например: зимний")}
                 maxLength={64}
                 className="w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent"
               />
@@ -881,14 +882,14 @@ export default function WardrobePage() {
                 onClick={() => setNewOutfit(false)}
                 className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
               >
-                Отмена
+                {t("Отмена")}
               </button>
               <button
                 onClick={saveOutfit}
                 disabled={busy === "outfit"}
                 className="rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
               >
-                Сохранить
+                {t("Сохранить")}
               </button>
             </div>
           </div>

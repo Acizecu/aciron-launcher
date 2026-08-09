@@ -1,9 +1,6 @@
 use crate::builds::{self, Build, InstalledMod};
 use crate::launcher::emit_op;
 
-// Локальный emit тегирует ВСЕ события этого модуля как операцию "install", чтобы
-// орб установки не закрывался чужим "done" от запуска игры, а ошибка установки не
-// поднимала баннер запуска (launch-progress — глобальное событие).
 fn emit(app: &tauri::AppHandle, stage: &str, message: &str, current: u64, total: u64) {
     emit_op(app, "install", stage, message, current, total);
 }
@@ -28,14 +25,6 @@ fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     Some(p)
 }
 
-// Ленивый общий Client на весь модуль (B8): reqwest::Client внутри держит пул
-// соединений/TLS-сессий, дёшево клонируется и потокобезопасен. Раньше http()
-// строил новый Client на КАЖДУЮ tauri-команду, выбрасывая keep-alive соединения
-// между вызовами (search -> project -> versions открывали TCP+TLS заново).
-// Теперь клиент строится один раз и переиспользуется; поведение (user-agent,
-// таймауты) и сигнатура http() -> Result<Client, String> сохранены 1-в-1, так что
-// все существующие вызовы `http()?` работают без изменений. При ошибке сборки
-// клиента (практически недостижимой) возвращаем ту же Err(String), что и раньше.
 fn client() -> Result<&'static reqwest::Client, String> {
     static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
     CLIENT
@@ -390,11 +379,7 @@ async fn build_from_mrpack(
     // files_list.iter().enumerate(), замыкание получает аргумент
     // (usize, &serde_json::Value), и futures::stream::iter(..).buffer_unordered
     // требует от этого замыкания HRTB-обобщённости по времени жизни borrow'а,
-    // которую компилятор доказать не может ("implementation of `FnOnce`/`Iterator`
-    // is not general enough"). Владеющий Vec убирает borrow из сигнатуры
-    // замыкания — futures становятся 'static по этим данным. Поведение 1-в-1:
-    // тот же индекс i (enumerate ниже идёт в том же порядке), те же извлечённые
-    // значения (unsupported/path/dl), тот же buffer_unordered(8).
+
     let prepared: Vec<(bool, String, Option<String>)> = files_list
         .iter()
         .map(|f| {
@@ -410,17 +395,15 @@ async fn build_from_mrpack(
         .collect();
 
     let tasks = prepared.into_iter().enumerate().map(|(i, (unsupported, path, dl))| {
-        // cl: &reqwest::Client — берём ВЛАДЕЮЩИЙ клон Client (дёшево, шарит пул),
-        // а не клон ссылки; (*cl).clone() снимает неоднозначность метода clone.
+
         let cl = (*cl).clone();
         let build_dir = build_dir.clone();
-        // app: &AppHandle — тоже берём владеющий клон (Arc внутри), не клон ссылки.
+
         let app = (*app).clone();
         let done = done.clone();
         let cancelled = cancelled.clone();
         async move {
-            // Отмена, замеченная до старта задачи — эквивалент проверки в начале
-            // старого цикла. Возвращаем маркер отмены, прогресс не двигаем.
+
             if crate::cancel::is_cancelled(ckey) {
                 cancelled.store(true, Ordering::Relaxed);
                 return None;
@@ -443,8 +426,7 @@ async fn build_from_mrpack(
             if let Some(dl) = dl {
                 let dest = match safe_join(&build_dir, &path) {
                     Some(d) => d,
-                    // Как и в исходнике: при неудачном safe_join итерация
-                    // прерывалась `continue` ДО emit — прогресс не двигаем.
+
                     None => return None,
                 };
                 if download_cancelable(&cl, &dl, &dest, ckey).await.is_err()
@@ -487,15 +469,10 @@ async fn build_from_mrpack(
         return Err(crate::cancel::CANCELLED.into());
     }
 
-    // Финальный emit прогресса стадии модпака: гарантирует 100%, как в исходном
-    // последовательном цикле, где последняя итерация эмитила (total, total).
-    // Порядок завершения задач в buffer_unordered произволен, поэтому точный
-    // момент n == total мог не совпасть — добираем здесь. Безопасно и идемпотентно.
     if total > 0 {
         emit(app, "modpack", "Загрузка модпака", total, total);
     }
 
-    // Восстанавливаем исходный (файловый) порядок mods_entries по индексу.
     let mut collected: Vec<(usize, InstalledMod)> = results.into_iter().flatten().collect();
     collected.sort_by_key(|(i, _)| *i);
     let mods_entries: Vec<InstalledMod> = collected.into_iter().map(|(_, m)| m).collect();
@@ -741,7 +718,7 @@ async fn project_title(cl: &reqwest::Client, project_id: &str) -> (String, Strin
 
 #[tauri::command]
 pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Build, String> {
-    let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
+    let build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
     let loader = build.loader.clone();
     let mc = build.mc_version.clone();
     let cl = http()?;
@@ -757,6 +734,8 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
     let mut seen: HashSet<String> = build.mods.iter().map(|m| m.project_id.clone()).collect();
     let mut queue: Vec<(String, bool)> = vec![(project_id.clone(), true)];
 
+    let mut added: Vec<InstalledMod> = Vec::new();
+
     while let Some((pid, is_root)) = queue.pop() {
         if seen.contains(&pid) {
             continue;
@@ -768,12 +747,17 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
             Some(v) => v,
             None => {
                 if is_root {
-                    let what = match kind.as_str() {
-                        "resourcepack" => format!("Ресурспак не поддерживает {mc}."),
-                        "shader" => format!("Шейдер не поддерживает {mc}."),
-                        _ => format!("Мод не поддерживает {mc} · {loader}."),
-                    };
-                    return Err(format!("{what} Выберите другой или версию сборки."));
+                    return Err(match kind.as_str() {
+                        "resourcepack" => format!(
+                            "Ресурспак не подходит этой сборке. Выберите другую версию: {mc}"
+                        ),
+                        "shader" => {
+                            format!("Шейдер не подходит этой сборке. Выберите другую версию: {mc}")
+                        }
+                        _ => format!(
+                            "Мод не подходит этой сборке. Выберите другую версию: {mc} · {loader}"
+                        ),
+                    });
                 }
 
                 continue;
@@ -806,7 +790,7 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
 
         let version_id = ver["id"].as_str().unwrap_or("").to_string();
         let (title, icon) = project_title(&cl, &pid).await;
-        build.mods.push(InstalledMod {
+        added.push(InstalledMod {
             project_id: pid.clone(),
             version_id,
             name: title,
@@ -831,8 +815,7 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
         }
     }
 
-    builds::upsert_build(build.clone())?;
-    Ok(build)
+    builds::add_installed(&build_id, added)
 }
 
 #[tauri::command]
@@ -855,7 +838,7 @@ pub async fn modrinth_install_version(
     project_id: String,
     version_id: String,
 ) -> Result<Build, String> {
-    let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
+    let build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
     let loader = build.loader.clone();
     let mc = build.mc_version.clone();
     let cl = http()?;
@@ -885,11 +868,12 @@ pub async fn modrinth_install_version(
     if let Some(old) = build.mods.iter().find(|m| m.project_id == project_id) {
         let _ = std::fs::remove_file(builds::content_dir(&build_id, &old.kind).join(&old.filename));
     }
-    build.mods.retain(|m| m.project_id != project_id);
+
+    let mut added: Vec<InstalledMod> = Vec::new();
 
     download_to(&cl, &url, &dir.join(&filename)).await?;
     let (title, icon) = project_title(&cl, &project_id).await;
-    build.mods.push(InstalledMod {
+    added.push(InstalledMod {
         project_id: project_id.clone(),
         version_id: version_id.clone(),
         name: title,
@@ -900,7 +884,13 @@ pub async fn modrinth_install_version(
     });
 
     if is_mod {
-        let mut seen: HashSet<String> = build.mods.iter().map(|m| m.project_id.clone()).collect();
+
+        let mut seen: HashSet<String> = build
+            .mods
+            .iter()
+            .chain(added.iter())
+            .map(|m| m.project_id.clone())
+            .collect();
         let mut queue: Vec<String> = Vec::new();
         if let Some(deps) = ver["dependencies"].as_array() {
             for d in deps {
@@ -927,7 +917,7 @@ pub async fn modrinth_install_version(
                     let dname = f["filename"].as_str().unwrap_or("mod.jar").to_string();
                     download_to(&cl, &durl, &builds::mods_dir(&build_id).join(&dname)).await?;
                     let (t, ic) = project_title(&cl, &pid).await;
-                    build.mods.push(InstalledMod {
+                    added.push(InstalledMod {
                         project_id: pid.clone(),
                         version_id: v["id"].as_str().unwrap_or("").to_string(),
                         name: t,
@@ -952,6 +942,5 @@ pub async fn modrinth_install_version(
         }
     }
 
-    builds::upsert_build(build.clone())?;
-    Ok(build)
+    builds::add_installed(&build_id, added)
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Modal from "./Modal";
 import { migrateData } from "../api";
+import { t } from "../i18n";
 
 export default function DataMigrationModal() {
   const [busy, setBusy] = useState(false);
@@ -9,7 +10,7 @@ export default function DataMigrationModal() {
     if (busy) return;
     setBusy(true);
     window.dispatchEvent(
-      new CustomEvent("aciron-task-start", { detail: { name: "Перенос данных" } })
+      new CustomEvent("aciron-task-start", { detail: { name: t("Перенос данных") } })
     );
     try {
       await migrateData();
@@ -21,17 +22,18 @@ export default function DataMigrationModal() {
   };
 
   return (
-    <Modal title="Перенос данных Aciron" icon="fa-database" onClose={() => {}}>
+    <Modal title={t("Перенос данных Aciron")} icon="fa-database" dismissible={false} onClose={() => {}}>
       <div className="p-5">
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2.5 text-sm text-accent">
           <i className="fa-solid fa-circle-info mt-0.5" />
           <span>
-            Ваши данные (аккаунты, сборки, настройки) находятся в старом расположении. Они будут
-            перенесены в папку лаунчера — так их не потеряет удаление старой папки.
+            {t(
+              "Ваши данные (аккаунты, сборки, настройки) находятся в старом расположении. Они будут перенесены в папку лаунчера — так их не потеряет удаление старой папки."
+            )}
           </span>
         </div>
         <p className="text-xs text-muted">
-          Перенос занимает мгновение. После него окно перезагрузится автоматически.
+          {t("Перенос занимает мгновение. После него окно перезагрузится автоматически.")}
         </p>
         <div className="mt-5 flex justify-end">
           <button
@@ -42,12 +44,12 @@ export default function DataMigrationModal() {
             {busy ? (
               <>
                 <i className="fa-solid fa-spinner fa-spin" />
-                Перенос…
+                {t("Перенос…")}
               </>
             ) : (
               <>
                 <i className="fa-solid fa-truck-fast" />
-                Перенести
+                {t("Перенести")}
               </>
             )}
           </button>

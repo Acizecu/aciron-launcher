@@ -1,0 +1,120 @@
+# .github/workflows/release-prod.yml
+#
+# Сборка релиза основного канала под Windows, macOS и Linux.
+#
+# ЗАЧЕМ ИМЕННО CI. Приложение линкуется с системным webview каждой платформы:
+# WebView2 на Windows, WKWebView на macOS, WebKitGTK на Linux. Кросс-компиляции
+# для этого не существует — macOS-сборка требует Xcode и подписи, Linux-сборка
+# требует заголовков GTK/WebKitGTK. Собрать все три на одной машине нельзя ни при
+# каком старании, поэтому платформенные сборки идут на своих раннерах GitHub.
+#
+# ЧЕМ ОТЛИЧАЕТСЯ ОТ release-dev.yml:
+#   • НИКАКОГО --features dev-channel и никакого tauri.dev.effective.conf.json —
+#     это прод. Канал вшивается маркером ACIRON_BUILD_CHANNEL=stable, иначе
+#     build.rs пометит сборку как "local" и апдейтер в ней будет выключен.
+#   • Подпись — ПРОД-ключом. Он существует ровно один; новый ключ означал бы, что
+#     установленные у людей лаунчеры перестанут принимать обновления.
+#   • latest.json собирает tauri-action (includeUpdaterJson) — сразу по всем
+#     платформам. Ручной tools/make-latest-json.mjs умеет только Windows.
+#
+# Релиз создаётся ЧЕРНОВИКОМ: публикует его человек, посмотрев артефакты.
+#
+# СЕКРЕТЫ (Settings → Secrets and variables → Actions):
+#   ACIRON_ID_URL, ACIRON_CF_PROXY_URL, ACIRON_CLIENT_KEY, ACIRON_PROXY_TOKEN,
+#   ACIRON_MS_CLIENT_ID   — вшиваются в бинарь через build.rs
+#   VITE_ACIRON_ID_URL    — без него vite build падает намеренно (иначе скины и
+#                           плащи уехали бы на example.invalid, как в 0.9.0/0.9.1)
+#   TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) — прод-ключ апдейтера
+
+name: release-prod
+
+on:
+  push:
+    # Только чистый semver: теги дев-канала (v0.9.3-dev.7) сюда не попадают.
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write # создать черновик релиза и залить в него артефакты
+
+    strategy:
+      # Упавшая платформа не должна отменять две другие: лучше получить два
+      # установщика из трёх и починить третий, чем остаться без всего.
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon и Intel — отдельные сборки: универсальный бинарь
+          # тянет за собой обе цели и всё равно собирается дважды.
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            bundles: dmg,app
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            bundles: dmg,app
+          # 22.04, а не latest: собранное на новой glibc не запустится на
+          # системах постарше, обратное — запустится.
+          - platform: ubuntu-22.04
+            target: ""
+            bundles: deb,appimage
+          - platform: windows-latest
+            target: ""
+            bundles: nsis
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Системные библиотеки Linux
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            build-essential curl wget file libssl-dev libxdo-dev libgtk-3-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+          key: ${{ matrix.platform }}-${{ matrix.target }}
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Маркер канала. Пусто -> build.rs вшивает "local", апдейтер выключен,
+          # а рядом с версией висит жёлтое "LOCAL".
+          ACIRON_CHANNEL: stable
+          ACIRON_BUILD_CHANNEL: stable
+          ACIRON_ID_URL: ${{ secrets.ACIRON_ID_URL }}
+          ACIRON_CF_PROXY_URL: ${{ secrets.ACIRON_CF_PROXY_URL }}
+          ACIRON_CLIENT_KEY: ${{ secrets.ACIRON_CLIENT_KEY }}
+          ACIRON_PROXY_TOKEN: ${{ secrets.ACIRON_PROXY_TOKEN }}
+          ACIRON_MS_CLIENT_ID: ${{ secrets.ACIRON_MS_CLIENT_ID }}
+          VITE_ACIRON_ID_URL: ${{ secrets.VITE_ACIRON_ID_URL }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', github.run_number) }}
+          releaseName: Aciron Launcher v__VERSION__
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          # --bundles перебивает bundle.targets из tauri.conf.json (там "nsis",
+          # и на Linux/macOS сборка иначе просто не нашла бы что паковать).
+          args: >-
+            --bundles ${{ matrix.bundles }}
+            ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isTauri, getSettings } from "./api";
+import { ts } from "./i18n";
 
 async function appWin() {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -40,10 +41,7 @@ export function useLauncher() {
     const unlisteners: (() => void)[] = [];
     import("@tauri-apps/api/event").then(({ listen }) => {
       listen<Progress>("launch-progress", (e) => {
-        // PlayBar/DownloadBar показывают ТОЛЬКО прогресс запуска игры. Установку
-        // модпака и перенос данных (op="install"/"migrate") ведёт орб, а не эта
-        // панель — иначе ошибка установки поднимала бы баннер запуска, а её "done"
-        // сбрасывал бы состояние. Пустой op трактуем как запуск (совместимость).
+
         const op = e.payload.op ?? "";
         if (op && op !== "launch") return;
         setProgress(e.payload);
@@ -141,7 +139,7 @@ export function useLauncher() {
         setStatus("done");
         timer.current = window.setTimeout(() => setStatus("idle"), 4000);
       } catch (e) {
-        setError(String(e));
+        setError(ts(String(e)));
         setStatus("error");
         timer.current = window.setTimeout(() => setStatus("idle"), 6000);
       }

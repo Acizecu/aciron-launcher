@@ -2,11 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Modal from "./Modal";
 import Dropdown from "./Dropdown";
+import LoadingDots from "./LoadingDots";
+import { t, ts } from "../i18n";
+import LoaderVersionPicker from "./builds/LoaderVersionPicker";
 import {
   createBuild,
   listVersions,
   pickFile,
   setBuildImage,
+  setBuildLoader,
   type Loader,
   type VersionInfo,
 } from "../api";
@@ -31,6 +35,8 @@ export default function CreateBuildModal({
   const [name, setName] = useState("");
   const [loader, setLoader] = useState<Loader>("fabric");
   const [version, setVersion] = useState("");
+
+  const [loaderVersion, setLoaderVersion] = useState("");
   const [versions, setVersions] = useState<VersionInfo[] | null>(null);
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [imagePath, setImagePath] = useState("");
@@ -54,11 +60,19 @@ export default function CreateBuildModal({
 
   const submit = async () => {
     setError("");
-    if (!name.trim()) return setError("Введите название сборки");
-    if (!version) return setError("Выберите версию Minecraft");
+    if (!name.trim()) return setError(t("Введите название сборки"));
+    if (!version) return setError(t("Выберите версию Minecraft"));
     setBusy(true);
     try {
       const build = await createBuild(name.trim(), version, loader);
+
+      if (loaderVersion) {
+        try {
+          await setBuildLoader(build.id, loader, loaderVersion);
+        } catch {
+
+        }
+      }
       if (imagePath) {
         try {
           await setBuildImage(build.id, imagePath);
@@ -69,25 +83,25 @@ export default function CreateBuildModal({
       onCreated();
       onClose();
     } catch (e) {
-      setError(String(e));
+      setError(ts(String(e)));
     } finally {
       setBusy(false);
     }
   };
 
   const pickImage = async () => {
-    const f = await pickFile("Изображение", ["png", "jpg", "jpeg", "webp", "gif"]);
+    const f = await pickFile(t("Изображение"), ["png", "jpg", "jpeg", "webp", "gif"]);
     if (f) setImagePath(f);
   };
 
   return (
-    <Modal title="Новая сборка" icon="fa-cubes-stacked" onClose={onClose}>
+    <Modal title={t("Новая сборка")} icon="fa-cubes-stacked" onClose={onClose}>
       <div className="space-y-4 p-5">
         {}
         <div className="flex gap-4">
           <button
             onClick={pickImage}
-            title="Обложка"
+            title={t("Обложка")}
             className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-border bg-bg"
           >
             {imagePath ? (
@@ -100,27 +114,27 @@ export default function CreateBuildModal({
             <span className="absolute inset-0 grid place-items-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
               <span className="flex flex-col items-center gap-1 text-white">
                 <i className="fa-solid fa-camera" />
-                <span className="text-[10px] font-medium">Обложка</span>
+                <span className="text-[10px] font-medium">{t("Обложка")}</span>
               </span>
             </span>
           </button>
 
           <div className="flex min-w-0 flex-1 flex-col justify-center">
-            <label className="mb-1.5 block text-xs text-muted">Название сборки</label>
+            <label className="mb-1.5 block text-xs text-muted">{t("Название сборки")}</label>
             <input
               autoFocus
               className={inputCls}
               value={name}
-              placeholder="Моя сборка"
+              placeholder={t("Моя сборка")}
               maxLength={40}
               onChange={(e) => setName(e.target.value)}
             />
-            <p className="mt-1.5 text-[11px] text-muted">Обложку можно поменять позже.</p>
+            <p className="mt-1.5 text-[11px] text-muted">{t("Обложку можно поменять позже.")}</p>
           </div>
         </div>
 
         <div>
-          <span className="mb-1.5 block text-xs text-muted">Ядро (загрузчик модов)</span>
+          <span className="mb-1.5 block text-xs text-muted">{t("Ядро (загрузчик модов)")}</span>
           <div className="grid grid-cols-2 gap-2">
             {LOADERS.map((l) => (
               <button
@@ -141,9 +155,9 @@ export default function CreateBuildModal({
                 </span>
                 <div className="min-w-0">
                   <div className={`text-sm font-semibold ${loader === l.id ? "text-accent" : "text-text"}`}>
-                    {l.label}
+                    {t(l.label)}
                   </div>
-                  <div className="truncate text-[11px] text-muted">{l.desc}</div>
+                  <div className="truncate text-[11px] text-muted">{t(l.desc)}</div>
                 </div>
               </button>
             ))}
@@ -152,7 +166,7 @@ export default function CreateBuildModal({
 
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs text-muted">Версия Minecraft</span>
+            <span className="text-xs text-muted">{t("Версия Minecraft")}</span>
             <button
               onClick={() => setShowSnapshots((s) => !s)}
               className={`text-[11px] font-medium transition-colors ${
@@ -160,25 +174,38 @@ export default function CreateBuildModal({
               }`}
             >
               <i className="fa-solid fa-flask mr-1" />
-              Снапшоты
+              {t("Снапшоты")}
             </button>
           </div>
           {versions === null ? (
             <div className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-muted">
               <i className="fa-solid fa-spinner fa-spin" />
-              Загрузка версий…
+              {t("Загрузка версий")}
+              <LoadingDots className="ml-1" />
             </div>
           ) : (
             <Dropdown
               value={version}
               onChange={setVersion}
-              placeholder="Выберите версию"
+              placeholder={t("Выберите версию")}
               options={versionOptions.map((v) => ({
                 value: v.id,
                 label: v.id + (v.type !== "release" ? ` (${v.type})` : ""),
               }))}
             />
           )}
+        </div>
+
+        <div>
+          <span className="mb-1.5 block text-xs text-muted">
+            {t("Версия {loader}", { loader: LOADERS.find((l) => l.id === loader)?.label ?? loader })}
+          </span>
+          <LoaderVersionPicker
+            loader={loader}
+            mcVersion={version}
+            value={loaderVersion}
+            onChange={setLoaderVersion}
+          />
         </div>
 
         {error && (
@@ -193,7 +220,7 @@ export default function CreateBuildModal({
             onClick={onClose}
             className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
           >
-            Отмена
+            {t("Отмена")}
           </button>
           <button
             onClick={submit}
@@ -201,7 +228,7 @@ export default function CreateBuildModal({
             className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-60"
           >
             {busy && <i className="fa-solid fa-spinner fa-spin" />}
-            Создать
+            {t("Создать")}
           </button>
         </div>
       </div>

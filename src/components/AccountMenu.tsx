@@ -14,15 +14,16 @@ import {
 import Head from "./Head";
 import Modal from "./Modal";
 import AddAccountModal from "./AddAccountModal";
+import { t, ts } from "../i18n";
 
 const typeLabel = (a: Account) =>
   a.type === "microsoft"
     ? "Microsoft"
     : a.type === "aciron"
     ? a.licensed
-      ? "Aciron ID · лицензия"
+      ? t("Aciron ID · лицензия")
       : "Aciron ID"
-    : "Оффлайн";
+    : t("Оффлайн");
 
 export default function AccountMenu() {
   const [open, setOpen] = useState(false);
@@ -45,14 +46,14 @@ export default function AccountMenu() {
     if (!active) return;
     setWarn(false);
     setLinking(true);
-    setLinkMsg("Открываем вход Microsoft в браузере…");
+    setLinkMsg(t("Открываем вход Microsoft в браузере…"));
 
     try {
       await acironLinkLicense(active.id);
       setLinkMsg("");
       refresh();
     } catch (e) {
-      setLinkMsg(String(e).replace(/^Error:\s*/, ""));
+      setLinkMsg(ts(String(e)));
     } finally {
       setLinking(false);
     }
@@ -86,10 +87,10 @@ export default function AccountMenu() {
         )}
         <div className="text-left leading-tight">
           <div className="max-w-[120px] truncate text-sm font-semibold text-text">
-            {active?.username ?? "Нет аккаунта"}
+            {active?.username ?? t("Нет аккаунта")}
           </div>
           <div className="text-[11px] text-muted">
-            {active ? typeLabel(active) : "Добавьте аккаунт"}
+            {active ? typeLabel(active) : t("Добавьте аккаунт")}
           </div>
         </div>
         <i
@@ -102,11 +103,11 @@ export default function AccountMenu() {
       {open && (
         <div className="absolute bottom-full right-0 mb-2 w-64 overflow-hidden rounded-xl border border-border bg-panel shadow-xl shadow-black/40">
           <div className="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Аккаунты
+            {t("Аккаунты")}
           </div>
           <div className="max-h-56 overflow-y-auto pb-1">
             {state.accounts.length === 0 && (
-              <div className="px-3 py-4 text-center text-xs text-muted">Список пуст</div>
+              <div className="px-3 py-4 text-center text-xs text-muted">{t("Список пуст")}</div>
             )}
             {state.accounts.map((a) => {
               const isActive = a.id === active?.id;
@@ -142,7 +143,7 @@ export default function AccountMenu() {
                 <span className="grid h-[30px] w-[30px] place-items-center rounded-md bg-card text-accent">
                   <i className="fa-solid fa-id-badge text-xs" />
                 </span>
-                Личный кабинет
+                {t("Личный кабинет")}
               </button>
 
               {active.licensed ? (
@@ -150,14 +151,14 @@ export default function AccountMenu() {
                   <span className="grid h-[30px] w-[30px] place-items-center rounded-md bg-card text-accent">
                     <i className="fa-solid fa-certificate text-xs" />
                   </span>
-                  Лицензия подключена
+                  {t("Лицензия подключена")}
                 </div>
               ) : linking ? (
                 <div className="flex items-center gap-2.5 px-2.5 py-2 text-xs text-muted">
                   <span className="grid h-[30px] w-[30px] place-items-center rounded-md bg-card text-accent">
                     <i className="fa-solid fa-spinner fa-spin text-xs" />
                   </span>
-                  {linkMsg || "Ожидание входа Microsoft…"}
+                  {linkMsg || t("Ожидание входа Microsoft…")}
                 </div>
               ) : (
                 <button
@@ -167,7 +168,7 @@ export default function AccountMenu() {
                   <span className="grid h-[30px] w-[30px] place-items-center rounded-md bg-card text-accent">
                     <i className="fa-solid fa-key text-xs" />
                   </span>
-                  Подключить лицензию
+                  {t("Подключить лицензию")}
                 </button>
               )}
               {linkMsg && !linking && !active.licensed && (
@@ -187,7 +188,7 @@ export default function AccountMenu() {
               <span className="grid h-[30px] w-[30px] place-items-center rounded-md border border-dashed border-accent/50">
                 <i className="fa-solid fa-plus text-xs" />
               </span>
-              Добавить аккаунт
+              {t("Добавить аккаунт")}
             </button>
           </div>
         </div>
@@ -197,24 +198,23 @@ export default function AccountMenu() {
 
       {warn && active && (
         <Modal
-          title="Подключение лицензии"
+          title={t("Подключение лицензии")}
           icon="fa-triangle-exclamation"
           onClose={() => setWarn(false)}
         >
           <div className="space-y-4 p-5">
             <p className="text-sm text-text">
-              Вы привяжете лицензию Minecraft (Microsoft) к аккаунту{" "}
-              <b>{active.aciron_name || active.username}</b> и будете играть через неё.
+              {t("Вы привяжете лицензию Minecraft (Microsoft) к аккаунту {name} и будете играть через неё.", {
+                name: active.aciron_name || active.username,
+              })}
             </p>
 
             <div className="space-y-2.5">
               <WarnRow icon="fa-user-pen">
-                Ник аккаунта <b>сменится на лицензионный</b> — именно он будет
-                отображаться в игре и на серверах.
+                {t("Ник аккаунта сменится на лицензионный — именно он будет отображаться в игре и на серверах.")}
               </WarnRow>
               <WarnRow icon="fa-scale-balanced">
-                Используйте <b>только свою</b> лицензию. Взлом, кража или использование
-                чужих аккаунтов — <b>не ответственность Aciron</b>.
+                {t("Используйте только свою лицензию. Взлом, кража или использование чужих аккаунтов — не ответственность Aciron.")}
               </WarnRow>
             </div>
 
@@ -223,14 +223,14 @@ export default function AccountMenu() {
                 onClick={() => setWarn(false)}
                 className="flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
               >
-                Отмена
+                {t("Отмена")}
               </button>
               <button
                 onClick={linkLicense}
                 className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
               >
                 <i className="fa-brands fa-microsoft" />
-                Продолжить и войти
+                {t("Продолжить и войти")}
               </button>
             </div>
           </div>

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ACIRON_ID_API, friendRespond, type PendingUser } from "../api";
+import Head from "./Head";
 import { patchFriends, refreshFriends, restoreFriends } from "../friends";
 import { useToast } from "../ToastContext";
+import { t, ts } from "../i18n";
 
 const LIFE_MS = 5000;
 
@@ -61,7 +63,7 @@ export default function FriendRequestToast({
     } catch (e) {
 
       restoreFriends(prev);
-      toast(String(e).replace(/^Error:\s*/, ""), "error");
+      toast(ts(String(e)), "error");
     }
   };
 
@@ -82,30 +84,16 @@ export default function FriendRequestToast({
     >
       <div className="flex items-center gap-3">
         {}
-        <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-card text-muted">
-          {avatar ? (
-            <div
-              className="h-10 w-10"
-              style={{
-                backgroundImage: `url(${avatar})`,
-                backgroundSize: "320px",
-                backgroundPosition: "-40px -40px",
-                imageRendering: "pixelated",
-              }}
-            />
-          ) : (
-            <i className="fa-solid fa-user text-sm" />
-          )}
-        </div>
+        <Head skin={avatar} name={user.username} size={40} className="shrink-0" />
 
         <div className="min-w-0 flex-1">
           <div className="line-clamp-1 text-sm font-semibold text-text">{user.username}</div>
-          <div className="text-[11px] text-muted">хочет добавить вас в друзья</div>
+          <div className="text-[11px] text-muted">{t("хочет добавить вас в друзья")}</div>
         </div>
 
         <button
           onClick={close}
-          title="Скрыть"
+          title={t("Скрыть")}
           className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted transition-colors hover:text-text"
         >
           <i className="fa-solid fa-xmark text-xs" />
@@ -118,14 +106,14 @@ export default function FriendRequestToast({
           disabled={busy}
           className="flex-1 rounded-lg bg-accent py-2 text-xs font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
         >
-          Принять
+          {t("Принять")}
         </button>
         <button
           onClick={() => void respond(false)}
           disabled={busy}
           className="flex-1 rounded-lg border border-border py-2 text-xs font-medium text-muted transition-colors hover:text-text disabled:opacity-60"
         >
-          Отклонить
+          {t("Отклонить")}
         </button>
       </div>
     </div>

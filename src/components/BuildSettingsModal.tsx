@@ -2,18 +2,23 @@ import { useEffect, useMemo, useState } from "react";
 import Modal from "./Modal";
 import BuildCover from "./BuildCover";
 import Dropdown from "./Dropdown";
+import LoaderVersionPicker from "./builds/LoaderVersionPicker";
 import {
   listVersions,
   changeBuildVersion,
   renameBuild,
   setBuildImage,
   setBuildBanner,
+  setBuildLoader,
   getBuildBanner,
   pickFile,
   type Build,
+  type Loader,
   type VersionInfo,
 } from "../api";
 import { useToast } from "../ToastContext";
+import LoadingDots from "./LoadingDots";
+import { t, ts } from "../i18n";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none transition-colors focus:border-accent";
@@ -24,6 +29,13 @@ const loaderLabel: Record<string, string> = {
   neoforge: "NeoForge",
   quilt: "Quilt",
 };
+
+const LOADERS: { id: Loader; label: string; icon: string }[] = [
+  { id: "fabric", label: "Fabric", icon: "fa-scroll" },
+  { id: "forge", label: "Forge", icon: "fa-hammer" },
+  { id: "neoforge", label: "NeoForge", icon: "fa-fire" },
+  { id: "quilt", label: "Quilt", icon: "fa-layer-group" },
+];
 
 export default function BuildSettingsModal({
   build,
@@ -37,6 +49,8 @@ export default function BuildSettingsModal({
   const [versions, setVersions] = useState<VersionInfo[] | null>(null);
   const [showSnapshots, setShowSnapshots] = useState(false);
   const [version, setVersion] = useState(build.mc_version);
+  const [loader, setLoader] = useState<Loader>(build.loader as Loader);
+  const [loaderVersion, setLoaderVersion] = useState(build.loader_version ?? "");
   const [name, setName] = useState(build.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -52,15 +66,15 @@ export default function BuildSettingsModal({
   }, [build.id]);
 
   const changeBanner = async () => {
-    const f = await pickFile("Изображение", ["png", "jpg", "jpeg", "webp", "gif"]);
+    const f = await pickFile(t("Изображение"), ["png", "jpg", "jpeg", "webp", "gif"]);
     if (!f) return;
     try {
       const updated = await setBuildBanner(build.id, f);
       onUpdated(updated);
       setBanner(await getBuildBanner(build.id));
-      toast("Баннер обновлён", "success");
+      toast(t("Баннер обновлён"), "success");
     } catch (e) {
-      toast(String(e), "error");
+      toast(ts(String(e)), "error");
     }
   };
 
@@ -69,9 +83,9 @@ export default function BuildSettingsModal({
       const updated = await setBuildBanner(build.id, "");
       onUpdated(updated);
       setBanner(null);
-      toast("Баннер убран", "info");
+      toast(t("Баннер убран"), "info");
     } catch (e) {
-      toast(String(e), "error");
+      toast(ts(String(e)), "error");
     }
   };
 
@@ -84,23 +98,25 @@ export default function BuildSettingsModal({
   }, [versions, showSnapshots, build.mc_version]);
 
   const changeCover = async () => {
-    const f = await pickFile("Изображение", ["png", "jpg", "jpeg", "webp", "gif"]);
+    const f = await pickFile(t("Изображение"), ["png", "jpg", "jpeg", "webp", "gif"]);
     if (!f) return;
     try {
       const updated = await setBuildImage(build.id, f);
       onUpdated(updated);
-      toast("Обложка обновлена", "success");
+      toast(t("Обложка обновлена"), "success");
     } catch (e) {
-      toast(String(e), "error");
+      toast(ts(String(e)), "error");
     }
   };
 
   const nameChanged = name.trim() !== "" && name.trim() !== build.name;
   const versionChanged = version !== build.mc_version;
+  const loaderChanged = loader !== build.loader;
+  const loaderVersionChanged = loaderVersion !== (build.loader_version ?? "");
 
   const apply = async () => {
     setError("");
-    if (!nameChanged && !versionChanged) {
+    if (!nameChanged && !versionChanged && !loaderChanged && !loaderVersionChanged) {
       onClose();
       return;
     }
@@ -115,17 +131,31 @@ export default function BuildSettingsModal({
         onUpdated(upd);
         const off = upd.mods.filter((m) => !m.enabled).length;
         toast(
-          `Версия изменена на ${version}` +
-            (off ? ` · ${off} мод(ов) выключено (нет под эту версию)` : ""),
+          t("Версия изменена на {v}", { v: version }) +
+            (off ? t(" · {n} мод(ов) выключено (нет под эту версию)", { n: off }) : ""),
           "success"
         );
-      } else if (nameChanged) {
-        toast("Сохранено", "success");
+      }
+
+      if (loaderChanged || loaderVersionChanged) {
+        const upd = await setBuildLoader(build.id, loader, loaderVersion);
+        onUpdated(upd);
+        toast(
+          loaderVersion
+            ? t("Ядро: {loader} {version}", {
+                loader: loaderLabel[loader] ?? loader,
+                version: loaderVersion,
+              })
+            : t("Ядро: {loader}, последняя версия", { loader: loaderLabel[loader] ?? loader }),
+          "success"
+        );
+      } else if (nameChanged && !versionChanged) {
+        toast(t("Сохранено"), "success");
       }
       onClose();
     } catch (e) {
-      setError(String(e));
-      toast(String(e), "error");
+      setError(ts(String(e)));
+      toast(ts(String(e)), "error");
     } finally {
       setBusy(false);
     }
@@ -133,8 +163,12 @@ export default function BuildSettingsModal({
 
   return (
     <Modal
-      title="Настройка сборки"
-      subtitle={`${loaderLabel[build.loader] ?? build.loader} · ядро менять нельзя`}
+      title={t("Настройка сборки")}
+      subtitle={
+        build.loader_version
+          ? `${loaderLabel[build.loader] ?? build.loader} ${build.loader_version}`
+          : loaderLabel[build.loader] ?? build.loader
+      }
       icon="fa-gear"
       onClose={onClose}
     >
@@ -143,49 +177,49 @@ export default function BuildSettingsModal({
         <div className="flex gap-4">
           <button
             onClick={changeCover}
-            title="Изменить обложку"
+            title={t("Изменить обложку")}
             className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-border"
           >
             <BuildCover build={build} className="h-24 w-24" />
             <span className="absolute inset-0 grid place-items-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
               <span className="flex flex-col items-center gap-1 text-white">
                 <i className="fa-solid fa-camera" />
-                <span className="text-[10px] font-medium">Обложка</span>
+                <span className="text-[10px] font-medium">{t("Обложка")}</span>
               </span>
             </span>
           </button>
 
           <div className="flex min-w-0 flex-1 flex-col justify-center">
-            <label className="mb-1.5 block text-xs text-muted">Название сборки</label>
+            <label className="mb-1.5 block text-xs text-muted">{t("Название сборки")}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && apply()}
               maxLength={60}
-              placeholder="Моя сборка"
+              placeholder={t("Моя сборка")}
               className={inputCls}
             />
-            <p className="mt-1.5 text-[11px] text-muted">Папка сборки на диске не изменится.</p>
+            <p className="mt-1.5 text-[11px] text-muted">{t("Папка сборки на диске не изменится.")}</p>
           </div>
         </div>
 
         {}
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs text-muted">Баннер карточки</span>
+            <span className="text-xs text-muted">{t("Баннер карточки")}</span>
             {banner && (
               <button
                 onClick={dropBanner}
                 className="text-[11px] font-medium text-muted transition-colors hover:text-[#ef4444]"
               >
                 <i className="fa-solid fa-trash-can mr-1" />
-                Убрать
+                {t("Убрать")}
               </button>
             )}
           </div>
           <button
             onClick={changeBanner}
-            title={banner ? "Сменить баннер" : "Выбрать картинку"}
+            title={banner ? t("Сменить баннер") : t("Выбрать картинку")}
             className="group relative h-28 w-full overflow-hidden rounded-[16px] border border-border bg-bg"
           >
             {banner ? (
@@ -194,7 +228,7 @@ export default function BuildSettingsModal({
               <span className="grid h-full w-full place-items-center text-muted">
                 <span className="flex flex-col items-center gap-1">
                   <i className="fa-solid fa-image" />
-                  <span className="text-[11px]">Добавить баннер</span>
+                  <span className="text-[11px]">{t("Добавить баннер")}</span>
                 </span>
               </span>
             )}
@@ -202,20 +236,20 @@ export default function BuildSettingsModal({
               <span className="absolute inset-0 grid place-items-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
                 <span className="flex flex-col items-center gap-1 text-white">
                   <i className="fa-solid fa-camera" />
-                  <span className="text-[10px] font-medium">Сменить</span>
+                  <span className="text-[10px] font-medium">{t("Сменить")}</span>
                 </span>
               </span>
             )}
           </button>
           <p className="mt-1.5 text-[11px] text-muted">
-            Показывается на карточке сборки. Рекомендуемый размер — 570×300.
+            {t("Показывается на карточке сборки. Рекомендуемый размер — 570×300.")}
           </p>
         </div>
 
         {}
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs text-muted">Версия Minecraft</span>
+            <span className="text-xs text-muted">{t("Версия Minecraft")}</span>
             <button
               onClick={() => setShowSnapshots((s) => !s)}
               className={`text-[11px] font-medium transition-colors ${
@@ -223,13 +257,13 @@ export default function BuildSettingsModal({
               }`}
             >
               <i className="fa-solid fa-flask mr-1" />
-              Снапшоты
+              {t("Снапшоты")}
             </button>
           </div>
           {versions === null ? (
             <div className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-muted">
               <i className="fa-solid fa-spinner fa-spin" />
-              Загрузка версий…
+              {t("Загрузка версий")}<LoadingDots className="ml-1" />
             </div>
           ) : (
             <Dropdown
@@ -244,9 +278,53 @@ export default function BuildSettingsModal({
           {versionChanged && (
             <p className="mt-2 flex items-start gap-1.5 text-[11px] text-muted">
               <i className="fa-solid fa-circle-info mt-0.5 text-accent" />
-              Моды будут пере-подобраны под {version}; те, которых под неё нет, — выключены.
+              {t("Моды будут пере-подобраны под {v}; те, которых под неё нет, — выключены.", {
+                v: version,
+              })}
             </p>
           )}
+        </div>
+
+        {}
+        <div>
+          <span className="mb-1.5 block text-xs text-muted">{t("Ядро (загрузчик модов)")}</span>
+          <div className="grid grid-cols-4 gap-2">
+            {LOADERS.map((l) => (
+              <button
+                key={l.id}
+                onClick={() => setLoader(l.id)}
+                className={`flex flex-col items-center gap-1.5 rounded-lg border p-2.5 transition-colors ${
+                  loader === l.id
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-border bg-card text-muted hover:border-accent/40 hover:text-text"
+                }`}
+              >
+                <i className={`fa-solid ${l.icon} text-sm`} />
+                <span className="text-[11px] font-medium">{l.label}</span>
+              </button>
+            ))}
+          </div>
+          {loaderChanged && (
+            <p className="mt-2 flex items-start gap-1.5 text-[11px] text-[#fbbf24]">
+              <i className="fa-solid fa-triangle-exclamation mt-0.5" />
+              {t(
+                "Моды пишут под конкретное ядро: установленные под {from} на {to} скорее всего не заработают. Файлы останутся на месте — их можно выключить или удалить вручную.",
+                { from: loaderLabel[build.loader] ?? build.loader, to: loaderLabel[loader] ?? loader }
+              )}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <span className="mb-1.5 block text-xs text-muted">
+            {t("Версия {loader}", { loader: loaderLabel[loader] ?? loader })}
+          </span>
+          <LoaderVersionPicker
+            loader={loader}
+            mcVersion={version}
+            value={loaderVersion}
+            onChange={setLoaderVersion}
+          />
         </div>
 
         {error && (
@@ -261,7 +339,7 @@ export default function BuildSettingsModal({
             onClick={onClose}
             className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
           >
-            Закрыть
+            {t("Закрыть")}
           </button>
           <button
             onClick={apply}
@@ -269,7 +347,7 @@ export default function BuildSettingsModal({
             className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-60"
           >
             {busy && <i className="fa-solid fa-spinner fa-spin" />}
-            {busy ? "Сохранение…" : "Сохранить"}
+            {busy ? t("Сохранение…") : t("Сохранить")}
           </button>
         </div>
       </div>

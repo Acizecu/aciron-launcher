@@ -7,9 +7,6 @@ use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tauri::AppHandle;
 
-// Локальный emit тегирует ВСЕ события этого модуля как операцию "install", чтобы
-// орб установки не закрывался чужим "done" от запуска игры, а ошибка установки не
-// поднимала баннер запуска (launch-progress — глобальное событие).
 fn emit(app: &AppHandle, stage: &str, message: &str, current: u64, total: u64) {
     emit_op(app, "install", stage, message, current, total);
 }
@@ -41,11 +38,6 @@ fn build_client() -> Result<reqwest::Client, String> {
         .map_err(|e| e.to_string())
 }
 
-// B8: один ленивый reqwest::Client на модуль (образец — cancel.rs/discord.rs OnceLock).
-// Client клонируется дёшево и шарит внутренний connection-pool/TLS, поэтому команды
-// (search/project/versions/install) переиспользуют keep-alive соединения между вызовами.
-// Конфигурация статична (user-agent + compile-time proxy_headers), так что кэшировать
-// клиент безопасно — поведение идентично прежнему построению на каждый вызов.
 fn http() -> Result<reqwest::Client, String> {
     static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
     CLIENT.get_or_init(build_client).clone()
@@ -116,13 +108,6 @@ pub async fn ftb_search(
         .take(limit as usize)
         .collect();
 
-    // B5: раньше детали каждого пака страницы тянулись строго последовательно
-    // (N round-trip'ов до api.modpacks.ch перед выдачей). Теперь тянем через
-    // buffer_unordered(8) — задержка ≈ один RTT вместо суммы. batch-эндпоинта
-    // у modpacks.ch public нет, поэтому параллелим по одному запросу на пак.
-    // Список ранжирован (search/popular), а buffer_unordered отдаёт результаты
-    // в произвольном порядке — поэтому тегируем индексом и восстанавливаем порядок,
-    // а неуспешные запросы отбрасываем ровно как прежний `if let Ok(..)`.
     use futures::StreamExt;
     let tasks = page.into_iter().enumerate().map(|(i, id)| {
         let cl = cl.clone();
@@ -227,11 +212,6 @@ pub async fn ftb_project_versions(project_id: String) -> Result<Value, String> {
     Ok(Value::Array(versions))
 }
 
-// B6: стриминг ответа чанками вместо буферизации всего файла в память
-// (.bytes() -> tokio::fs::write). Образец — modrinth.rs download_cancelable.
-// Пиковое потребление памяти теперь ограничено размером чанка, а не всего файла;
-// это особенно важно при параллельной установке модпака (B3). Поведение (создать
-// родительскую директорию, записать байты в path, вернуть ошибку сети/IO) неизменно.
 async fn download_to(cl: &reqwest::Client, url: &str, path: &Path) -> Result<(), String> {
     use futures::StreamExt;
     use tokio::io::AsyncWriteExt;
@@ -239,8 +219,7 @@ async fn download_to(cl: &reqwest::Client, url: &str, path: &Path) -> Result<(),
     if let Some(p) = path.parent() {
         tokio::fs::create_dir_all(p).await.map_err(|e| e.to_string())?;
     }
-    // Пишем во временный .part и атомарно переименовываем: обрыв/ошибка не оставят
-    // усечённый файл на месте итогового (иначе он сошёл бы за корректно установленный).
+
     let tmp = {
         let mut s = path.as_os_str().to_os_string();
         s.push(".part");
@@ -288,8 +267,7 @@ pub async fn ftb_install_modpack(
     project_id: String,
     version_id: Option<String>,
 ) -> Result<Build, String> {
-    // Обёртка: любая ошибка (кроме отмены) шлёт "error", иначе орб установки завис
-    // бы на «Подготовка…» без сигнала о сбое. Отмену ошибкой не считаем.
+
     let res = ftb_install_inner(app.clone(), project_id, version_id).await;
     if let Err(e) = &res {
         if e != crate::cancel::CANCELLED {
@@ -305,7 +283,7 @@ async fn ftb_install_inner(
     version_id: Option<String>,
 ) -> Result<Build, String> {
     let cl = http()?;
-    // Снимаем прошлую пометку отмены под общим ключом орба ("legacy").
+
     crate::cancel::reset("legacy");
     let id = strip_id(&project_id).to_string();
 
@@ -350,32 +328,9 @@ async fn ftb_install_inner(
     let files = manifest["files"].as_array().cloned().unwrap_or_default();
     let total = files.len() as u64;
 
-    // B3: раньше файлы модпака обрабатывались строго последовательно — на каждый
-    // CF-файл resolve_url делал лишний round-trip к download-url прокси (ftb.rs),
-    // а затем download_to тоже .await по одному. На крупных FTB-модпаках это
-    // сотни сериализованных сетевых операций. Теперь и resolve_url, и download_to
-    // выполняются внутри одной задачи на файл, а задачи гоняются через
-    // buffer_unordered(8) (CF-прокси строг по rate-limit — держим 8, как в
-    // curseforge.rs/modrinth check_build_updates).
-    //
-    // Поведение сохранено 1-в-1:
-    //  * прогресс: как и раньше, каждый файл эмитит ровно один тик "modpack"/
-    //    "Загрузка модпака"; счётчик атомарный (образец — launcher.rs done.fetch_add),
-    //    значение current теперь порядковый номер завершения (total совпадает,
-    //    монотонно 1..=total). Пустой name по-прежнему не эмитит прогресс (ранний
-    //    `continue` без emit) — такой файл возвращает None и не двигает счётчик;
-    //  * serveronly и провал safe_join по-прежнему эмитят прогресс и не качаются;
-    //  * mods_entries собираются по индексу файла и восстанавливаются в исходном
-    //    порядке (buffer_unordered отдаёт результаты вразнобой);
-    //  * каждый файл пишется в свой safe_join-путь, гонок по файловой системе нет.
     use futures::StreamExt;
     let done = Arc::new(AtomicU64::new(0));
-    // into_iter() (а не iter()) отдаёт владение Value в замыкание: раньше замыкание
-    // принимало &serde_json::Value и клонировало его внутри (let f = f.clone()), из-за
-    // чего async-блок захватывал заём и не был higher-ranked-lifetime general enough —
-    // tauri::generate_handler не мог доказать FnOnce для любых лайфтаймов. Передавая
-    // owned `f`, заём через границу async исчезает (HRTB-ошибка уходит), а лишний clone
-    // устранён. `files` — уже owned Vec и дальше не используется, поведение 1-в-1.
+
     let tasks = files.into_iter().enumerate().map(|(i, f)| {
         let cl = cl.clone();
         let app = app.clone();
@@ -393,7 +348,7 @@ async fn ftb_install_inner(
             }
             let fname = f["name"].as_str().unwrap_or("").to_string();
             if fname.is_empty() {
-                // как и в исходнике: ранний выход без эмита прогресса
+
                 return None;
             }
 
@@ -409,8 +364,7 @@ async fn ftb_install_inner(
             };
 
             let mut entry: Option<InstalledMod> = None;
-            // Отмена: не начинаем скачивание оставшихся файлов (итоговая очистка
-            // сборки — после сбора результатов).
+
             if !crate::cancel::is_cancelled("legacy") {
               if let Some(url) = resolve_url(&cl, &f).await {
                 if download_to(&cl, &url, &dest).await.is_ok()
@@ -444,9 +398,6 @@ async fn ftb_install_inner(
     collected.sort_by_key(|(i, _)| *i);
     let mods_entries: Vec<InstalledMod> = collected.into_iter().map(|(_, e)| e).collect();
 
-    // Отмена во время закачки → удаляем осиротевшую сборку целиком. Папка создана
-    // create_build этой операцией, поэтому remove_dir_all безопасен и не трогает
-    // ранее существовавшие данные (образец: modrinth build_from_mrpack).
     if crate::cancel::is_cancelled("legacy") {
         let _ = builds::delete_build(build_id.clone());
         return Err(crate::cancel::CANCELLED.into());

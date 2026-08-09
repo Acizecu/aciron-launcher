@@ -15,12 +15,15 @@ import SettingsModal from "./components/SettingsModal";
 import BackgroundCubes from "./components/BackgroundCubes";
 import FirstRunImport from "./components/FirstRunImport";
 import DataMigrationModal from "./components/DataMigrationModal";
-import { DEV } from "./config";
+import Onboarding from "./components/Onboarding";
+import Tooltip from "./components/Tooltip";
+import { DEBUG_TOOLS, DEV } from "./config";
 import { LauncherProvider } from "./LauncherContext";
 import { ToastProvider } from "./ToastContext";
 import FriendRequestToasts from "./components/FriendRequestToasts";
 import ChatToasts from "./components/ChatToasts";
 import { ThemeProvider } from "./ThemeContext";
+import { t, useLang } from "./i18n";
 import {
   getSettings,
   hardwareCapable,
@@ -29,6 +32,7 @@ import {
   openUrl,
   scanExternalInstances,
   dataMigrationPending,
+  pendingPack,
   type ExternalInstance,
 } from "./api";
 
@@ -54,6 +58,8 @@ const DEBUG_INSTANCES: ExternalInstance[] = [
 ];
 
 function AppInner() {
+
+  useLang();
   const [active, setActive] = useState<NavId>("home");
   const [anim, setAnim] = useState(false);
   const [uiScale, setUiScale] = useState(100);
@@ -61,6 +67,7 @@ function AppInner() {
   const [migratePrompt, setMigratePrompt] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notifySound, setNotifySound] = useState(true);
+  const [onboarding, setOnboarding] = useState(false);
 
   const showBottomBar =
     active !== "builds" && active !== "servers" && active !== "wardrobe" && active !== "friends";
@@ -75,6 +82,16 @@ function AppInner() {
     setActive(id);
   };
 
+  const offerImport = async () => {
+    try {
+      if (!(await firstRunPending())) return;
+      const found = await scanExternalInstances();
+      if (found.length > 0) setImportList(found);
+    } catch {
+
+    }
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -82,9 +99,13 @@ function AppInner() {
           setMigratePrompt(true);
           return;
         }
-        if (!(await firstRunPending())) return;
-        const found = await scanExternalInstances();
-        if (found.length > 0) setImportList(found);
+
+        const s = await getSettings();
+        if (!s.onboarded && (await firstRunPending())) {
+          setOnboarding(true);
+          return;
+        }
+        await offerImport();
       } catch {
 
       }
@@ -92,18 +113,50 @@ function AppInner() {
   }, []);
 
   useEffect(() => {
-    const open = () => setActive("friends");
+    const open = (e: Event) => {
+
+      const id = (e as CustomEvent<string>).detail;
+      if (id) (window as unknown as { __acironOpenChat?: string }).__acironOpenChat = id;
+      setActive("friends");
+    };
     window.addEventListener("aciron-open-chat", open);
     return () => window.removeEventListener("aciron-open-chat", open);
   }, []);
 
-  // Переход к сборке из «Последних запусков»: RecentCard кладёт id в window и шлёт
-  // событие; мы переключаемся на вкладку «Сборки», а BuildsPage при монтировании
-  // прочитает window.__acironOpenBuild и откроет нужную сборку.
   useEffect(() => {
     const open = () => setActive("builds");
     window.addEventListener("aciron-open-build", open);
     return () => window.removeEventListener("aciron-open-build", open);
+  }, []);
+
+  useEffect(() => {
+    const hand = (path: string) => {
+      if (!path) return;
+      (window as unknown as { __acironOpenPack?: string }).__acironOpenPack = path;
+      setActive("builds");
+
+      window.dispatchEvent(new CustomEvent("aciron-open-pack", { detail: path }));
+    };
+
+    void pendingPack()
+      .then((p) => {
+        if (p) hand(p);
+      })
+      .catch(() => {});
+
+    if (!isTauri) return;
+    let off: (() => void) | undefined;
+    let dead = false;
+    void (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      const un = await listen<string>("acpack-open", (e) => hand(e.payload));
+      if (dead) un();
+      else off = un;
+    })();
+    return () => {
+      dead = true;
+      off?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -113,11 +166,15 @@ function AppInner() {
   }, []);
 
   useEffect(() => {
-    if (!DEV) return;
+    if (!DEV && !DEBUG_TOOLS) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "F6") {
         e.preventDefault();
         setMigratePrompt((v) => !v);
+      }
+      if (e.key === "F7") {
+        e.preventDefault();
+        setOnboarding((v) => !v);
       }
       if (e.key === "F8") {
         e.preventDefault();
@@ -172,6 +229,8 @@ function AppInner() {
       {anim && <BackgroundCubes />}
       <ResizeHandles />
       {}
+      <Tooltip />
+      {}
       <FriendRequestToasts sound={notifySound} />
       {}
       <ChatToasts
@@ -191,10 +250,28 @@ function AppInner() {
       >
         <DownloadOrb abovePlayBar={showBottomBar} />
         {migratePrompt && <DataMigrationModal />}
+        {onboarding && (
+          <Onboarding
+            onClose={() => {
+              setOnboarding(false);
+              void offerImport();
+            }}
+          />
+        )}
         {importList && (
           <FirstRunImport instances={importList} onClose={() => setImportList(null)} />
         )}
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+        {}
+        {DEBUG_TOOLS && !onboarding && (
+          <button
+            onClick={() => setOnboarding(true)}
+            title={t("Открыть мастер настройки (F7)")}
+            className="absolute bottom-3 left-3 z-30 grid h-8 w-8 place-items-center rounded-lg border border-border bg-card/80 text-[11px] text-muted opacity-40 backdrop-blur transition hover:opacity-100 hover:text-accent"
+          >
+            <i className="fa-solid fa-wand-magic-sparkles" />
+          </button>
+        )}
         <div className="relative z-10 flex h-full w-full flex-col">
           <TitleBar />
           <div className="flex min-h-0 flex-1">

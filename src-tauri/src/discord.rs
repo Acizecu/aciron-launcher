@@ -27,6 +27,11 @@ fn last_state() -> &'static Mutex<State> {
     S.get_or_init(|| Mutex::new(State::Idle))
 }
 
+fn large_text() -> &'static str {
+    static T: OnceLock<String> = OnceLock::new();
+    T.get_or_init(|| format!("Aciron Launcher (v{})", env!("CARGO_PKG_VERSION")))
+}
+
 static ENABLED: AtomicBool = AtomicBool::new(true);
 
 fn enabled() -> bool {
@@ -107,7 +112,6 @@ fn apply(act: Activity) {
     }
 }
 
-/// «Просто в лаунчере».
 pub fn set_idle() {
     if let Ok(mut s) = last_state().lock() {
         *s = State::Idle;
@@ -119,12 +123,11 @@ pub fn set_idle() {
         Activity::new()
             .details("В лаунчере")
             .state("Отдыхает")
-            .assets(Assets::new().large_image("logo").large_text("Aciron Launcher"))
+            .assets(Assets::new().large_image("logo").large_text(large_text()))
             .buttons(download_button()),
     );
 }
 
-/// «Играет на <версия>» — маленькая картинка всегда grass (обычная версия).
 pub fn set_version(version: &str) {
     if let Ok(mut s) = last_state().lock() {
         *s = State::Version(version.to_string());
@@ -139,7 +142,7 @@ pub fn set_version(version: &str) {
             .assets(
                 Assets::new()
                     .large_image("logo")
-                    .large_text("Aciron Launcher")
+                    .large_text(large_text())
                     .small_image("grass")
                     .small_text(version),
             )
@@ -148,7 +151,6 @@ pub fn set_version(version: &str) {
     );
 }
 
-/// «Играет в <сборка>» — логотип + трава (обложку по названию не ищем).
 pub fn set_build(name: &str) {
     if let Ok(mut s) = last_state().lock() {
         *s = State::Build { name: name.to_string() };
@@ -163,7 +165,7 @@ pub fn set_build(name: &str) {
             .assets(
                 Assets::new()
                     .large_image("logo")
-                    .large_text("Aciron Launcher")
+                    .large_text(large_text())
                     .small_image("grass")
                     .small_text(name),
             )

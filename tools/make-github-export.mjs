@@ -11,13 +11,15 @@ const SKIP_DIRS = new Set([
   "node_modules", "dist", "dist-ssr", "target", "gen", ".git",
   ".idea", ".vscode", "github-export", "aciron-launcher",
   ".cargo",
+
+  "icons-dev",
 ]);
 const SKIP_FILES = new Set([
   "TODO.md", "launcher-screenshot.png", ".DS_Store", "Thumbs.db",
+
+  "DEV_ONBOARDING.md", "run-dev.ps1", "release-dev.yml", "tauri.dev.conf.json",
 ]);
-// `.effective.` — сгенерированный конфиг дев-канала: в нём лежит токен
-// обновлений. Экспорт копирует файлы с диска, а не из git, и .gitignore его не
-// спасает — без этого правила токен уехал бы в публичный репозиторий.
+
 const SKIP_RE = [
   /\.local$/,
   /\.log$/,
@@ -29,11 +31,6 @@ const SKIP_RE = [
   /apikeys/i,
 ];
 
-// Исключения из SKIP_RE: имя выглядит «секретным», но файл обязан попасть в
-// экспорт. src-tauri/src/secret.rs — модуль шифрования токенов на диске (DPAPI),
-// самих секретов в нём нет, зато lib.rs объявляет `mod secret`. Правило
-// /secret/i молча выбрасывало его, и опубликованный прод переставал собираться:
-// accounts.rs зовёт crate::secret::encrypt/decrypt, а файла нет.
 const KEEP = new Set(["secret.rs"]);
 
 const CODE_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".rs", ".java"]);

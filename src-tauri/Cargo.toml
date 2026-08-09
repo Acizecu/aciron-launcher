@@ -1,6 +1,6 @@
 [package]
 name = "aciron-launcher"
-version = "0.9.2"
+version = "0.9.3"
 description = "Aciron Minecraft Launcher"
 authors = ["acizecu"]
 edition = "2021"
@@ -8,6 +8,13 @@ edition = "2021"
 [lib]
 name = "aciron_launcher_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+# Метка дев-канала. Ничего не подключает — только флаг для cfg!,
+# который переключает папку данных на .acirondev (settings.rs::channel_dir).
+# Decoupled от updater-канала: собрать --features dev-channel можно и в
+# локальной сборке (channel=local, updater выкл) — для теста изоляции данных.
+dev-channel = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

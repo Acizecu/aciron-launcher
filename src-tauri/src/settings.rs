@@ -3,11 +3,23 @@ use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 use tauri::AppHandle;
 
+#[inline]
+fn channel_dir() -> &'static str {
+    #[cfg(feature = "dev-channel")]
+    {
+        ".acirondev"
+    }
+    #[cfg(not(feature = "dev-channel"))]
+    {
+        ".acironlauncher"
+    }
+}
+
 pub fn launcher_root() -> PathBuf {
     let base = dirs::config_dir()
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."));
-    base.join(".acironlauncher")
+    base.join(channel_dir())
 }
 
 pub fn data_root() -> PathBuf {
@@ -26,7 +38,23 @@ fn base_data_root() -> PathBuf {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             if is_writable(dir) {
-                return dir.to_path_buf();
+                // Дев-канал уводим в свою подпапку: прод-exe и дев-exe могут
+                // лежать в одной writable-папке (USB, рабочий стол), и без
+                // разделения они писали бы в один settings.json/accounts.json.
+                #[cfg(feature = "dev-channel")]
+                {
+                    return dir.join(channel_dir());
+                }
+                // Основной канал остаётся ПРЯМО рядом с exe — так было в 0.9.2 и
+                // раньше. Подпапка здесь означала бы, что у КАЖДОГО обновившегося
+                // лаунчер не находит свои settings.json, accounts.json и
+                // builds.json: сброшенные пути к папкам, разлогин и пустой список
+                // сборок. Механизм подхвата старых данных это вытянул бы, но ценой
+                // диалога переноса при обычном обновлении.
+                #[cfg(not(feature = "dev-channel"))]
+                {
+                    return dir.to_path_buf();
+                }
             }
         }
     }
@@ -58,16 +86,22 @@ const DATA_FILES: [&str; 5] = [
 
 /// Каталоги, где могли остаться данные предыдущей установки.
 ///
-/// Кроме исторического `%APPDATA%\.acironlauncher` это папки прошлых установок:
-/// обновление не всегда попадало в каталог старого лаунчера (установка из .msi,
+/// Кроме исторического launcher_root() это папки прошлых установок: обновление
+/// не всегда попадало в каталог старого лаунчера (установка из .msi,
 /// перенесённая вручную папка), а данные лежат рядом с exe — и после такого
-/// обновления лаунчер выглядел пустым. Имя папки берём из product_name, чтобы
-/// dev-канал не утащил к себе данные обычного лаунчера.
+/// обновления лаунчер выглядел пустым. Для каждой папки проверяем оба варианта
+/// раскладки: с channel_dir() и без него (как было до его появления).
+///
+/// Имя папки берётся из product_name, поэтому дев-канал («Aciron Launcher Dev»)
+/// не может утащить к себе данные обычного лаунчера — они лежат под другим
+/// именем.
 fn legacy_roots(product: &str) -> Vec<PathBuf> {
     let mut roots = vec![launcher_root()];
     for var in ["LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)"] {
         if let Some(base) = std::env::var_os(var) {
-            roots.push(PathBuf::from(base).join(product));
+            let dir = PathBuf::from(base).join(product);
+            roots.push(dir.join(channel_dir()));
+            roots.push(dir);
         }
     }
     roots
@@ -169,8 +203,28 @@ pub struct Settings {
     #[serde(default)]
     pub jvm_args: String,
 
+    // Авто-ПРОВЕРКА апдейта. Дефолт true и для прод (как раньше), и для дева
+    // (решение владельца: в dev авто-проверка ВКЛючена по умолчанию). Сама
+    // установка НИКОГДА не происходит автоматически — только по явному
+    // подтверждению пользователя (см. фронт: confirm + defer/skip).
     #[serde(default = "default_true")]
     pub auto_update_check: bool,
+
+    // Тумблер «Dev Mode»: полностью отключает проверку/установку апдейтов,
+    // пока разработчик правит код. Дефолт false (старые settings.json читаются
+    // без миграции благодаря serde(default)).
+    #[serde(default)]
+    pub dev_mode_disable_updates: bool,
+
+    // «Пропустить версию»: точная версия апдейта, баннер о которой подавлен.
+    // Пусто = ничего не пропущено. Дефолт "".
+    #[serde(default)]
+    pub skipped_update_version: String,
+
+    // «Отложить»: epoch-секунды, до которых баннер апдейта подавлен. None =
+    // не отложено. Дефолт None.
+    #[serde(default)]
+    pub defer_update_until: Option<i64>,
 
     #[serde(default)]
     pub fullscreen: bool,
@@ -180,6 +234,17 @@ pub struct Settings {
 
     #[serde(default = "default_true")]
     pub notify_sound: bool,
+
+    /// Язык интерфейса: "ru" | "en". Пустая строка = ещё не выбирали (мастер
+    /// первого запуска спросит). Старые settings.json читаются без миграции.
+    #[serde(default)]
+    pub language: String,
+
+    /// Мастер первоначальной настройки пройден. Отдельно от .aciron_setup_done
+    /// (тот про импорт сборок из других лаунчеров): мастер могли добавить уже
+    /// после того, как человек отказался от импорта.
+    #[serde(default)]
+    pub onboarded: bool,
 }
 
 fn default_ui_scale() -> u32 {
@@ -208,9 +273,14 @@ impl Default for Settings {
             autoadd_server: true,
             jvm_args: String::new(),
             auto_update_check: true,
+            dev_mode_disable_updates: false,
+            skipped_update_version: String::new(),
+            defer_update_until: None,
             fullscreen: false,
             ui_scale: 100,
             notify_sound: true,
+            language: String::new(),
+            onboarded: false,
         }
     }
 }
@@ -286,16 +356,12 @@ fn settings_cache() -> &'static RwLock<Option<Settings>> {
     C.get_or_init(|| RwLock::new(None))
 }
 
-/// Сбрасывает кэш настроек (после записи файла), чтобы следующий load_settings
-/// перечитал диск и заново применил detect_java/ensure_dirs — семантика 1-в-1
-/// с прежним поведением (в т.ч. повторный detect_java, если java_path пуст).
 fn invalidate_settings_cache() {
     if let Ok(mut guard) = settings_cache().write() {
         *guard = None;
     }
 }
 
-/// Читает и полностью разрешает настройки с диска (java_path + ensure_dirs).
 fn load_settings_uncached() -> Settings {
     let file = settings_file();
     let mut s = match std::fs::read_to_string(&file) {
@@ -311,15 +377,13 @@ fn load_settings_uncached() -> Settings {
 }
 
 pub fn load_settings() -> Settings {
-    // Быстрый путь: возвращаем кэш, если он прогрет.
+
     if let Ok(guard) = settings_cache().read() {
         if let Some(s) = guard.as_ref() {
             return s.clone();
         }
     }
-    // Медленный путь: читаем диск и прогреваем кэш. Возможна гонка двух
-    // «первых» вызовов — оба сделают одинаковую работу и запишут один и тот же
-    // результат; это безопасно (последняя запись выигрывает, значение то же).
+
     let s = load_settings_uncached();
     if let Ok(mut guard) = settings_cache().write() {
         *guard = Some(s.clone());
@@ -337,8 +401,7 @@ pub fn save_settings(settings: Settings) -> Result<(), String> {
     ensure_dirs(&settings);
     let txt = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
     crate::atomic::write(&settings_file(), &txt)?;
-    // Инвалидируем кэш: следующий load_settings перечитает файл и заново
-    // применит detect_java/ensure_dirs — те же данные, что видит пользователь.
+
     invalidate_settings_cache();
 
     crate::discord::set_enabled(settings.discord_rpc);

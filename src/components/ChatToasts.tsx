@@ -5,6 +5,8 @@ import { onMessage, parseForward } from "../chat";
 import { useFriends } from "../friends";
 import { playNotification } from "../sound";
 import { cardInDelay } from "../anim";
+import { isMuted } from "../mutes";
+import { t as tr } from "../i18n";
 
 const LIFE_MS = 6000;
 const SLIDE_MS = 220;
@@ -22,9 +24,7 @@ function Toast({
   onOpen: () => void;
   onDone: () => void;
 }) {
-  // Toast теперь презентационный: друг приходит пропсом из родителя (одна подписка
-  // useFriends + один Map-lookup вместо подписки и .find() в КАЖДОМ тосте). Апдейт
-  // списка друзей больше не ре-рендерит все активные тосты по отдельности.
+
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
@@ -59,7 +59,7 @@ function Toast({
       />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="truncate text-xs font-semibold text-text">
-          {friend?.username ?? "Новое сообщение"}
+          {friend?.username ?? tr("Новое сообщение")}
         </div>
         {}
         <div className="mt-0.5 line-clamp-2 text-[11px] text-muted">
@@ -79,10 +79,9 @@ export default function ChatToasts({
 }) {
   const [queue, setQueue] = useState<Item[]>([]);
   const { data } = useFriends();
-  // «Не беспокоить»: собственный статус присутствия dnd глушит всплывашки и звук.
+
   const dnd = data?.me?.status === "dnd";
 
-  // Один раз строим индекс id→friend вместо линейного .find() в каждом тосте.
   const byId = useMemo(() => {
     const m = new Map<string, Friend>();
     for (const f of data?.friends ?? []) m.set(f.id, f);
@@ -92,8 +91,10 @@ export default function ChatToasts({
   useEffect(() => {
     let n = 0;
     return onMessage((msg, from) => {
-      // «Не беспокоить»: не показываем всплывашку и не пищим.
+
       if (dnd) return;
+
+      if (isMuted(from)) return;
       setQueue((q) => [...q, { key: ++n, msg, from }]);
       playNotification(sound);
     });

@@ -2,13 +2,13 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
+declare const process: { env: Record<string, string | undefined> };
+
+const APP_VERSION = process.env.npm_package_version ?? "0.0.0";
+const APP_CHANNEL = process.env.ACIRON_CHANNEL ?? "local";
+
 export default defineConfig(({ command, mode }) => {
-  // VITE_ACIRON_ID_URL обязателен для релизной сборки. Без него api.ts молча
-  // подставляет https://example.invalid, лаунчер собирается и запускается, все
-  // запросы через Rust работают (там свой ACIRON_ID_URL из .cargo/config.toml),
-  // но КАЖДАЯ картинка — скины, плащи, аватары друзей — грузится с несуществующего
-  // домена и превью остаются пустыми без единого сообщения об ошибке. Именно так
-  // уехали 0.9.0 и 0.9.1. Пусть лучше падает сборка, чем релиз.
+
   const env = loadEnv(mode, process.cwd(), "");
   if (command === "build" && !env.VITE_ACIRON_ID_URL) {
     throw new Error(
@@ -23,10 +23,7 @@ export default defineConfig(({ command, mode }) => {
   build: {
     rollupOptions: {
       output: {
-        // Явное выделение вендор-чанков: three и react-рантайм получают
-        // стабильные имена/хеши, поэтому не инвалидируют весь vendor между
-        // релизами (лучше кэшируется) и парсятся отдельными чанками.
-        // Поведение приложения не меняется — это лишь группировка модулей.
+
         manualChunks(id) {
           if (id.includes("node_modules")) {
             if (id.includes("/three/") || id.includes("\\three\\")) return "three";
@@ -46,6 +43,12 @@ export default defineConfig(({ command, mode }) => {
   },
 
   clearScreen: false,
+
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __APP_CHANNEL__: JSON.stringify(APP_CHANNEL),
+  },
+
   server: {
     port: 1420,
     strictPort: true,

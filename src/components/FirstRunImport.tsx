@@ -6,6 +6,7 @@ import {
   type ExternalInstance,
 } from "../api";
 import { useToast } from "../ToastContext";
+import { t, ts } from "../i18n";
 
 const loaderLabel: Record<string, string> = {
   fabric: "Fabric",
@@ -64,13 +65,14 @@ export default function FirstRunImport({
         await importExternalInstance(inst.path, inst.source);
         ok++;
       } catch (e) {
-        toast(`«${inst.name}»: ${String(e)}`, "error");
+
+        toast(t("«{name}»: {e}", { name: inst.name, e: ts(String(e)) }), "error");
       }
       setDone((d) => d + 1);
     }
     setBusy(false);
     toast(
-      ok > 0 ? `Импортировано сборок: ${ok}` : "Ничего не импортировано",
+      ok > 0 ? t("Импортировано сборок: {n}", { n: ok }) : t("Ничего не импортировано"),
       ok > 0 ? "success" : "info"
     );
     await finish();
@@ -80,17 +82,19 @@ export default function FirstRunImport({
 
   return (
     <Modal
-      title="Импорт сборок"
-      subtitle="Нашли сборки в других лаунчерах — перенести их в Aciron?"
+      title={t("Импорт сборок")}
+      subtitle={t("Нашли сборки в других лаунчерах — перенести их в Aciron?")}
       icon="fa-file-import"
-      onClose={busy ? () => {} : skip}
+      dismissible={!busy}
+      onClose={skip}
     >
       <div className="flex max-h-[60vh] flex-col p-5">
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-sm text-accent">
           <i className="fa-solid fa-circle-info mt-0.5" />
           <span>
-            Скопируются моды, ресурспаки, шейдеры и конфиги. Оригинальные сборки в других
-            лаунчерах не изменятся.
+            {t(
+              "Скопируются моды, ресурспаки, шейдеры и конфиги. Оригинальные сборки в других лаунчерах не изменятся."
+            )}
           </span>
         </div>
 
@@ -117,7 +121,8 @@ export default function FirstRunImport({
                   <div className="truncate text-sm font-semibold text-text">{inst.name}</div>
                   <div className="truncate text-xs text-muted">
                     {inst.source_label} · {inst.mc_version} ·{" "}
-                    {loaderLabel[inst.loader] ?? inst.loader} · {inst.mods_count} мод(ов)
+                    {loaderLabel[inst.loader] ?? inst.loader} ·{" "}
+                    {t("{n} мод(ов)", { n: inst.mods_count })}
                   </div>
                 </div>
                 <span
@@ -136,10 +141,10 @@ export default function FirstRunImport({
           {busy ? (
             <span className="flex items-center gap-2 text-sm text-muted">
               <i className="fa-solid fa-spinner fa-spin" />
-              Импорт… {done}/{total}
+              {t("Импорт… {done}/{total}", { done, total })}
             </span>
           ) : (
-            <span className="text-xs text-muted">Выбрано: {total}</span>
+            <span className="text-xs text-muted">{t("Выбрано: {n}", { n: total })}</span>
           )}
           <div className="ml-auto flex items-center gap-2">
             <button
@@ -147,7 +152,7 @@ export default function FirstRunImport({
               disabled={busy}
               className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text disabled:opacity-50"
             >
-              Пропустить
+              {t("Пропустить")}
             </button>
             <button
               onClick={runImport}
@@ -155,7 +160,8 @@ export default function FirstRunImport({
               className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-50"
             >
               <i className="fa-solid fa-file-import" />
-              Импортировать{total > 0 ? ` (${total})` : ""}
+              {t("Импортировать")}
+              {total > 0 ? ` (${total})` : ""}
             </button>
           </div>
         </div>

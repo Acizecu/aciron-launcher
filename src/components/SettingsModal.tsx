@@ -2,6 +2,7 @@ import { useState } from "react";
 import Modal from "./Modal";
 import ConfirmModal from "./ConfirmModal";
 import SettingsPage from "./SettingsPage";
+import { t } from "../i18n";
 
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [dirty, setDirty] = useState(false);
@@ -12,7 +13,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   return (
     <>
       <Modal
-        title="Настройки"
+        title={t("Настройки")}
         icon="fa-gear"
         width="max-w-4xl"
         bare
@@ -25,9 +26,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
 
       {confirm && (
         <ConfirmModal
-          title="Несохранённые изменения"
-          message="Вы изменили настройки, но не сохранили их. Закрыть без сохранения?"
-          confirmLabel="Закрыть без сохранения"
+          title={t("Несохранённые изменения")}
+          message={t("Вы изменили настройки, но не сохранили их. Закрыть без сохранения?")}
+          confirmLabel={t("Закрыть без сохранения")}
           confirmIcon="fa-arrow-right-from-bracket"
           danger={false}
           onConfirm={onClose}

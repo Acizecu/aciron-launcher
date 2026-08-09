@@ -10,18 +10,10 @@ use tauri::{AppHandle, Emitter};
 
 const BUFFER_LINES: usize = 2000;
 
-/// Как часто таймер сбрасывает накопленные строки во фронт.
-/// ~60 мс — незаметно для глаза, но за это окно тысячи строк старта
-/// схлопываются в одно IPC-событие вместо тысяч.
 const FLUSH_INTERVAL: Duration = Duration::from_millis(60);
-/// Порог по количеству строк: даже внутри окна не копим слишком много —
-/// чтобы при экстремальном спаме батч не разрастался без границ.
+
 const FLUSH_MAX_LINES: usize = 512;
 
-/// Событие лога: пачка строк одной игры за один IPC-переход.
-/// Раньше эмитилась одна `LogLine` на строку (шторм IPC + `game.clone()`
-/// на каждую строку); теперь `game` клонируется один раз на пачку.
-/// Фронт (`GameConsole.add`) уже принимает массив строк — маппится 1:1.
 #[derive(Clone, Serialize)]
 pub struct LogBatch {
     pub game: String,
@@ -100,12 +92,9 @@ pub fn pump<R: std::io::Read + Send + 'static>(
     file: Arc<Mutex<Option<std::fs::File>>>,
 ) {
     let pending: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-    // Сигнал таймеру завершиться после EOF, чтобы поток не висел вечно.
+
     let done = Arc::new(AtomicBool::new(false));
 
-    // Фоновый таймер: периодический флаш непустой пачки. Гарантирует, что
-    // строки уходят во фронт даже когда поток затих (читающий поток заблокирован
-    // в read_until), а накопленный хвост уже не пуст.
     {
         let app = app.clone();
         let game = game.clone();
@@ -116,7 +105,7 @@ pub fn pump<R: std::io::Read + Send + 'static>(
                 std::thread::sleep(FLUSH_INTERVAL);
                 flush(&app, &game, &pending);
             }
-            // Финальный флаш на случай строк, добавленных прямо перед завершением.
+
             flush(&app, &game, &pending);
         });
     }
@@ -140,8 +129,6 @@ pub fn pump<R: std::io::Read + Send + 'static>(
             }
             push_line(&game, &line);
 
-            // Копим строку в пачку; если набралось много — сбрасываем сразу,
-            // не дожидаясь таймера (быстрый бёрст не должен раздувать буфер).
             let should_flush = {
                 if let Ok(mut p) = pending.lock() {
                     p.push(line);
@@ -154,7 +141,7 @@ pub fn pump<R: std::io::Read + Send + 'static>(
                 flush(&app, &game, &pending);
             }
         }
-        // EOF: финальный флаш хвоста и остановка таймера.
+
         flush(&app, &game, &pending);
         done.store(true, Ordering::Relaxed);
     });

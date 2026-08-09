@@ -6,9 +6,12 @@ import {
   removeMod,
   toggleMod,
   setBuildImage,
+  setBuildFavorite,
+  addContentFiles,
   refreshBuildContent,
   matchLocalMods,
   importMrpack,
+  importAcpack,
   modrinthInstall,
   checkBuildUpdates,
   pickFile,
@@ -21,6 +24,11 @@ import {
 import { coverFor } from "../covers";
 import { CARD_FALL_MS, ROW_OUT_MS, cardInDelay } from "../anim";
 import { useFlip } from "../hooks/useFlip";
+import { useFileDrop } from "../hooks/useFileDrop";
+import { useViewMode } from "../hooks/useViewMode";
+import ViewToggle from "./ViewToggle";
+import { t, useLang, ts } from "../i18n";
+import ExportBuildModal from "./ExportBuildModal";
 import CreateBuildModal from "./CreateBuildModal";
 import ModsBrowser from "./ModsBrowser";
 import ModDetail from "./ModDetail";
@@ -44,13 +52,22 @@ const loaderLabel: Record<string, string> = {
 
 const BUILDS_PER_PAGE = 8;
 
+function orderBuilds(list: Build[]): Build[] {
+  return [...list].sort((a, b) => {
+    if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
+    if ((b.last_played ?? 0) !== (a.last_played ?? 0))
+      return (b.last_played ?? 0) - (a.last_played ?? 0);
+    return (b.created ?? 0) - (a.created ?? 0);
+  });
+}
+
 function fmtPlaytime(secs: number): string {
   if (!secs) return "";
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
-  if (h > 0) return `${h}ч ${m}м`;
-  if (m > 0) return `${m}м`;
-  return "<1м";
+  if (h > 0) return t("{h}ч {m}м", { h, m });
+  if (m > 0) return t("{m}м", { m });
+  return t("<1м");
 }
 
 function modPageTarget(
@@ -97,12 +114,6 @@ type View = "list" | "detail" | "browse";
 
 type ModFilter = "all" | "on" | "off" | "outdated";
 
-// Вынесенная memo-строка мода: раньше это был инлайн-JSX в items.map со свежими
-// колбэками на строку, поэтому ВСЕ видимые строки перерисовывались на каждое
-// нажатие в поиске/toggle. Теперь строка перерисовывается только когда меняются
-// её собственные пропсы (m, флаги picked/hasUpdate/updating/leaving, i для
-// анимации). Колбэки родитель передаёт стабильными (useCallback). Разметка и
-// поведение 1-в-1 с прежним инлайном.
 type ModRowProps = {
   m: InstalledMod;
   i: number;
@@ -116,6 +127,8 @@ type ModRowProps = {
   onUpdate: (projectId: string, name: string) => void;
   onToggle: (projectId: string) => void;
   onRemove: (m: InstalledMod) => void;
+
+  tile?: boolean;
 };
 
 const ModRow = memo(function ModRow({
@@ -131,9 +144,115 @@ const ModRow = memo(function ModRow({
   onUpdate,
   onToggle,
   onRemove,
+  tile,
 }: ModRowProps) {
+
+  useLang();
   const manual = m.project_id.startsWith("local:");
   const target = modPageTarget(m);
+
+  if (tile) {
+    return (
+      <div
+        style={leaving ? undefined : cardInDelay(i)}
+        className={`group relative flex flex-col rounded-[16px] border-1 p-3 transition-colors ${
+          picked ? "border-accent bg-accent/8" : "border-[#232427]/65 bg-card hover:border-accent/40"
+        } ${leaving ? "row-out" : "card-in"} ${m.enabled ? "" : "opacity-60"}`}
+      >
+        <div className="flex min-w-0 items-start gap-3">
+          {}
+          <div className="relative shrink-0">
+            <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-[12px] bg-bg">
+              {m.icon_url ? (
+                <img src={m.icon_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <i className={`fa-solid ${metaIcon} text-lg text-muted`} />
+              )}
+            </div>
+            <button
+              onClick={() => onTogglePick(m.project_id)}
+              title={t("Выделить")}
+              className={`absolute -left-1 -top-1 transition-opacity ${
+                picked ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+              }`}
+            >
+              <Check on={picked} />
+            </button>
+          </div>
+
+          <button
+            onClick={() => onOpen(m)}
+            disabled={!target}
+            title={target ? t("Открыть страницу") : t("Файл не опознан на Modrinth")}
+            className={`min-w-0 flex-1 pr-8 text-left ${target ? "cursor-pointer" : "cursor-default"}`}
+          >
+            <div
+              className={`truncate text-[15px] font-semibold leading-tight text-text ${
+                target ? "group-hover:text-accent" : ""
+              }`}
+              title={m.name}
+            >
+              {m.name}
+            </div>
+            <div
+              className="selectable mt-1 truncate text-[12px] text-[#818181]"
+              title={m.filename}
+            >
+              {m.filename || "—"}
+            </div>
+          </button>
+
+          <div className="absolute right-2 top-2 flex items-center gap-1">
+            {hasUpdate && (
+              <button
+                onClick={() => onUpdate(m.project_id, m.name)}
+                disabled={updating}
+                title={t("Доступно обновление — скачать")}
+                className="grid h-7 w-7 place-items-center rounded-[8px] text-accent transition-colors hover:bg-accent hover:text-bg disabled:opacity-60"
+              >
+                <i
+                  className={`fa-solid ${updating ? "fa-spinner fa-spin" : "fa-download"} text-[11px]`}
+                />
+              </button>
+            )}
+            <button
+              onClick={() => onRemove(m)}
+              title={t("Удалить")}
+              className="grid h-7 w-7 place-items-center rounded-[8px] text-muted opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
+            >
+              <i className="fa-solid fa-trash-can text-[11px]" />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-2">
+          {}
+          {manual ? (
+            <span className="rounded-full bg-bg px-2 py-1 text-[11px] leading-none text-muted">
+              {t("вручную")}
+            </span>
+          ) : (
+            <span />
+          )}
+
+          <button
+            onClick={() => onToggle(m.project_id)}
+            title={m.enabled ? t("Выключить") : t("Включить")}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+              m.enabled ? "bg-accent" : "bg-border"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                m.enabled ? "left-[22px]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={leaving ? undefined : cardInDelay(i)}
@@ -142,14 +261,14 @@ const ModRow = memo(function ModRow({
       } ${m.enabled ? "" : "opacity-60"}`}
     >
       {}
-      <button onClick={() => onTogglePick(m.project_id)} title="Выделить" className="shrink-0">
+      <button onClick={() => onTogglePick(m.project_id)} title={t("Выделить")} className="shrink-0">
         <Check on={picked} />
       </button>
 
       <button
         onClick={() => onOpen(m)}
         disabled={!target}
-        title={target ? "Открыть страницу" : "Файл не опознан на Modrinth"}
+        title={target ? t("Открыть страницу") : t("Файл не опознан на Modrinth")}
         className={`flex min-w-0 flex-1 items-center gap-3 text-left ${
           target ? "cursor-pointer" : "cursor-default"
         }`}
@@ -173,7 +292,7 @@ const ModRow = memo(function ModRow({
             </span>
             {manual && (
               <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-[10px] text-muted">
-                вручную
+                {t("вручную")}
               </span>
             )}
           </div>
@@ -188,7 +307,7 @@ const ModRow = memo(function ModRow({
         <button
           onClick={() => onUpdate(m.project_id, m.name)}
           disabled={updating}
-          title="Доступно обновление — скачать"
+          title={t("Доступно обновление — скачать")}
           className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-accent transition-colors hover:bg-accent hover:text-bg disabled:opacity-60"
         >
           <i className={`fa-solid ${updating ? "fa-spinner fa-spin" : "fa-download"} text-xs`} />
@@ -198,7 +317,7 @@ const ModRow = memo(function ModRow({
       {}
       <button
         onClick={() => onToggle(m.project_id)}
-        title={m.enabled ? "Выключить" : "Включить"}
+        title={m.enabled ? t("Выключить") : t("Включить")}
         className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
           m.enabled ? "bg-accent" : "bg-border"
         }`}
@@ -212,7 +331,7 @@ const ModRow = memo(function ModRow({
 
       <button
         onClick={() => onRemove(m)}
-        title="Удалить"
+        title={t("Удалить")}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-muted opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
       >
         <i className="fa-solid fa-trash-can text-xs" />
@@ -222,9 +341,13 @@ const ModRow = memo(function ModRow({
 });
 
 export default function BuildsPage() {
+  const { t } = useLang();
   const [builds, setBuilds] = useState<Build[]>([]);
+  const [exportModal, setExportModal] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("list");
+
+  const rowView = useViewMode();
   const [createModal, setCreateModal] = useState(false);
   const [browseQuery, setBrowseQuery] = useState("");
   const [modSearch, setModSearch] = useState("");
@@ -242,9 +365,7 @@ export default function BuildsPage() {
 
   const [updates, setUpdates] = useState<string[]>([]);
   const [updatingMod, setUpdatingMod] = useState<Set<string>>(new Set());
-  // Синхронное зеркало updatingMod для дедупа в стабильном updateOneMod:
-  // функциональный setState-updater в React выполняется не в момент вызова, а
-  // при обработке очереди, поэтому для мгновенного guard читаем ref.
+
   const updatingRef = useRef<Set<string>>(updatingMod);
   updatingRef.current = updatingMod;
 
@@ -260,15 +381,14 @@ export default function BuildsPage() {
   const downloading = useDownloadActive();
 
   const [launching, setLaunching] = useState<Set<string>>(new Set());
-  // Guard от двойного импорта: без него быстрый двойной клик по «Импорт» запускал
-  // два import_mrpack → две одинаковые сборки.
+
   const [importing, setImporting] = useState(false);
 
   const startLaunch = async (id: string, name: string) => {
     const target = `build:${id}`;
     if (launching.has(target)) return;
     setLaunching((p) => new Set(p).add(target));
-    toast(`Запуск «${name}»…`, "success");
+    toast(t("Запуск «{name}»…", { name }), "success");
     try {
       await launch(target);
     } finally {
@@ -290,9 +410,7 @@ export default function BuildsPage() {
   };
 
   useEffect(() => {
-    // При открытии страницы: подгружаем список и, если пришли из «Последних запусков»
-    // с просьбой открыть конкретную сборку, открываем её (BuildsPage смонтирована только
-    // сейчас, поэтому цель лежит в window, а не в событии).
+
     (async () => {
       await refresh();
       const w = window as unknown as { __acironOpenBuild?: string };
@@ -302,10 +420,9 @@ export default function BuildsPage() {
         openBuild(id);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
-  // Если страница уже открыта — тоже реагируем на переход к сборке.
   useEffect(() => {
     const onOpen = (e: Event) => {
       const id = (e as CustomEvent<string>).detail;
@@ -313,7 +430,7 @@ export default function BuildsPage() {
     };
     window.addEventListener("aciron-open-build", onOpen);
     return () => window.removeEventListener("aciron-open-build", onOpen);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   useEffect(() => {
@@ -328,15 +445,128 @@ export default function BuildsPage() {
 
   }, []);
 
-  useFlip(gridRef, builds.map((b) => b.id).join());
+  const ordered = useMemo(() => orderBuilds(builds), [builds]);
+
+  useFlip(gridRef, ordered.map((b) => b.id).join());
 
   const selected = builds.find((b) => b.id === selectedId) ?? null;
 
-  // Раньше весь этот вывод (фильтрация модов по kind, счётчики, items из двух
-  // .filter, массив FILTERS) считался в inline-IIFE на КАЖДЫЙ рендер — а рендер
-  // происходит на каждое нажатие в поиске модов, любой toggle, событие
-  // download/run. Выносим в useMemo с точными зависимостями: логика и результат
-  // 1-в-1, но пересчёт только при реальном изменении входных данных.
+  const toggleFavorite = async (b: Build) => {
+    try {
+      const updated = await setBuildFavorite(b.id, !b.favorite);
+      setBuilds((list) => list.map((x) => (x.id === updated.id ? updated : x)));
+      toast(
+        updated.favorite
+          ? t("«{name}» закреплена", { name: b.name })
+          : t("«{name}» откреплена", { name: b.name }),
+        "info"
+      );
+    } catch (e) {
+      toast(ts(String(e)), "error");
+    }
+  };
+
+  const importFromPath = useCallback(
+    async (path: string) => {
+      const acpack = path.toLowerCase().endsWith(".acpack");
+      if (!acpack && !path.toLowerCase().endsWith(".mrpack")) {
+        toast(t("Это не файл сборки: нужен .acpack или .mrpack"), "error");
+        return;
+      }
+      setImporting(true);
+      window.dispatchEvent(
+        new CustomEvent("aciron-task-start", {
+          detail: {
+            name: acpack ? t("Импорт .acpack") : t("Импорт .mrpack"),
+            cancelLabel: t("Отменить импорт"),
+          },
+        })
+      );
+      try {
+
+        const res = acpack ? await importAcpack(path) : null;
+        const b = res ? res.build : await importMrpack(path);
+        setBuilds(await getBuilds());
+        toast(t("Сборка «{name}» импортирована", { name: b.name }), "success");
+        if (res && res.missing.length) {
+          toast(
+            t("Не скачалось: {list}", { list: res.missing.join(", ") }),
+            "warning"
+          );
+        }
+      } catch (e) {
+
+        if (!wasCancelled("legacy")) {
+          window.dispatchEvent(new CustomEvent("aciron-task-end"));
+          toast(ts(String(e)), "error");
+        }
+        setBuilds(await getBuilds());
+      } finally {
+        setImporting(false);
+      }
+    },
+    [toast]
+  );
+
+  const importPack = async () => {
+    if (importing) return;
+    const f = await pickFile(t("Сборка Aciron или модпак Modrinth"), ["acpack", "mrpack"]);
+    if (!f) return;
+    await importFromPath(f);
+  };
+
+  useEffect(() => {
+    const w = window as unknown as { __acironOpenPack?: string };
+    if (w.__acironOpenPack) {
+      const p = w.__acironOpenPack;
+      w.__acironOpenPack = undefined;
+      void importFromPath(p);
+    }
+    const onPack = (e: Event) => {
+      const p = (e as CustomEvent<string>).detail;
+      if (!p) return;
+      w.__acironOpenPack = undefined;
+      void importFromPath(p);
+    };
+    window.addEventListener("aciron-open-pack", onPack);
+    return () => window.removeEventListener("aciron-open-pack", onPack);
+  }, [importFromPath]);
+
+  const dropKind: ContentKind = contentTab === "console" ? "mod" : contentTab;
+  const onFilesDropped = useCallback(
+    async (paths: string[]) => {
+      const packs = paths.filter((p) => /\.(acpack|mrpack)$/i.test(p));
+      if (packs.length > 0) {
+        for (const p of packs) await importFromPath(p);
+        return;
+      }
+      if (view !== "detail" || !selectedId) {
+        toast(t("Откройте сборку — тогда моды и паки можно бросать прямо в неё"), "info");
+        return;
+      }
+      try {
+        const [updated, added, skipped] = await addContentFiles(selectedId, paths, dropKind);
+        setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
+        if (added > 0) {
+          toast(
+            added === 1 ? t("Файл добавлен в сборку") : t("Добавлено файлов: {n}", { n: added }),
+            "success"
+          );
+        }
+        if (skipped > 0 && added === 0) {
+          toast(t("Ничего не добавили: подходят только .jar и .zip"), "error");
+        } else if (skipped > 0) {
+          toast(t("Пропущено: {n}", { n: skipped }), "info");
+        }
+      } catch (e) {
+        toast(ts(String(e)), "error");
+      }
+    },
+    [selectedId, view, dropKind, importFromPath, toast]
+  );
+
+  const dropping = useFileDrop(view !== "browse", onFilesDropped);
+
   const contentMods = contentTab === "console" ? null : contentTab;
   const all = useMemo(
     () => (selected && contentMods ? selected.mods.filter((m) => m.kind === contentMods) : []),
@@ -399,14 +629,14 @@ export default function BuildsPage() {
     } catch {
 
     }
-    toast("Список контента обновлён", "info");
+    toast(t("Список контента обновлён"), "info");
   };
 
   const confirmDelete = async () => {
     const b = confirmDel;
     if (!b) return;
     if (isRunning(`build:${b.id}`) || downloading) {
-      toast("Нельзя удалить сборку, пока она запущена или идёт скачивание", "error");
+      toast(t("Нельзя удалить сборку, пока она запущена или идёт скачивание"), "error");
       return;
     }
 
@@ -415,7 +645,7 @@ export default function BuildsPage() {
     setTimeout(async () => {
       await refresh();
       setDyingId(null);
-      toast(`Сборка «${b.name}» удалена`, "success");
+      toast(t("Сборка «{name}» удалена", { name: b.name }), "success");
     }, CARD_FALL_MS);
   };
 
@@ -430,36 +660,34 @@ export default function BuildsPage() {
         for (const id of ids) last = await removeMod(selected.id, id);
         if (last) setBuilds((list) => list.map((b) => (b.id === last!.id ? last! : b)));
         toast(
-          mods.length > 1 ? `Удалено: ${mods.length} шт.` : `«${mods[0].name}» удалён`,
+          mods.length > 1
+            ? t("Удалено: {n} шт.", { n: mods.length })
+            : t("«{name}» удалён", { name: mods[0].name }),
           "success"
         );
       } catch (e) {
-        toast(String(e), "error");
+        toast(ts(String(e)), "error");
       }
       setDyingMods([]);
       setPicked((p) => p.filter((x) => !ids.includes(x)));
     }, ROW_OUT_MS);
   };
 
-  // Тело без изменений по семантике; useCallback keyed на selectedId (не на весь
-  // selected, чтобы toggle/refresh, меняющие builds, не пересоздавали хендлер) —
-  // это даёт memo(ModRow) стабильный проп. Guard читает updatingRef (синхронное
-  // зеркало) вместо updatingMod, чтобы не тянуть его в deps; поведение то же.
   const updateOneMod = useCallback(
     async (projectId: string, name: string) => {
       if (!selectedId || updatingRef.current.has(projectId)) return;
       setUpdatingMod((prev) => new Set(prev).add(projectId));
-      startTask(`mod:${projectId}`, `Обновление · ${name}`);
+      startTask(`mod:${projectId}`, t("Обновление · {name}", { name }));
       try {
         const updated = await modrinthInstall(selectedId, projectId);
         if (wasCancelled(`mod:${projectId}`)) return;
         setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
         setUpdates((u) => u.filter((id) => id !== projectId));
         endTask(`mod:${projectId}`, true);
-        toast(`«${name}» обновлён`, "success");
+        toast(t("«{name}» обновлён", { name }), "success");
       } catch (e) {
         endTask(`mod:${projectId}`, false);
-        toast(String(e), "error");
+        toast(ts(String(e)), "error");
       }
       setUpdatingMod((prev) => {
         const next = new Set(prev);
@@ -476,13 +704,18 @@ export default function BuildsPage() {
       const updated = await toggleMod(selectedId, projectId);
       setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
       const m = updated.mods.find((x) => x.project_id === projectId);
-      if (m) toast(`Мод «${m.name}» ${m.enabled ? "включён" : "выключен"}`, "info");
+      if (m)
+        toast(
+          t("Мод «{name}» {state}", {
+            name: m.name,
+            state: t(m.enabled ? "включён" : "выключен"),
+          }),
+          "info"
+        );
     },
     [selectedId, toast]
   );
 
-  // Стабильные хендлеры для строки мода (принимают mod/id) — одна ссылка на все
-  // строки, чтобы memo(ModRow) реально срезал ре-рендеры при вводе/toggle.
   const togglePicked = useCallback(
     (projectId: string) =>
       setPicked((p) =>
@@ -504,29 +737,11 @@ export default function BuildsPage() {
 
   const changeCover = async () => {
     if (!selected) return;
-    const f = await pickFile("Изображение", ["png", "jpg", "jpeg", "webp", "gif"]);
+    const f = await pickFile(t("Изображение"), ["png", "jpg", "jpeg", "webp", "gif"]);
     if (!f) return;
     const updated = await setBuildImage(selected.id, f);
     setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
-    toast("Обложка обновлена", "success");
-  };
-
-  const importPack = async () => {
-    if (importing) return;
-    const f = await pickFile("Modrinth-модпак", ["mrpack"]);
-    if (!f) return;
-    setImporting(true);
-    window.dispatchEvent(new CustomEvent("aciron-task-start", { detail: { name: "Импорт .mrpack" } }));
-    try {
-      const b = await importMrpack(f);
-      await refresh();
-      toast(`Сборка «${b.name}» импортирована`, "success");
-    } catch (e) {
-      window.dispatchEvent(new CustomEvent("aciron-task-end"));
-      toast(String(e), "error");
-    } finally {
-      setImporting(false);
-    }
+    toast(t("Обложка обновлена"), "success");
   };
 
   const goBrowse = (query = "", kind: ContentKind = "mod") => {
@@ -562,13 +777,29 @@ export default function BuildsPage() {
 
   if (view === "detail" && selected) {
     return (
-      <div className="flex h-full min-h-0 flex-col px-8 py-6">
+      <div className="relative flex h-full min-h-0 flex-col px-8 py-6">
+        {}
+        {dropping && (
+          <div className="drop-overlay pointer-events-none absolute inset-3 z-40 grid place-items-center rounded-[20px] border-2 border-dashed border-accent/70 bg-bg/70">
+            <div className="text-center">
+              <i className="fa-solid fa-download mb-3 block text-3xl text-accent" />
+              <div className="text-sm font-semibold text-text">
+                {t("Отпустите — разложим по папкам")}
+              </div>
+              <div className="mt-1 text-[12px] text-muted">
+                {t(
+                  "Моды (.jar) уйдут в mods, архивы — в ресурспаки или шейдеры, .acpack станет сборкой"
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         {}
         <div className="mb-6 flex items-center gap-4">
           <div className="flex w-full items-center gap-4">
           <button
             onClick={changeCover}
-            title="Изменить обложку"
+            title={t("Изменить обложку")}
             className="group relative h-[72px] w-[72px] shrink-0"
           >
             <BuildCover build={selected} className="h-[72px] w-[72px]" rounded="rounded-[16px]" />
@@ -577,12 +808,26 @@ export default function BuildsPage() {
             </span>
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[30px] font-light leading-none text-text">
-              {selected.name}
-            </h1>
+            {}
+            <div className="flex min-w-0 items-center gap-2.5">
+              <h1 className="truncate text-[30px] font-light leading-none text-text">
+                {selected.name}
+              </h1>
+              <button
+                onClick={() => toggleFavorite(selected)}
+                title={selected.favorite ? t("Открепить") : t("Закрепить")}
+                className={`shrink-0 transition-colors ${
+                  selected.favorite ? "text-accent" : "text-muted hover:text-accent"
+                }`}
+              >
+                <i
+                  className={`${selected.favorite ? "fa-solid" : "fa-regular"} fa-star text-[18px]`}
+                />
+              </button>
+            </div>
             <div className="mt-2 truncate text-[12px] text-[#818181]">
               {loaderLabel[selected.loader] ?? selected.loader} · {selected.mc_version} ·{" "}
-              {selected.mods.length} элементов
+              {selected.mods.length} {t("элементов")}
               {selected.playtime_secs > 0 && ` · ${fmtPlaytime(selected.playtime_secs)}`}
             </div>
           </div>
@@ -590,21 +835,28 @@ export default function BuildsPage() {
           <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={doRefresh}
-              title="Обновить список (подхватить ручные файлы)"
+              title={t("Обновить список (подхватить ручные файлы)")}
               className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-accent"
             >
               <i className="fa-solid fa-arrows-rotate text-sm" />
             </button>
             <button
+              onClick={() => setExportModal(true)}
+              title={t("Экспорт сборки")}
+              className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-accent"
+            >
+              <i className="fa-solid fa-file-export text-sm" />
+            </button>
+            <button
               onClick={() => setSettingsModal(true)}
-              title="Настройка сборки"
+              title={t("Настройка сборки")}
               className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-accent"
             >
               <i className="fa-solid fa-gear text-sm" />
             </button>
             <button
               onClick={() => openBuildFolder(selected.id)}
-              title="Открыть папку сборки"
+              title={t("Открыть папку сборки")}
               className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-accent"
             >
               <i className="fa-solid fa-folder-open text-sm" />
@@ -616,7 +868,7 @@ export default function BuildsPage() {
               onClick={() => stop(`build:${selected.id}`)}
               className="h-11 shrink-0 rounded-[8px] bg-[#ef4444] px-7 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
             >
-              Закрыть
+              {t("Закрыть")}
             </button>
           ) : (
             <button
@@ -629,7 +881,7 @@ export default function BuildsPage() {
                   launching.has(`build:${selected.id}`) ? "fa-spinner fa-spin" : "fa-play"
                 } text-xs`}
               />
-              Играть
+              {t("Играть")}
             </button>
           )}
           </div>
@@ -643,16 +895,24 @@ export default function BuildsPage() {
           />
         )}
 
+        {exportModal && (
+          <ExportBuildModal build={selected} onClose={() => setExportModal(false)} />
+        )}
+
         {}
         {confirmMods && (
           <ConfirmModal
-            title={confirmMods.length > 1 ? "Удалить выбранное" : "Удалить файл"}
+            title={confirmMods.length > 1 ? t("Удалить выбранное") : t("Удалить файл")}
             message={
               confirmMods.length > 1
-                ? `Удалить ${confirmMods.length} шт. из сборки? Файлы будут стёрты с диска.`
-                : `Удалить «${confirmMods[0].name}» из сборки? Файл будет стёрт с диска.`
+                ? t("Удалить {n} шт. из сборки? Файлы будут стёрты с диска.", {
+                    n: confirmMods.length,
+                  })
+                : t("Удалить «{name}» из сборки? Файл будет стёрт с диска.", {
+                    name: confirmMods[0].name,
+                  })
             }
-            confirmLabel="Удалить"
+            confirmLabel={t("Удалить")}
             confirmIcon="fa-trash-can"
             onConfirm={() => removeMods(confirmMods)}
             onClose={() => setConfirmMods(null)}
@@ -661,14 +921,14 @@ export default function BuildsPage() {
 
         {}
         <div className="mb-4 flex items-baseline gap-4">
-          {CONTENT_TABS.map((t) => {
-            const count = selected.mods.filter((m) => m.kind === t.id).length;
-            const active = contentTab === t.id;
+          {CONTENT_TABS.map((ct) => {
+            const count = selected.mods.filter((m) => m.kind === ct.id).length;
+            const active = contentTab === ct.id;
             return (
               <button
-                key={t.id}
+                key={ct.id}
                 onClick={() => {
-                  setContentTab(t.id);
+                  setContentTab(ct.id);
                   setModFilter("all");
                   setPicked([]);
                 }}
@@ -677,7 +937,7 @@ export default function BuildsPage() {
                 }`}
               >
                 <div className="flex items-center gap-[5px]">
-                  {t.label}
+                  {t(ct.label)}
                   {count > 0 && (
                     <span
                       className={`grid h-[18px] min-w-[18px] place-items-center rounded-full px-1.5 text-[10px] font-semibold leading-none ${
@@ -700,9 +960,9 @@ export default function BuildsPage() {
             }`}
           >
             <span className="flex items-center gap-[6px]">
-              Консоль
+              {t("Консоль")}
               {isRunning(`build:${selected.id}`) && (
-                <span className="h-2 w-2 rounded-full bg-[#4ade80]" title="Игра запущена" />
+                <span className="h-2 w-2 rounded-full bg-[#4ade80]" title={t("Игра запущена")} />
               )}
             </span>
           </button>
@@ -716,8 +976,8 @@ export default function BuildsPage() {
         )}
 
         {contentTab !== "console" && (() => {
-          const meta = CONTENT_TABS.find((t) => t.id === contentTab)!;
-          // all/on/outdated/items вынесены в useMemo выше — здесь только чтение.
+          const meta = CONTENT_TABS.find((c) => c.id === contentTab)!;
+
           const on = enabledCount;
 
           if (all.length === 0) {
@@ -727,13 +987,13 @@ export default function BuildsPage() {
                   <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-card text-xl text-accent">
                     <i className={`fa-solid ${meta.icon}`} />
                   </div>
-                  <p className="mb-4 text-sm text-muted">{meta.empty}</p>
+                  <p className="mb-4 text-sm text-muted">{t(meta.empty)}</p>
                   <button
                     onClick={() => goBrowse("", contentTab)}
                     className="mx-auto flex h-10 items-center gap-2 rounded-[8px] bg-accent px-5 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
                   >
                     <i className="fa-solid fa-plus text-xs" />
-                    Установить {meta.label.toLowerCase()}
+                    {t("Добавить")} · {t(meta.label).toLowerCase()}
                   </button>
                 </div>
               </div>
@@ -764,7 +1024,7 @@ export default function BuildsPage() {
                           active ? "bg-card text-text" : "text-muted hover:text-text"
                         }`}
                       >
-                        <span className="min-w-0 flex-1 truncate">{f.label}</span>
+                        <span className="min-w-0 flex-1 truncate">{t(f.label)}</span>
                         <span
                           className={`shrink-0 text-[11px] ${active ? "text-accent" : "text-muted"}`}
                         >
@@ -780,7 +1040,7 @@ export default function BuildsPage() {
                   className="mt-auto flex h-10 items-center gap-2 rounded-[8px] px-3 text-sm text-muted transition-colors hover:text-text"
                 >
                   <i className="fa-solid fa-arrow-left text-xs" />
-                  Все сборки
+                  {t("Все сборки")}
                 </button>
               </aside>
 
@@ -791,14 +1051,14 @@ export default function BuildsPage() {
                     <i className="fa-solid fa-magnifying-glass text-xs text-muted" />
                     <input
                       className="w-full bg-transparent text-sm text-text outline-none placeholder:text-muted"
-                      placeholder={`Поиск среди ${meta.label.toLowerCase()}…`}
+                      placeholder={`${t("Поиск")} · ${t(meta.label).toLowerCase()}`}
                       value={modSearch}
                       onChange={(e) => setModSearch(e.target.value)}
                     />
                     {modSearch && (
                       <button
                         onClick={() => setModSearch("")}
-                        title="Очистить"
+                        title={t("Очистить")}
                         className="shrink-0 text-muted transition-colors hover:text-text"
                       >
                         <i className="fa-solid fa-xmark text-xs" />
@@ -810,7 +1070,7 @@ export default function BuildsPage() {
                     className="flex h-10 shrink-0 items-center gap-2 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
                   >
                     <i className="fa-solid fa-plus text-xs" />
-                    Добавить
+                    {t("Добавить")}
                   </button>
                 </div>
 
@@ -827,27 +1087,35 @@ export default function BuildsPage() {
                     <Check
                       on={items.length > 0 && items.every((m) => picked.includes(m.project_id))}
                     />
-                    Выделить все
+                    {t("Выделить все")}
                   </button>
                   {picked.length > 0 && (
                     <>
-                      <span className="text-[12px] text-[#818181]">выбрано {picked.length}</span>
+                      <span className="text-[12px] text-[#818181]">{t("выбрано")} {picked.length}</span>
                       <button
                         onClick={() => setConfirmMods(items.filter((m) => picked.includes(m.project_id)))}
-                        className="ml-auto flex h-8 items-center gap-2 rounded-[8px] bg-[#ef4444] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
+                        className="flex h-8 items-center gap-2 rounded-[8px] bg-[#ef4444] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
                       >
                         <i className="fa-solid fa-trash-can text-xs" />
-                        Удалить
+                        {t("Удалить")}
                       </button>
                     </>
                   )}
+                  <ViewToggle className="ml-auto" />
                 </div>
 
                 {}
-                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto py-1 pr-1 pb-4">
+                {}
+                <div
+                  className={`min-h-0 flex-1 overflow-y-auto py-1 pr-1 pb-4 ${
+                    rowView === "grid"
+                      ? "grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] content-start gap-2.5"
+                      : "space-y-2"
+                  }`}
+                >
                   {items.length === 0 && (
                     <div className="rounded-[16px] bg-card p-4 text-center text-xs text-muted">
-                      Ничего не нашлось
+                      {t("Ничего не нашлось")}
                     </div>
                   )}
                   {items.map((m, i) => (
@@ -865,6 +1133,7 @@ export default function BuildsPage() {
                       onUpdate={updateOneMod}
                       onToggle={toggleOneMod}
                       onRemove={confirmRemoveOne}
+                      tile={rowView === "grid"}
                     />
                   ))}
                 </div>
@@ -877,21 +1146,35 @@ export default function BuildsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col px-8 py-6">
+    <div className="relative flex h-full min-h-0 flex-col px-8 py-6">
+      {}
+      {dropping && (
+        <div className="drop-overlay pointer-events-none absolute inset-3 z-40 grid place-items-center rounded-[20px] border-2 border-dashed border-accent/70 bg-bg/70">
+          <div className="text-center">
+            <i className="fa-solid fa-file-arrow-down mb-3 block text-3xl text-accent" />
+            <div className="text-sm font-semibold text-text">
+              {t("Отпустите — импортируем сборку")}
+            </div>
+            <div className="mt-1 text-[12px] text-muted">
+              {t("Подойдут .acpack и .mrpack")}
+            </div>
+          </div>
+        </div>
+      )}
       {}
       <div className="flex justify-between">
         <h1 className="mb-5 text-[30px] font-light leading-none text-text">
-          Сборки
+          {t("Сборки")}
         </h1>
         {tab === "mine" && (
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={importPack}
               disabled={importing}
-              title="Импортировать .mrpack (Modrinth-модпак)"
+              title={t("Импортировать сборку .acpack или модпак .mrpack")}
               className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Импорт
+              {t("Импорт")}
               <i className={`fa-solid ${importing ? "fa-spinner fa-spin" : "fa-file-zipper"}`} />
             </button>
             <button
@@ -899,7 +1182,7 @@ export default function BuildsPage() {
               className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
             >
               <i className="fa-solid fa-plus" />
-              Создать сборку
+              {t("Создать сборку")}
             </button>
           </div>
         )}
@@ -910,15 +1193,15 @@ export default function BuildsPage() {
             { id: "mine", label: "Мои сборки" },
             { id: "popular", label: "Популярные" },
           ] as const
-        ).map((t, i) => (
+        ).map((x) => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`leading-none transition-colors ${
-              i === 0 ? "text-[20px] font-light" : "text-[20px] font-light"
-            } ${tab === t.id ? "text-text" : "text-muted hover:text-text"}`}
+            key={x.id}
+            onClick={() => setTab(x.id)}
+            className={`text-[20px] font-light leading-none transition-colors ${
+              tab === x.id ? "text-text" : "text-muted hover:text-text"
+            }`}
           >
-            {t.label}
+            {t(x.label)}
           </button>
         ))}
       </div>
@@ -938,18 +1221,18 @@ export default function BuildsPage() {
               <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-card text-2xl text-muted">
                 <i className="fa-solid fa-cubes-stacked" />
               </div>
-              <h2 className="font-semibold text-text">Сборок пока нет</h2>
+              <h2 className="font-semibold text-text">{t("Сборок пока нет")}</h2>
               <p className="mt-1 text-sm text-muted">
-                Создайте сборку, выберите ядро и добавьте моды с Modrinth
+                {t("Создайте сборку, выберите ядро и добавьте моды с Modrinth")}
               </p>
             </div>
           </div>
         ) : (
           <>
           {builds.length > 0 && (() => {
-            const totalPages = Math.ceil(builds.length / BUILDS_PER_PAGE);
+            const totalPages = Math.ceil(ordered.length / BUILDS_PER_PAGE);
             const safePage = Math.min(page, Math.max(0, totalPages - 1));
-            const pageBuilds = builds.slice(
+            const pageBuilds = ordered.slice(
               safePage * BUILDS_PER_PAGE,
               safePage * BUILDS_PER_PAGE + BUILDS_PER_PAGE
             );
@@ -988,27 +1271,49 @@ export default function BuildsPage() {
                         ) : (
                           <div className="absolute inset-0 bg-gradient-to-br from-accent/30 via-card to-bg" />
                         )}
-                        <div className="absolute inset-0 bg-black/80" />
+                        <div className="absolute inset-0 bg-[var(--veil)]" />
 
                         {}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (running || downloading) return;
-                            setConfirmDel(b);
+                            void toggleFavorite(b);
                           }}
-                          disabled={running || downloading}
-                          title={running ? "Сборка запущена" : "Удалить сборку"}
-                          className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-lg bg-black/50 text-white/70 opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100 disabled:cursor-not-allowed"
+                          title={b.favorite ? t("Открепить") : t("Закрепить")}
+                          className={`absolute left-2 top-2 grid h-7 w-7 place-items-center rounded-lg transition ${
+                            b.favorite
+                              ? "text-accent opacity-100"
+                              : "text-[var(--veil-text-dim)] opacity-0 hover:text-accent group-hover:opacity-100"
+                          }`}
                         >
-                          <i className="fa-solid fa-trash-can text-xs" />
+                          <i
+                            className={`${b.favorite ? "fa-solid" : "fa-regular"} fa-star text-sm`}
+                          />
                         </button>
+
+                        {}
+                        <div className="absolute right-2 top-2 flex gap-1.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (running || downloading) return;
+                              setConfirmDel(b);
+                            }}
+                            disabled={running || downloading}
+                            title={running ? t("Сборка запущена") : t("Удалить сборку")}
+                            className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--veil-btn)] text-[var(--veil-text-dim)] opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100 disabled:cursor-not-allowed"
+                          >
+                            <i className="fa-solid fa-trash-can text-xs" />
+                          </button>
+                        </div>
 
                         <div className="absolute inset-x-0 bottom-0 flex items-end gap-3 p-4">
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[15px] font-medium text-white">{b.name}</div>
-                            <div className="truncate text-[10px] text-[#818181]">
-                              {b.mc_version} · {loaderLabel[b.loader] ?? b.loader} · {b.mods.length} модов
+                            <div className="truncate text-[15px] font-medium text-[var(--veil-text)]">
+                              {b.name}
+                            </div>
+                            <div className="truncate text-[10px] text-[var(--veil-text-dim)]">
+                              {b.mc_version} · {loaderLabel[b.loader] ?? b.loader} · {b.mods.length} {t("модов")}
                               {b.playtime_secs > 0 && ` · ${fmtPlaytime(b.playtime_secs)}`}
                             </div>
                           </div>
@@ -1020,7 +1325,7 @@ export default function BuildsPage() {
                               }}
                               className="h-9 shrink-0 rounded-[8px] bg-[#ef4444] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
                             >
-                              Закрыть
+                              {t("Закрыть")}
                             </button>
                           ) : (
                             <button
@@ -1029,13 +1334,13 @@ export default function BuildsPage() {
                                 startLaunch(b.id, b.name);
                               }}
                               disabled={launching.has(`build:${b.id}`)}
-                              title="Запустить сборку"
+                              title={t("Запустить сборку")}
                               className="h-9 shrink-0 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {launching.has(`build:${b.id}`) ? (
                                 <i className="fa-solid fa-spinner fa-spin" />
                               ) : (
-                                "Играть"
+                                t("Играть")
                               )}
                             </button>
                           )}
@@ -1060,15 +1365,18 @@ export default function BuildsPage() {
           onClose={() => setCreateModal(false)}
           onCreated={() => {
             refresh();
-            toast("Сборка создана", "success");
+            toast(t("Сборка создана"), "success");
           }}
         />
       )}
 
       {confirmDel && (
         <ConfirmModal
-          title="Удалить сборку"
-          message={`Удалить сборку «${confirmDel.name}» вместе со всеми модами? Это действие нельзя отменить.`}
+          title={t("Удалить сборку")}
+          message={t(
+            "Удалить сборку «{name}» вместе со всеми модами? Это действие нельзя отменить.",
+            { name: confirmDel.name }
+          )}
           onConfirm={confirmDelete}
           onClose={() => setConfirmDel(null)}
         />
@@ -1076,13 +1384,17 @@ export default function BuildsPage() {
 
       {confirmMods && (
         <ConfirmModal
-          title={confirmMods.length > 1 ? "Удалить выбранное" : "Удалить файл"}
+          title={confirmMods.length > 1 ? t("Удалить выбранное") : t("Удалить файл")}
           message={
             confirmMods.length > 1
-              ? `Удалить ${confirmMods.length} шт. из сборки? Файлы будут стёрты с диска.`
-              : `Удалить «${confirmMods[0].name}» из сборки? Файл будет стёрт с диска.`
+              ? t("Удалить {n} шт. из сборки? Файлы будут стёрты с диска.", {
+                  n: confirmMods.length,
+                })
+              : t("Удалить «{name}» из сборки? Файл будет стёрт с диска.", {
+                  name: confirmMods[0].name,
+                })
           }
-          confirmLabel="Удалить"
+          confirmLabel={t("Удалить")}
           confirmIcon="fa-trash-can"
           onConfirm={() => removeMods(confirmMods)}
           onClose={() => setConfirmMods(null)}

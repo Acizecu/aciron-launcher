@@ -39,10 +39,7 @@ fn load() -> Vec<Recent> {
 }
 
 fn save(list: &[Recent]) {
-    // Атомарная запись (tmp+rename), как для settings/builds/accounts. Прежний
-    // прямой std::fs::write мог оставить обрезанный recents.json при крахе
-    // посреди записи (карточки последних запусков пропали бы). atomic::write
-    // сам создаёт родительскую директорию. Ошибки, как и раньше, глотаем.
+
     if let Ok(txt) = serde_json::to_string_pretty(list) {
         let _ = crate::atomic::write(&store_file(), &txt);
     }

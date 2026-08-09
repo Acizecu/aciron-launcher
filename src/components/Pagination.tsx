@@ -1,4 +1,5 @@
 
+import { t } from "../i18n";
 export default function Pagination({
   page,
   totalPages,
@@ -24,7 +25,7 @@ export default function Pagination({
       <button
         disabled={page === 0}
         onClick={() => onChange(Math.max(0, page - 1))}
-        title="Предыдущая страница"
+        title={t("Предыдущая страница")}
         className={arrow}
       >
         <i className="fa-solid fa-chevron-left text-xs" />
@@ -47,7 +48,7 @@ export default function Pagination({
       <button
         disabled={page >= totalPages - 1}
         onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
-        title="Следующая страница"
+        title={t("Следующая страница")}
         className={arrow}
       >
         <i className="fa-solid fa-chevron-right text-xs" />

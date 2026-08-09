@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useChat } from "../chat";
+import { t as tr, useLang } from "../i18n";
 
 export type NavId = "home" | "builds" | "wardrobe" | "friends" | "settings" | "servers";
 
@@ -13,9 +14,6 @@ const topItems: { id: NavId; label: string; icon: string }[] = [
   { id: "friends", label: "Друзья", icon: "fa-comments" },
 ];
 
-// Item вынесен на уровень модуля: раньше он объявлялся внутри тела Sidebar,
-// поэтому был новым типом компонента на каждый рендер и React размонтировал/
-// монтировал все кнопки заново вместо диффа. Разметка и поведение идентичны.
 function Item({
   id,
   label,
@@ -32,10 +30,11 @@ function Item({
   badge: number;
 }) {
   const isActive = active === id;
+  const name = tr(label);
   return (
     <button
       onClick={() => onSelect(id)}
-      title={badge > 0 ? `${label}: новых сообщений ${badge}` : label}
+      title={badge > 0 ? tr("{name}: новых сообщений {n}", { name, n: badge }) : name}
       className={[
         "relative flex h-12 w-full items-center justify-center transition-colors",
         isActive ? "text-accent" : "text-muted hover:text-text",
@@ -63,6 +62,7 @@ export default function Sidebar({
   onSelect: (id: NavId) => void;
 }) {
 
+  useLang();
   const { unread } = useChat();
   const unreadTotal = useMemo(
     () => Object.values(unread).reduce((a, b) => a + b, 0),
@@ -87,7 +87,7 @@ export default function Sidebar({
           {}
         <Item
           id="settings"
-          label="Настройка лаунчера"
+          label={tr("Настройка лаунчера")}
           icon="fa-gear"
           active={active}
           onSelect={onSelect}

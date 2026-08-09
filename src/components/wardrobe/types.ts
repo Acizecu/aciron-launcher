@@ -1,20 +1,29 @@
 
 import type { SkinModelId } from "../../api";
+import { t, ts } from "../../i18n";
 
 export function human(e: unknown): string {
-  const m = String(e).replace(/^Error:\s*/, "");
-  if (m === "SESSION_EXPIRED") return "Сессия Aciron ID истекла — войдите заново";
-  if (m === "NO_ACIRON") return "Гардероб доступен с аккаунтом Aciron ID";
+  const m = ts(String(e));
+  if (m === "SESSION_EXPIRED") return t("Сессия Aciron ID истекла — войдите заново");
+  if (m === "NO_ACIRON") return t("Гардероб доступен с аккаунтом Aciron ID");
   return m;
 }
 
 export type CapeOrigin = "license" | "own" | "mojang" | "aciron";
 
 export const ORIGIN_LABEL: Record<CapeOrigin, string> = {
-  license: "На аккаунте",
-  own: "Свой плащ",
-  mojang: "Дизайн Mojang",
-  aciron: "Дизайн Aciron",
+  get license() {
+    return t("На аккаунте");
+  },
+  get own() {
+    return t("Свой плащ");
+  },
+  get mojang() {
+    return t("Дизайн Mojang");
+  },
+  get aciron() {
+    return t("Дизайн Aciron");
+  },
 };
 
 export type CapeEntry = {

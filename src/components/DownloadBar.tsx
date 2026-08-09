@@ -1,4 +1,5 @@
 import { useLauncherCtx } from "../LauncherContext";
+import { t, ts } from "../i18n";
 
 const STAGE: Record<string, { icon: string; title: string }> = {
   java: { icon: "fa-mug-hot", title: "Среда Java" },
@@ -39,10 +40,13 @@ export default function DownloadBar() {
     icon: "fa-download",
     title: "Загрузка",
   };
-  const title = isError ? "Ошибка" : meta.title;
+  const title = isError ? t("Ошибка") : t(meta.title);
+
   const sub = isError
-    ? error || "Не удалось загрузить"
-    : progress?.message ?? "Подготовка…";
+    ? (error && ts(error)) || t("Не удалось загрузить")
+    : progress?.message
+    ? ts(progress.message)
+    : t("Подготовка…");
 
   return (
     <div

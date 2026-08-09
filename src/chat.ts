@@ -1,5 +1,6 @@
 
 import { useSyncExternalStore } from "react";
+import { t, ts } from "./i18n";
 import {
   cachePeek,
   cacheSet,
@@ -19,9 +20,6 @@ export type LocalMessage = ChatMessage & {
 
   state?: SendState;
 
-  // Стабильный React-ключ, переживающий подмену temp→real: id меняется с tmp-… на
-  // серверный, и без этого ключа React ремоунтил пузырь (сообщение «прыгало» при
-  // смене метки «отправляется»→«доставлено»). localId остаётся прежним весь путь.
   localId?: string;
 };
 
@@ -47,7 +45,6 @@ type State = {
 
   last: Record<string, number>;
 
-  // userId → печатает (true, пока не истёк TTL). Эфемерно, в кэш не пишется.
   typing: Record<string, boolean>;
 };
 
@@ -115,7 +112,7 @@ export async function openConversation(userId: string): Promise<void> {
       error: "",
     });
   } catch (e) {
-    patch(userId, { loading: false, error: String(e).replace(/^Error:\s*/, "") });
+    patch(userId, { loading: false, error: ts(String(e)) });
   }
 }
 
@@ -131,27 +128,19 @@ export async function loadOlder(userId: string): Promise<void> {
       loading: false,
     });
   } catch (e) {
-    patch(userId, { loading: false, error: String(e).replace(/^Error:\s*/, "") });
+    patch(userId, { loading: false, error: ts(String(e)) });
   }
 }
 
 const tempId = () => `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-// --- Пересылка с атрибуцией «переслано от <кого>» ---
-// Атрибуцию исходного автора кодируем ПРЯМО в тело сообщения приватными
-// маркерами (Private Use Area). Причина: сервер хранит и возвращает тело
-// как есть (история + realtime прокидывает message вербатим), поэтому шапка
-// «Переслано от…» переживает перезагрузку и доезжает получателю БЕЗ новых
-// серверных полей. Клиент парсит маркер и рисует стилизованную шапку; маркеры
-// невидимы и не являются пробелами (trim их не срежет).
 const FWD_A = "";
 const FWD_B = "";
 
 export function encodeForward(fromName: string, body: string): string {
-  // Пересылка уже пересланного сохраняет ПЕРВОГО автора: если тело уже помечено,
-  // не оборачиваем повторно — отдаём как есть.
+
   if (parseForward(body).forwardedFrom) return body;
-  const name = fromName.replace(FWD_A, "").replace(FWD_B, "").trim() || "неизвестно";
+  const name = fromName.replace(FWD_A, "").replace(FWD_B, "").trim() || t("неизвестно");
   return `${FWD_A}${name}${FWD_B}${body}`;
 }
 
@@ -161,6 +150,95 @@ export function parseForward(body: string): { forwardedFrom?: string; text: stri
     if (end > 1) return { forwardedFrom: body.slice(1, end), text: body.slice(end + 1) };
   }
   return { text: body };
+}
+
+const RE_A = "";
+const RE_B = "";
+const RE_C = "";
+
+const QUOTE_MAX = 140;
+
+export function encodeReply(author: string, quoted: string, body: string): string {
+  const clean = (s: string) =>
+    s.replace(RE_A, "").replace(RE_B, "").replace(RE_C, "").replace(/\s+/g, " ").trim();
+
+  const inner = parseReply(parseForward(quoted).text).text;
+  const short = clean(inner).slice(0, QUOTE_MAX);
+  return `${RE_A}${clean(author) || "…"}${RE_B}${short}${RE_C}${body}`;
+}
+
+export function parseReply(body: string): {
+  replyTo?: { author: string; text: string };
+  text: string;
+} {
+  if (!body.startsWith(RE_A)) return { text: body };
+  const b = body.indexOf(RE_B);
+  const c = body.indexOf(RE_C);
+  if (b < 0 || c < b) return { text: body };
+  return {
+    replyTo: { author: body.slice(1, b), text: body.slice(b + 1, c) },
+    text: body.slice(c + 1),
+  };
+}
+
+const RC_A = "";
+const RC_B = "";
+
+export function encodeReaction(targetId: string, emoji: string): string {
+  return `${RC_A}${targetId}${RC_B}${emoji}`;
+}
+
+export function parseReaction(body: string): { targetId: string; emoji: string } | null {
+  if (!body.startsWith(RC_A)) return null;
+  const b = body.indexOf(RC_B);
+  if (b < 1) return null;
+  return { targetId: body.slice(1, b), emoji: body.slice(b + 1) };
+}
+
+export type Reaction = { emoji: string; count: number; mine: boolean };
+
+export function splitReactions(
+  messages: LocalMessage[],
+  friendId: string
+): { visible: LocalMessage[]; reactions: Record<string, Reaction[]> } {
+  const visible: LocalMessage[] = [];
+
+  const latest = new Map<string, Map<string, string>>();
+
+  for (const m of messages) {
+    const r = parseReaction(m.body);
+    if (!r) {
+      visible.push(m);
+      continue;
+    }
+    const who = m.from === friendId ? "them" : "me";
+    const byWho = latest.get(r.targetId) ?? new Map<string, string>();
+    byWho.set(who, r.emoji);
+    latest.set(r.targetId, byWho);
+  }
+
+  const reactions: Record<string, Reaction[]> = {};
+  for (const [targetId, byWho] of latest) {
+    const counts = new Map<string, Reaction>();
+    for (const [who, emoji] of byWho) {
+      if (!emoji) continue;
+      const cur = counts.get(emoji) ?? { emoji, count: 0, mine: false };
+      cur.count += 1;
+      cur.mine = cur.mine || who === "me";
+      counts.set(emoji, cur);
+    }
+    const list = [...counts.values()];
+    if (list.length) reactions[targetId] = list;
+  }
+  return { visible, reactions };
+}
+
+export function myReaction(reactions: Reaction[] | undefined): string {
+  return reactions?.find((r) => r.mine)?.emoji ?? "";
+}
+
+export async function react(userId: string, targetId: string, emoji: string, current: string) {
+  await send(userId, encodeReaction(targetId, emoji === current ? "" : emoji));
 }
 
 export async function send(userId: string, body: string): Promise<void> {
@@ -183,7 +261,7 @@ export async function send(userId: string, body: string): Promise<void> {
     : null;
   if (conv && temp) patch(userId, { messages: [...conv.messages, temp] });
 
-  touch(userId, Date.now());
+  if (!parseReaction(text)) touch(userId, Date.now());
 
   try {
     const real = await chatSend(userId, text);
@@ -226,8 +304,6 @@ function replaceTemp(userId: string, tempMessageId: string, real: ChatMessage) {
   const conv = state.byUser[userId];
   if (!conv) return;
 
-  // Сохраняем localId temp-сообщения на реальном — React-ключ не меняется, пузырь
-  // не ремоунтится, метка «отправляется»→«доставлено» сменяется на месте, без прыжка.
   const localId = conv.messages.find((m) => m.id === tempMessageId)?.localId ?? tempMessageId;
   const already = conv.messages.some((m) => m.id === real.id);
   patch(userId, {
@@ -276,6 +352,8 @@ function append(other: string, msg: ChatMessage) {
 function receive(other: string, msg: ChatMessage) {
   append(other, msg);
 
+  if (parseReaction(msg.body)) return;
+
   touch(other, msg.at);
 
   const incoming = msg.from === other;
@@ -294,9 +372,6 @@ function markTheirsRead(byUserId: string) {
   patch(byUserId, { messages: conv.messages.map((m) => ({ ...m, read: true })) });
 }
 
-// --- «Печатает…» ---
-// Индикатор эфемерный: приходит по вебсокету (событие chat-typing от Rust),
-// держится TTL и сам гаснет, если новых сигналов нет.
 const TYPING_TTL = 5000;
 const typingTimers: Record<string, number> = {};
 
@@ -312,8 +387,6 @@ function setTyping(other: string | undefined) {
   }, TYPING_TTL);
 }
 
-// Троттлированное уведомление сервера, что МЫ печатаем: не чаще раза в 2.5с на
-// собеседника (сервер тоже троттлит и ретранслирует только друзьям).
 const lastTyped: Record<string, number> = {};
 export function notifyTyping(userId: string) {
   const now = Date.now();
@@ -341,7 +414,9 @@ function listen(): () => void {
       const { with: other, message } = e.payload;
       receive(other, message);
 
-      if (message.from === other) for (const cb of arrivals) cb(message, other);
+      if (message.from === other && !parseReaction(message.body)) {
+        for (const cb of arrivals) cb(message, other);
+      }
     });
     const b = await on<string>("chat-read", (e) => markTheirsRead(e.payload));
     const c = await on<string[]>("chat-deleted", (e) => dropIds(e.payload ?? []));
@@ -391,12 +466,6 @@ export function useChat(): State {
   );
 }
 
-// Селекторные подписчики: вместо возврата всего `state` (любой emit создаёт новый
-// top-level объект → все потребители useChat ре-рендерятся на любое изменение чата)
-// возвращаем только нужный срез. patch() спредит только byUser, поэтому ссылки на
-// unread/last и на конкретную Conversation стабильны, пока сам срез не изменился →
-// useSyncExternalStore выходит из ре-рендера по Object.is. Поведение идентично
-// useChat(), но подписчик перерисовывается только при изменении его среза.
 export function useUnread(): Record<string, number> {
   return useSyncExternalStore(
     subscribe,
@@ -405,8 +474,6 @@ export function useUnread(): Record<string, number> {
   );
 }
 
-// Печатает ли собеседник прямо сейчас. Возвращает булев срез, поэтому ре-рендер
-// только при смене состояния именно этого пользователя.
 export function useTyping(userId: string): boolean {
   return useSyncExternalStore(
     subscribe,
@@ -424,9 +491,7 @@ export function useLast(): Record<string, number> {
 }
 
 export function useConversation(userId: string): Conversation {
-  // Подписка на срез одного диалога: тик unread или сообщение в ДРУГОМ диалоге
-  // не трогают state.byUser[userId] (patch создаёт новый объект только для своего
-  // userId), поэтому снапшот стабилен по Object.is и этот компонент не ре-рендерится.
+
   return useSyncExternalStore(
     subscribe,
     () => state.byUser[userId] ?? EMPTY,

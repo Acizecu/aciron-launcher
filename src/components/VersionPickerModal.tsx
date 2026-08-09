@@ -3,6 +3,7 @@ import Modal from "./Modal";
 import VersionList from "./VersionList";
 import { installModpackContent, type ModHit, type ModVersion, type SourceId } from "../api";
 import { useToast } from "../ToastContext";
+import { t, ts } from "../i18n";
 
 export default function VersionPickerModal({
   pack,
@@ -27,26 +28,36 @@ export default function VersionPickerModal({
     );
     try {
       await installModpackContent(source, pack.project_id, v.id);
-      toast(`Сборка «${pack.title}» (${v.version_number}) установлена`, "success");
+      toast(
+        t("Сборка «{title}» ({version}) установлена", {
+          title: pack.title,
+          version: v.version_number,
+        }),
+        "success"
+      );
       onInstalled();
       onClose();
     } catch (e) {
       window.dispatchEvent(new CustomEvent("aciron-task-end"));
-      toast(String(e), "error");
+      toast(ts(String(e)), "error");
       setBusy(null);
     }
   };
 
   return (
-    <Modal title={`Версии сборки — ${pack.title}`} icon="fa-layer-group" onClose={onClose}>
+    <Modal
+      title={t("Версии сборки — {title}", { title: pack.title })}
+      icon="fa-layer-group"
+      onClose={onClose}
+    >
       <div className="max-h-[60vh] overflow-y-auto p-4">
         <p className="mb-3 text-xs text-muted">
-          Выберите версию — она установится как отдельная сборка.
+          {t("Выберите версию — она установится как отдельная сборка.")}
         </p>
         <VersionList
           source={source}
           projectId={pack.project_id}
-          actionLabel="Скачать"
+          actionLabel={t("Скачать")}
           showFilters
           busyId={busy}
           onPick={pick}

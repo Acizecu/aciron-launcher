@@ -173,12 +173,8 @@ export default function PlayerView({
       renderer.render(scene, camera);
     };
 
-    // Гейтинг RAF по видимости: не крутим цикл, когда превью не видно (окно свёрнуто/
-    // скрыто, либо панель перекрыта модалкой). Поза time-driven (idlePose/applyAnimation
-    // по clock.getElapsedTime()), поэтому при возобновлении она продолжается с корректной
-    // фазы — визуально 1-в-1, экономится только лишний GPU/CPU, пока превью не смотрят.
     let running = false;
-    let visibleInView = true; // IntersectionObserver сообщит фактическое значение
+    let visibleInView = true;
     const shouldRun = () => alive && visibleInView && !document.hidden;
     const startLoop = () => {
       if (running || !shouldRun()) return;

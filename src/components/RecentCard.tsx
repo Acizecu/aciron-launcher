@@ -3,16 +3,14 @@ import { type Recent } from "../api";
 import { cardInDelay } from "../anim";
 import { coverFor } from "../covers";
 import { useLauncherCtx } from "../LauncherContext";
+import { t } from "../i18n";
 
 function playtime(secs: number): string {
-  if (secs < 60) return "< 1мин.";
-  if (secs < 3600) return `${Math.round(secs / 60)}мин.`;
-  return `${Math.floor(secs / 3600)}ч.`;
+  if (secs < 60) return t("< 1мин.");
+  if (secs < 3600) return t("{n}мин.", { n: Math.round(secs / 60) });
+  return t("{n}ч.", { n: Math.floor(secs / 3600) });
 }
 
-/** Переход к сборке из карточки последнего запуска. id рекента у сборок = "build:<id>";
- *  кладём чистый id в window (BuildsPage читает его при монтировании — она размонтирована,
- *  пока мы на главной) и просим App переключиться на вкладку «Сборки». */
 function goToBuild(recentId: string) {
   const id = recentId.startsWith("build:") ? recentId.slice("build:".length) : recentId;
   (window as unknown as { __acironOpenBuild?: string }).__acironOpenBuild = id;
@@ -55,15 +53,14 @@ export default function RecentCard({
       )}
 
       {}
-      <div className="absolute inset-0 bg-black/80" />
+      <div className="absolute inset-0 bg-[var(--veil)]" />
 
-      {/* Клик по самой карточке ведёт к сборке. Лежит под кнопками (они идут
-          дальше в разметке), поэтому «Продолжить» и крестик перехват не задевает. */}
+      {}
       {recent.kind === "build" && (
         <button
           onClick={() => goToBuild(recent.id)}
-          title="Перейти к сборке"
-          aria-label="Перейти к сборке"
+          title={t("Перейти к сборке")}
+          aria-label={t("Перейти к сборке")}
           className="absolute inset-0 h-full w-full cursor-pointer bg-white/0 transition-colors hover:bg-white/5"
         />
       )}
@@ -71,27 +68,28 @@ export default function RecentCard({
       {}
       <button
         onClick={onRemove}
-        title="Убрать из последних запусков"
-        className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-lg bg-black/50 text-white/70 opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
+        title={t("Убрать из последних запусков")}
+        className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-lg bg-[var(--veil-btn)] text-[var(--veil-text-dim)] opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
       >
         <i className="fa-solid fa-xmark text-xs" />
       </button>
 
-      {/* pointer-events-none, чтобы клик по названию/подписи доходил до подложки
-          перехода к сборке; сами кнопки возвращают себе события. */}
+      {}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-3 p-4">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[15px] font-medium text-white">
+          <div className="truncate text-[15px] font-medium text-[var(--veil-text)]">
             {recent.kind === "build" ? recent.name : `MC ${recent.name}`}
           </div>
-          <div className="text-[10px] text-[#818181]">Вы играли {playtime(recent.playtime_secs)}</div>
+          <div className="text-[10px] text-[var(--veil-text-dim)]">
+            {t("Вы играли {time}", { time: playtime(recent.playtime_secs) })}
+          </div>
         </div>
         {running ? (
           <button
             onClick={() => stop(recent.id)}
             className="pointer-events-auto h-9 shrink-0 rounded-lg bg-[#ef4444] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
           >
-            Закрыть
+            {t("Закрыть")}
           </button>
         ) : (
           <button
@@ -107,7 +105,7 @@ export default function RecentCard({
             disabled={busy}
             className="pointer-events-auto h-9 shrink-0 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {busy ? <i className="fa-solid fa-spinner fa-spin" /> : "Продолжить"}
+            {busy ? <i className="fa-solid fa-spinner fa-spin" /> : t("Продолжить")}
           </button>
         )}
       </div>

@@ -166,10 +166,7 @@ async fn ensure_java_runtime(
 
 #[derive(Clone, Serialize)]
 struct Progress {
-    /// Тип операции: "launch" (запуск игры), "install" (установка модпака/версии),
-    /// "migrate" (перенос данных). Событие launch-progress ГЛОБАЛЬНОЕ, поэтому без
-    /// этого тега «done» от запуска игры закрывал бы орб идущей установки, а ошибка
-    /// установки поднимала бы баннер запуска. Фронт слушает только «свою» операцию.
+
     op: String,
     stage: String,
     message: String,
@@ -177,8 +174,6 @@ struct Progress {
     total: u64,
 }
 
-/// emit c явным тегом операции. Используют установщики модпаков ("install") и
-/// перенос данных ("migrate").
 pub fn emit_op(app: &AppHandle, op: &str, stage: &str, message: &str, current: u64, total: u64) {
     let _ = app.emit(
         "launch-progress",
@@ -192,8 +187,6 @@ pub fn emit_op(app: &AppHandle, op: &str, stage: &str, message: &str, current: u
     );
 }
 
-/// emit по умолчанию — операция запуска игры ("launch"). Все вызовы в launcher.rs и
-/// forge.rs относятся к запуску, поэтому им дефолт подходит без правок.
 pub fn emit(app: &AppHandle, stage: &str, message: &str, current: u64, total: u64) {
     emit_op(app, "launch", stage, message, current, total);
 }
@@ -340,10 +333,24 @@ pub(crate) async fn download_file_checked(
             tokio::task::spawn_blocking(move || {
                 if content_addressed {
                     // Имя = SHA1: достаточно наличия и размера.
-                    file_meta_matches(&p, size)
-                } else {
-                    file_matches(&p, sha1_owned.as_deref(), size)
+                    return file_meta_matches(&p, size);
                 }
+                // Имя — maven-путь, а не хэш, поэтому честная проверка означает
+                // прочитать файл целиком. Если его уже проверяли и с тех пор не
+                // трогали — верим отпечатку и не читаем заново: иначе каждый
+                // запуск пере-хеширует весь classpath (см. verify.rs).
+                if let Some(expected) = sha1_owned.as_deref() {
+                    if crate::verify::is_verified(&p, expected, size) {
+                        return true;
+                    }
+                }
+                let ok = file_matches(&p, sha1_owned.as_deref(), size);
+                if ok {
+                    if let Some(expected) = sha1_owned.as_deref() {
+                        crate::verify::remember(&p, expected);
+                    }
+                }
+                ok
             })
             .await
             .unwrap_or(false)
@@ -373,6 +380,13 @@ pub(crate) async fn download_file_checked(
             return Err(format!(
                 "Хэш SHA1 не совпал: ожидалось {expected}, получено {actual}"
             ));
+        }
+        // Только что посчитали хэш по свежим байтам — запоминаем, чтобы
+        // следующий запуск не считал его снова.
+        if !content_addressed {
+            let p = path.to_path_buf();
+            let e = expected.to_string();
+            let _ = tokio::task::spawn_blocking(move || crate::verify::remember(&p, &e)).await;
         }
     }
     Ok(())
@@ -436,6 +450,25 @@ fn file_meta_matches(path: &Path, size: Option<u64>) -> bool {
         }
     }
     true
+}
+
+/// Отпечаток состояния нативов: какие jar распаковывали и сколько файлов вышло.
+///
+/// Имена и размеры jar ловят смену версии или загрузчика, число файлов в папке —
+/// удалённые вручную DLL. Оба признака дешёвые: метаданные, без чтения архивов.
+fn natives_stamp(jars: &[PathBuf], natives_dir: &Path) -> String {
+    let mut parts: Vec<String> = jars
+        .iter()
+        .map(|j| {
+            let size = std::fs::metadata(j).map(|m| m.len()).unwrap_or(0);
+            format!("{}:{size}", j.file_name().unwrap_or_default().to_string_lossy())
+        })
+        .collect();
+    parts.sort();
+    let files = std::fs::read_dir(natives_dir)
+        .map(|d| d.filter_map(|e| e.ok()).count())
+        .unwrap_or(0);
+    format!("{}|{files}", parts.join(","))
 }
 
 /// Распаковывает натив-jar в папку natives (только библиотеки, без META-INF).
@@ -503,30 +536,154 @@ pub(crate) fn maven_path(name: &str) -> Option<String> {
     Some(format!("{group}/{artifact}/{version}/{file}"))
 }
 
-/// Профиль загрузчика (Fabric/Quilt) под конкретную версию Minecraft.
+/// Адрес меты загрузчика: список версий и база для профиля.
+pub(crate) fn loader_meta(loader: &str, mc: &str) -> Option<(String, &'static str)> {
+    match loader {
+        "fabric" => Some((
+            format!("https://meta.fabricmc.net/v2/versions/loader/{mc}"),
+            "https://meta.fabricmc.net/v2/versions/loader",
+        )),
+        "quilt" => Some((
+            format!("https://meta.quiltmc.org/v3/versions/loader/{mc}"),
+            "https://meta.quiltmc.org/v3/versions/loader",
+        )),
+        _ => None,
+    }
+}
+
+#[derive(Serialize)]
+pub struct LoaderVersion {
+    pub version: String,
+
+    pub stable: bool,
+
+    pub latest: bool,
+}
+
+#[tauri::command]
+pub async fn loader_versions(
+    loader: String,
+    mc_version: String,
+) -> Result<Vec<LoaderVersion>, String> {
+    let client = reqwest::Client::builder()
+        .user_agent("AcironLauncher/0.1")
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut out: Vec<LoaderVersion> = match loader.as_str() {
+        "fabric" | "quilt" => {
+            let (list_url, _) = loader_meta(&loader, &mc_version)
+                .ok_or_else(|| format!("Этот загрузчик не поддерживается: {loader}"))?;
+            let list = get_json(&client, &list_url).await?;
+            list.as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|e| {
+                            Some(LoaderVersion {
+                                version: e["loader"]["version"].as_str()?.to_string(),
+                                stable: e["loader"]["stable"].as_bool().unwrap_or(false),
+                                latest: false,
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        }
+        "forge" => {
+
+            let meta = get_json(
+                &client,
+                "https://files.minecraftforge.net/net/minecraftforge/forge/maven-metadata.json",
+            )
+            .await?;
+            let recommended = get_json(
+                &client,
+                "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json",
+            )
+            .await
+            .ok()
+            .and_then(|p| {
+                p["promos"][format!("{mc_version}-recommended")]
+                    .as_str()
+                    .map(|s| s.to_string())
+            });
+            let prefix = format!("{mc_version}-");
+            let mut v: Vec<LoaderVersion> = meta[&mc_version]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str())
+
+                        .map(|s| s.strip_prefix(&prefix).unwrap_or(s).to_string())
+                        .map(|version| LoaderVersion {
+                            stable: recommended.as_deref() == Some(version.as_str()),
+                            version,
+                            latest: false,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            v.reverse();
+            v
+        }
+        "neoforge" => {
+            let xml = client
+                .get("https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml")
+                .send()
+                .await
+                .map_err(|e| e.to_string())?
+                .text()
+                .await
+                .map_err(|e| e.to_string())?;
+            let p: Vec<&str> = mc_version.split('.').collect();
+            let major = p.get(1).ok_or("Неверная версия Minecraft")?;
+            let minor = p.get(2).copied().unwrap_or("0");
+            let prefix = format!("{major}.{minor}.");
+            let mut v: Vec<LoaderVersion> = xml
+                .split("<version>")
+                .skip(1)
+                .filter_map(|s| s.split("</version>").next())
+                .filter(|x| x.starts_with(&prefix))
+                .map(|x| LoaderVersion {
+                    version: x.to_string(),
+
+                    stable: !x.contains("beta"),
+                    latest: false,
+                })
+                .collect();
+            v.reverse();
+            v
+        }
+        other => return Err(format!("Этот загрузчик не поддерживается: {other}")),
+    };
+
+    if let Some(first) = out.first_mut() {
+        first.latest = true;
+    }
+    Ok(out)
+}
+
 async fn fetch_loader_profile(
     client: &reqwest::Client,
     loader: &str,
     mc: &str,
+    pinned: Option<&str>,
 ) -> Result<Value, String> {
-    let (list_url, base) = match loader {
-        "fabric" => (
-            format!("https://meta.fabricmc.net/v2/versions/loader/{mc}"),
-            "https://meta.fabricmc.net/v2/versions/loader",
-        ),
-        "quilt" => (
-            format!("https://meta.quiltmc.org/v3/versions/loader/{mc}"),
-            "https://meta.quiltmc.org/v3/versions/loader",
-        ),
-        _ => return Err(format!("Загрузчик {loader} не поддерживается")),
+    let (list_url, base) = loader_meta(loader, mc)
+        .ok_or_else(|| format!("Этот загрузчик не поддерживается: {loader}"))?;
+    let lv = match pinned.filter(|s| !s.is_empty()) {
+        Some(v) => v.to_string(),
+        None => {
+            let list = get_json(client, &list_url).await?;
+            list.as_array()
+                .and_then(|a| a.first())
+                .and_then(|e| e["loader"]["version"].as_str())
+                .ok_or_else(|| format!("Нет версии загрузчика под эту Minecraft: {loader} · {mc}"))?
+                .to_string()
+        }
     };
-    let list = get_json(client, &list_url).await?;
-    let lv = list
-        .as_array()
-        .and_then(|a| a.first())
-        .and_then(|e| e["loader"]["version"].as_str())
-        .ok_or_else(|| format!("Нет версии {loader} под Minecraft {mc}"))?
-        .to_string();
     let profile_url = format!("{base}/{mc}/{lv}/profile/json");
     get_json(client, &profile_url).await
 }
@@ -537,19 +694,20 @@ async fn prepare_and_launch(
     version: &str,
     game_dir_override: Option<PathBuf>,
     loader: Option<&str>,
+
+    loader_version: Option<&str>,
     server: Option<&str>,
     build_id: Option<String>,
     build_name: Option<&str>,
 ) -> Result<(), String> {
-    // Таймауты для сетевых запросов (метаданные/манифесты): не зависаем навсегда.
+
     let client = reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1")
         .connect_timeout(Duration::from_secs(8))
         .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
-    // Отдельный клиент для загрузки игровых файлов: без общего timeout,
-    // т.к. крупные потоковые загрузки могут идти долго; только connect_timeout.
+
     let dl_client = reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1")
         .connect_timeout(Duration::from_secs(15))
@@ -562,78 +720,76 @@ async fn prepare_and_launch(
     let assets_dir = root.join("assets");
     let version_dir = versions_dir.join(version);
     let natives_dir = version_dir.join("natives");
-    // Папка игры (для сборки — её папка, чтобы моды из mods/ подхватились).
+
     let game_dir = game_dir_override.unwrap_or_else(|| root.clone());
 
-    // Тестовый сервер Aciron в список серверов игры (если включено в настройках).
     if settings.autoadd_server {
         ensure_test_server(&game_dir);
     }
 
-    // Полноэкранный режим — у Minecraft нет CLI-флага, задаётся через options.txt.
     if settings.fullscreen {
         ensure_fullscreen(&game_dir);
     }
 
-    // 1) Манифест → url версии
-    emit(app, "manifest", "Получение списка версий", 0, 1);
-    let manifest = get_json(&client, MANIFEST).await?;
-    let ver_url = manifest["versions"]
-        .as_array()
-        .and_then(|arr| {
-            arr.iter()
-                .find(|v| v["id"].as_str() == Some(version))
-                .and_then(|v| v["url"].as_str())
-        })
-        .ok_or_else(|| format!("Версия {version} не найдена в манифесте"))?
-        .to_string();
-    emit(app, "manifest", "Список версий получен", 1, 1);
-
-    // 2) JSON версии
-    emit(app, "version", "Загрузка описания версии", 0, 1);
-    let version_json = get_json(&client, &ver_url).await?;
     let json_path = version_dir.join(format!("{version}.json"));
-    if let Some(p) = json_path.parent() {
-        tokio::fs::create_dir_all(p).await.ok();
-    }
-    tokio::fs::write(
-        &json_path,
-        serde_json::to_vec_pretty(&version_json).unwrap_or_default(),
-    )
-    .await
-    .ok();
-    emit(app, "version", "Описание версии загружено", 1, 1);
+    let cached = tokio::fs::read(&json_path)
+        .await
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
 
-    // 3) client.jar
+        .filter(|v| v["downloads"]["client"]["url"].as_str().is_some());
+
+    let version_json = match cached {
+        Some(v) => {
+            emit(app, "version", "Описание версии на месте", 1, 1);
+            v
+        }
+        None => {
+            emit(app, "manifest", "Получение списка версий", 0, 1);
+            let manifest = get_json(&client, MANIFEST).await?;
+            let ver_url = manifest["versions"]
+                .as_array()
+                .and_then(|arr| {
+                    arr.iter()
+                        .find(|v| v["id"].as_str() == Some(version))
+                        .and_then(|v| v["url"].as_str())
+                })
+                .ok_or_else(|| format!("Версия не найдена в манифесте: {version}"))?
+                .to_string();
+            emit(app, "manifest", "Список версий получен", 1, 1);
+
+            emit(app, "version", "Загрузка описания версии", 0, 1);
+            let v = get_json(&client, &ver_url).await?;
+            if let Some(p) = json_path.parent() {
+                tokio::fs::create_dir_all(p).await.ok();
+            }
+            tokio::fs::write(&json_path, serde_json::to_vec_pretty(&v).unwrap_or_default())
+                .await
+                .ok();
+            emit(app, "version", "Описание версии загружено", 1, 1);
+            v
+        }
+    };
+
     let client_download = &version_json["downloads"]["client"];
     let client_url = client_download["url"]
         .as_str()
         .ok_or("Нет ссылки на client.jar")?;
     let client_jar = version_dir.join(format!("{version}.jar"));
-    // Хэш/размер client.jar из манифеста — для проверки целостности.
+
     let client_sha1 = client_download["sha1"].as_str();
     let client_size = client_download["size"].as_u64();
     emit(app, "client", "Загрузка клиента", 0, 1);
-    // client.jar: имя = <version>.jar (НЕ хэш) → полная проверка целостности.
+
     download_file_checked(&dl_client, client_url, &client_jar, client_sha1, client_size, false).await?;
     emit(app, "client", "Клиент загружен", 1, 1);
 
-    // 4) Библиотеки + нативы
     let empty = vec![];
     let libs = version_json["libraries"].as_array().unwrap_or(&empty);
-    // classpath хранит (group:artifact, путь) — чтобы библиотеки загрузчика
-    // могли перекрыть ванильные того же артефакта (иначе Fabric падает на дублях ASM).
-    //
-    // Two-pass: сперва синхронно (в порядке libs) строим classpath/native_jars и
-    // список задач загрузки, затем качаем их параллельно (buffer_unordered), как
-    // ассеты/java-runtime. Порядок classpath и дедуп остаются детерминированными,
-    // т.к. формируются в первом проходе; распаковка нативов — отдельным проходом
-    // после завершения всех загрузок. Семантика ошибок сохранена: любая неудачная
-    // загрузка обрывает установку (fail-fast) через `?` по результатам стрима.
+
     let mut classpath: Vec<(String, PathBuf)> = Vec::new();
     let mut native_jars: Vec<PathBuf> = Vec::new();
-    // Задачи загрузки: (url, dest, sha1, size). content_addressed=false — имена
-    // библиотек это maven-пути, не хэши.
+
     let mut lib_tasks: Vec<(String, PathBuf, Option<String>, Option<u64>)> = Vec::new();
     for lib in libs.iter() {
         if let Some(rules) = lib.get("rules") {
@@ -643,18 +799,18 @@ async fn prepare_and_launch(
         }
         let lib_name = lib["name"].as_str().unwrap_or("");
         let downloads = &lib["downloads"];
-        // Основной артефакт
+
         if let Some(artifact) = downloads.get("artifact") {
             if let (Some(path), Some(url)) = (
                 artifact["path"].as_str(),
                 artifact["url"].as_str().filter(|u| !u.is_empty()),
             ) {
                 let dest = libraries_dir.join(path);
-                // Хэш/размер из манифеста — для проверки целостности библиотеки.
+
                 let sha1 = artifact["sha1"].as_str();
                 let size = artifact["size"].as_u64();
                 lib_tasks.push((url.to_string(), dest.clone(), sha1.map(String::from), size));
-                // натив-классификаторы не участвуют в дедупликации по ключу
+
                 let is_native = path.contains("natives-");
                 let key = if is_native {
                     String::new()
@@ -667,7 +823,7 @@ async fn prepare_and_launch(
                 }
             }
         }
-        // Старый стиль нативов (natives + classifiers)
+
         if let Some(natives) = lib.get("natives") {
             if let Some(key) = natives.get(os_name()).and_then(|v| v.as_str()) {
                 let key = key.replace("${arch}", "64");
@@ -676,7 +832,7 @@ async fn prepare_and_launch(
                         (classifier["path"].as_str(), classifier["url"].as_str())
                     {
                         let dest = libraries_dir.join(path);
-                        // Хэш/размер из манифеста — для проверки целостности натива.
+
                         let sha1 = classifier["sha1"].as_str();
                         let size = classifier["size"].as_u64();
                         lib_tasks.push((url.to_string(), dest.clone(), sha1.map(String::from), size));
@@ -687,7 +843,6 @@ async fn prepare_and_launch(
         }
     }
 
-    // Параллельная загрузка библиотек (как ассеты). Прогресс — через atomic-счётчик.
     let total_libs = lib_tasks.len() as u64;
     let lib_done = Arc::new(AtomicU64::new(0));
     emit(app, "libraries", "Загрузка библиотек", 0, total_libs);
@@ -708,36 +863,36 @@ async fn prepare_and_launch(
     .buffer_unordered(16)
     .collect()
     .await;
-    // Fail-fast: первая же ошибка загрузки обрывает установку (как прежний `?`).
+
     for r in lib_results {
         r?;
     }
 
-    // Распаковка нативов (после того как все jar скачаны).
-    // Синхронный zip-I/O (open + ZipArchive + io::copy) уводим в spawn_blocking,
-    // чтобы не блокировать tokio-worker под async prepare_and_launch. Поведение
-    // 1-в-1: тот же порядок jar, та же пофайловая проверка out.exists() внутри
-    // extract_natives (само-восстановление при удалённых DLL сохраняется), тот же
-    // fail-fast по ошибке распаковки.
     if !native_jars.is_empty() {
         let natives = native_jars.clone();
         let natives_dir2 = natives_dir.clone();
         tokio::task::spawn_blocking(move || -> Result<(), String> {
+
+            let stamp = natives_stamp(&natives, &natives_dir2);
+            let marker = natives_dir2.join(".aciron-natives");
+            if std::fs::read_to_string(&marker).ok().as_deref() == Some(stamp.as_str()) {
+                return Ok(());
+            }
             for jar in &natives {
                 extract_natives(jar, &natives_dir2)?;
             }
+            let _ = std::fs::write(&marker, natives_stamp(&natives, &natives_dir2));
             Ok(())
         })
         .await
         .map_err(|e| e.to_string())??;
     }
 
-    // Java нужна ДО загрузчика: установщик Forge/NeoForge запускается через неё.
     let component = version_json["javaVersion"]["component"]
         .as_str()
         .unwrap_or("jre-legacy")
         .to_string();
-    // Клиент загрузки (без общего timeout): java-runtime содержит крупные файлы.
+
     let java = match ensure_java_runtime(app, &dl_client, &component, &root).await {
         Some(j) => j,
         None => {
@@ -746,7 +901,7 @@ async fn prepare_and_launch(
             let chosen = if jw.exists() { jw } else { p };
             if !chosen.exists() {
                 return Err(format!(
-                    "Не удалось получить Java {component}, и системная Java не найдена: {}",
+                    "Не удалось получить Java, и системной тоже нет: {component} · {}",
                     chosen.to_string_lossy()
                 ));
             }
@@ -754,7 +909,6 @@ async fn prepare_and_launch(
         }
     };
 
-    // 4b) Загрузчик модов: библиотеки + mainClass + JVM/игровые аргументы.
     let mut loader_main_class: Option<String> = None;
     let mut loader_jvm_args: Vec<String> = Vec::new();
     let mut loader_game_args: Vec<String> = Vec::new();
@@ -762,13 +916,9 @@ async fn prepare_and_launch(
         emit(app, "loader", "Загрузка загрузчика модов", 0, 1);
         match loader {
             "fabric" | "quilt" => {
-                let profile = fetch_loader_profile(&client, loader, version).await?;
+                let profile = fetch_loader_profile(&client, loader, version, loader_version).await?;
                 if let Some(libs) = profile["libraries"].as_array() {
-                    // Two-pass, как для ванильных либ: сперва синхронно строим classpath
-                    // (retain/push В ПОРЯДКЕ профиля — либы загрузчика перекрывают
-                    // ванильные того же артефакта, иначе Fabric падает на дублях ASM),
-                    // затем качаем jar-ы параллельно. Порядок перекрытия сохранён, т.к.
-                    // classpath формируется до/независимо от загрузки.
+
                     let mut loader_tasks: Vec<(String, PathBuf)> = Vec::new();
                     for lib in libs {
                         if let (Some(name), Some(url)) = (lib["name"].as_str(), lib["url"].as_str()) {
@@ -782,7 +932,7 @@ async fn prepare_and_launch(
                             }
                         }
                     }
-                    // Клиент загрузки (без общего timeout) — jar может быть крупным.
+
                     let results: Vec<Result<(), String>> = stream::iter(loader_tasks.into_iter().map(
                         |(full_url, dest)| {
                             let client = dl_client.clone();
@@ -797,7 +947,7 @@ async fn prepare_and_launch(
                     }
                 }
                 loader_main_class = profile["mainClass"].as_str().map(|s| s.to_string());
-                // Fabric требует -DFabricMcEmu, иначе не стартует.
+
                 if let Some(jvm) = profile["arguments"]["jvm"].as_array() {
                     for a in jvm {
                         if let Some(s) = a.as_str() {
@@ -807,7 +957,7 @@ async fn prepare_and_launch(
                 }
             }
             "forge" | "neoforge" => {
-                // Клиент загрузки (без общего timeout): установщик Forge крупный.
+
                 let profile = crate::forge::install(
                     &dl_client,
                     loader,
@@ -817,6 +967,7 @@ async fn prepare_and_launch(
                     &version_dir,
                     &java,
                     app,
+                    loader_version,
                 )
                 .await?;
                 for (key, dest) in profile.libraries {
@@ -829,12 +980,11 @@ async fn prepare_and_launch(
                 loader_jvm_args = profile.jvm_args;
                 loader_game_args = profile.game_args;
             }
-            other => return Err(format!("Загрузчик {other} не поддерживается")),
+            other => return Err(format!("Этот загрузчик не поддерживается: {other}")),
         }
         emit(app, "loader", "Загрузчик модов готов", 1, 1);
     }
 
-    // 5) Ассеты
     let asset_index = &version_json["assetIndex"];
     let asset_id = asset_index["id"].as_str().unwrap_or("legacy").to_string();
     let asset_index_url = asset_index["url"].as_str().unwrap_or("");
@@ -846,7 +996,7 @@ async fn prepare_and_launch(
             .map_err(|e| e.to_string())?;
 
     let objects = index_json["objects"].as_object().cloned().unwrap_or_default();
-    // Для ассетов hash — это SHA1 объекта; size — его размер. Проверяем целостность.
+
     let entries: Vec<(String, Option<u64>)> = objects
         .values()
         .filter_map(|o| {
@@ -855,34 +1005,52 @@ async fn prepare_and_launch(
                 .map(|s| (s.to_string(), o["size"].as_u64()))
         })
         .collect();
-    let total = entries.len() as u64;
-    let done = Arc::new(AtomicU64::new(0));
     let objects_dir = assets_dir.join("objects");
 
-    stream::iter(entries.into_iter().map(|(hash, size)| {
-        let client = dl_client.clone();
-        let done = done.clone();
-        let app = app.clone();
+    let missing: Vec<(String, Option<u64>)> = {
         let objects_dir = objects_dir.clone();
-        async move {
-            let sub = &hash[0..2];
-            let path = objects_dir.join(sub).join(&hash);
-            let url = format!("{RESOURCES}/{sub}/{hash}");
-            // content_addressed=true: имя объекта = его SHA1, поэтому существующий
-            // ассет проверяется только по наличию+размеру, без чтения и пере-хеширования
-            // сотен МБ на каждом запуске (полный SHA1 считается при первичной загрузке).
-            let _ = download_file_checked(&client, &url, &path, Some(&hash), size, true).await;
-            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-            if n % 25 == 0 || n == total {
-                emit(&app, "assets", "Загрузка ресурсов", n, total);
-            }
-        }
-    }))
-    .buffer_unordered(16)
-    .collect::<Vec<_>>()
-    .await;
+        tokio::task::spawn_blocking(move || {
+            entries
+                .into_iter()
+                .filter(|(hash, size)| {
+                    let path = objects_dir.join(&hash[0..2]).join(hash);
+                    !file_meta_matches(&path, *size)
+                })
+                .collect()
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    };
 
-    // 6) Классpath (все библиотеки + client.jar)
+    let total = missing.len() as u64;
+    if total > 0 {
+        let done = Arc::new(AtomicU64::new(0));
+        emit(app, "assets", "Загрузка ресурсов", 0, total);
+        stream::iter(missing.into_iter().map(|(hash, size)| {
+            let client = dl_client.clone();
+            let done = done.clone();
+            let app = app.clone();
+            let objects_dir = objects_dir.clone();
+            async move {
+                let sub = &hash[0..2];
+                let path = objects_dir.join(sub).join(&hash);
+                let url = format!("{RESOURCES}/{sub}/{hash}");
+
+                let _ = download_file_checked(&client, &url, &path, Some(&hash), size, true).await;
+                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if n % 25 == 0 || n == total {
+                    emit(&app, "assets", "Загрузка ресурсов", n, total);
+                }
+            }
+        }))
+        .buffer_unordered(16)
+        .collect::<Vec<_>>()
+        .await;
+    }
+    emit(app, "assets", "Ресурсы на месте", 1, 1);
+
+    let _ = tokio::task::spawn_blocking(crate::verify::flush).await;
+
     let sep = if cfg!(windows) { ";" } else { ":" };
     classpath.push((String::new(), client_jar.clone()));
     let cp = classpath
@@ -891,7 +1059,6 @@ async fn prepare_and_launch(
         .collect::<Vec<_>>()
         .join(sep);
 
-    // 7) Аргументы запуска. mainClass загрузчика важнее ванильного.
     let main_class = loader_main_class.unwrap_or_else(|| {
         version_json["mainClass"]
             .as_str()
@@ -900,24 +1067,19 @@ async fn prepare_and_launch(
     });
     let ram = settings.ram_mb.max(512);
 
-    // Идентичность игрока из активного аккаунта (Microsoft / Ely.by / оффлайн).
-    // Перед этим шагом возможен повторный вход Microsoft — сообщаем UI, чтобы не молчал.
     emit(app, "identity", "Проверка входа", 0, 1);
     let id = resolve_identity(app, settings).await?;
 
-    // -Xms = -Xmx: сразу резервируем всю кучу, меньше пауз на расширение.
     let mut args: Vec<String> = vec![
         format!("-Xmx{ram}M"),
         format!("-Xms{ram}M"),
         format!("-Djava.library.path={}", natives_dir.to_string_lossy()),
     ];
-    // Пользовательские JVM-аргументы из настроек (через пробел).
+
     for a in settings.jvm_args.split_whitespace() {
         args.push(a.to_string());
     }
-    // G1GC-тюнинг по умолчанию — только если пользователь сам не задал GC/размер
-    // нового поколения (-XX:+Use...GC или -Xmn). Дубли уже присутствующих флагов
-    // не добавляем.
+
     let user_jvm = &settings.jvm_args;
     let user_sets_gc = (user_jvm.contains("-XX:+Use") && user_jvm.contains("GC"))
         || user_jvm.contains("-Xmn");
@@ -935,9 +1097,7 @@ async fn prepare_and_launch(
             }
         }
     }
-    // Aciron Skins: свой java-агент. Показывает в игре скин и плащ из гардероба
-    // Aciron ID (аргумент — адрес сервиса), а если их нет — скин лицензионного
-    // аккаунта Mojang по нику. Работает и на пиратке, свой сервер не нужен.
+
     if let Some(jar) = ensure_aciron_skins(&root) {
         args.push(format!(
             "-javaagent:{}={}",
@@ -945,13 +1105,13 @@ async fn prepare_and_launch(
             crate::aciron::base()
         ));
     }
-    // JVM-аргументы загрузчика модов (например -DFabricMcEmu) — до -cp и main class.
+
     args.extend(loader_jvm_args);
     args.extend([
         "-cp".into(),
         cp,
         main_class,
-        // игровые аргументы (modern, 1.13+)
+
         "--username".into(),
         id.name,
         "--version".into(),
@@ -976,11 +1136,8 @@ async fn prepare_and_launch(
         settings.window_height.to_string(),
     ]);
 
-    // Игровые аргументы загрузчика (Forge: --launchTarget, --fml.*; 1.12.2: --tweakClass).
     args.extend(loader_game_args);
 
-    // Кнопка «Подключиться» на странице серверов: заходим сразу на сервер.
-    // 1.20+ — новый --quickPlayMultiplayer, старее — классические --server/--port.
     if let Some(addr) = server.filter(|s| !s.is_empty()) {
         let (host, port) = split_host_port(addr);
         if version_ge_1_20(version) {
@@ -996,36 +1153,30 @@ async fn prepare_and_launch(
 
     emit(app, "launch", "Запуск игры", 1, 1);
 
-    // Лог игры — чтобы падения не были «немыми» и можно было показать причину.
     let log_path = game_dir.join("logs").join("aciron-latest.log");
     let _ = std::fs::create_dir_all(game_dir.join("logs"));
     let log_file = std::fs::File::create(&log_path).ok();
 
     let mut cmd = std::process::Command::new(&java);
     cmd.args(&args).current_dir(&game_dir);
-    // Вывод забираем себе, а в файл пишем сами: так он попадает ещё и в живую
-    // консоль. Файл при этом остаётся прежним — на нём держатся показ причины
-    // краха и определение сервера для присутствия.
+
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd.creation_flags(0x08000000);
     }
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("Не удалось запустить Java: {e}"))?;
     let pid = child.id();
 
-    // Идентификатор игры (для остановки/событий). Несколько игр — одновременно.
     let game_id = match &build_id {
         Some(b) => format!("build:{b}"),
         None => version.to_string(),
     };
 
-    // Оба потока пишут в один файл, поэтому он под мьютексом: иначе строки
-    // налезали бы друг на друга посреди записи.
     let shared_log = std::sync::Arc::new(std::sync::Mutex::new(log_file));
     if let Some(out) = child.stdout.take() {
         crate::gamelog::pump(app.clone(), game_id.clone(), out, shared_log.clone());
@@ -1034,7 +1185,11 @@ async fn prepare_and_launch(
         crate::gamelog::pump(app.clone(), game_id.clone(), err, shared_log.clone());
     }
     register_game(&game_id, pid);
-    // Последние запуски (карточки на главной странице).
+
+    if let Some(bid) = &build_id {
+        crate::builds::touch_launch(bid);
+    }
+
     crate::recents::touch(
         &game_id,
         if build_id.is_some() { "build" } else { "version" },
@@ -1044,7 +1199,6 @@ async fn prepare_and_launch(
     let _ = app.emit("game-started", serde_json::json!({ "id": game_id }));
     emit(app, "done", "Игра запущена", 1, 1);
 
-    // Присутствие Aciron ID: отмечаем, что играем (сборка/версия + лог для сервера).
     crate::presence::set_playing(version, build_name.unwrap_or(""), log_path.clone());
 
     let app2 = app.clone();
@@ -1052,19 +1206,11 @@ async fn prepare_and_launch(
     let track_build = build_id.clone();
     let game_id2 = game_id.clone();
     let log_path2 = log_path.clone();
-    // Если активен аккаунт Aciron ID — по завершении сессии отправим налёт в ЛК.
+
     let aciron_token = crate::accounts::active_account()
         .map(|a| a.aciron_token)
         .filter(|t| !t.is_empty());
 
-    // Каждая игра — свой монитор-поток, владеющий своим Child.
-    // Блокирующий child.wait() вместо busy-poll try_wait каждые 700мс: поток спит
-    // в ядре до завершения процесса — без периодических пробуждений и без задержки
-    // до 700мс на обнаружение выхода. Остановка (stop_game) не трогает Child, а бьёт
-    // процесс по pid через taskkill, поэтому wait() всё равно разблокируется, когда
-    // ОС завершит процесс — механизм остановки совместим. Вся пост-обработка выхода
-    // (детект краха, playtime, unregister, emit game-exited, clear) выполняется ровно
-    // один раз, как и раньше.
     std::thread::spawn(move || {
         let mut child = child;
         let success = match child.wait() {
@@ -1072,7 +1218,6 @@ async fn prepare_and_launch(
             Err(_) => false,
         };
 
-        // Ранний выход с ошибкой = вероятно краш. Показываем хвост лога.
         if !success && started.elapsed().as_secs() < 40 {
             let tail = log_tail(&log_path2, 1600);
             let msg = if tail.is_empty() {
@@ -1092,21 +1237,19 @@ async fn prepare_and_launch(
                 started.elapsed().as_secs(),
             ));
         }
-        // Discord/присутствие сбрасываем только когда не осталось запущенных игр.
+
         if unregister_game(pid) == 0 {
             crate::discord::set_idle();
             crate::presence::set_stopped();
         }
         let _ = app2.emit("game-exited", serde_json::json!({ "id": game_id2 }));
-        // Хвост лога больше не нужен: игра закрыта, а держать десятки
-        // тысяч строк на каждую запущенную за сессию сборку незачем.
+
         crate::gamelog::clear(&game_id2);
     });
 
     Ok(())
 }
 
-/// Идентичность игрока для запуска.
 struct Identity {
     name: String,
     uuid: String,
@@ -1114,22 +1257,15 @@ struct Identity {
     user_type: String,
 }
 
-/// Определяет ник/uuid/токен/тип по активному аккаунту.
-///
-/// Для Microsoft тихо обновляет сессию через refresh-токен. Если обновлять нечем
-/// или Microsoft отказал — открываем обычный вход вместо ошибки: у аккаунтов, к
-/// которым лицензию подключали давно, refresh-токен мог не сохраниться вовсе, и
-/// «Нет refresh-токена — войдите в Microsoft заново» оказывалось тупиком: текст
-/// говорил, что делать, а сделать это было негде.
 async fn resolve_identity(app: &AppHandle, settings: &Settings) -> Result<Identity, String> {
     match crate::accounts::active_account() {
-        // Microsoft, либо аккаунт Aciron ID с привязанной лицензией — реальная авторизация.
+
         Some(a) if a.kind == "microsoft" || (a.kind == "aciron" && a.licensed) => {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
-            // Кэш: токен Minecraft ещё валиден (с запасом 5 мин) — не дёргаем Microsoft.
+
             if !a.access_token.is_empty() && a.access_token != "0" && now + 300 < a.token_expires {
                 return Ok(Identity {
                     name: a.username.clone(),
@@ -1141,10 +1277,7 @@ async fn resolve_identity(app: &AppHandle, settings: &Settings) -> Result<Identi
             let fresh = match crate::microsoft::refresh_account(&a.refresh_token).await {
                 Ok(f) => f,
                 Err(e) => {
-                    // Тихо обновить не вышло — просим войти прямо сейчас. Обязательно
-                    // говорим об этом в полосу запуска: интерактивный вход ждёт код на
-                    // loopback до двух минут, и без подписи это выглядит как зависший
-                    // запуск — человек не понимает, что от него ждут действия в браузере.
+
                     eprintln!("[account] обновление сессии Microsoft не удалось: {e}");
                     emit(
                         app,
@@ -1154,8 +1287,7 @@ async fn resolve_identity(app: &AppHandle, settings: &Settings) -> Result<Identi
                         1,
                     );
                     let f = crate::microsoft::interactive_login(app.clone()).await?;
-                    // Свежий refresh-токен нужен и сервису: он ходит в Mojang за
-                    // скином и плащами лицензии от имени игрока.
+
                     if a.kind == "aciron" && !a.aciron_token.is_empty() {
                         crate::aciron::push_license(&a.aciron_token, &f).await;
                     }
@@ -1192,8 +1324,6 @@ async fn resolve_identity(app: &AppHandle, settings: &Settings) -> Result<Identi
     }
 }
 
-/// Имя и адрес тестового сервера, который добавляется в список серверов игры.
-/// Разбирает "host" или "host:port" (по умолчанию 25565).
 fn split_host_port(addr: &str) -> (String, u16) {
     match addr.rsplit_once(':') {
         Some((h, p)) if !h.is_empty() => (h.to_string(), p.parse().unwrap_or(25565)),
@@ -1201,7 +1331,6 @@ fn split_host_port(addr: &str) -> (String, u16) {
     }
 }
 
-/// Версия игры >= 1.20 (для выбора флага быстрого подключения к серверу).
 fn version_ge_1_20(version: &str) -> bool {
     let mut it = version.split(|c| c == '.' || c == '-');
     let major = it.next().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
@@ -1212,9 +1341,6 @@ fn version_ge_1_20(version: &str) -> bool {
 const TEST_SERVER_NAME: &str = "Aciron — тестовый сервер";
 const TEST_SERVER_IP: &str = "mc.aciron.pro";
 
-/// Пишет <game_dir>/servers.dat с тестовым сервером, если файла ещё нет.
-/// servers.dat — НЕсжатый NBT. Существующий файл не трогаем, чтобы не потерять
-/// серверы игрока (append в NBT без парсинга невозможен).
 fn ensure_test_server(game_dir: &Path) {
     let path = game_dir.join("servers.dat");
     if path.exists() {
@@ -1227,8 +1353,6 @@ fn ensure_test_server(game_dir: &Path) {
     let _ = std::fs::write(&path, data);
 }
 
-/// Включает полноэкранный режим через <game_dir>/options.txt (строка `fullscreen:true`).
-/// Существующий options.txt не перетираем — только правим/добавляем нужную строку.
 fn ensure_fullscreen(game_dir: &Path) {
     let path = game_dir.join("options.txt");
     let _ = std::fs::create_dir_all(game_dir);
@@ -1249,8 +1373,6 @@ fn ensure_fullscreen(game_dir: &Path) {
     let _ = std::fs::write(&path, lines.join("\n") + "\n");
 }
 
-/// Собирает бинарь servers.dat (несжатый NBT): root-compound → list "servers"
-/// из compound'ов {name, ip, acceptTextures}.
 fn build_servers_nbt(servers: &[(&str, &str)]) -> Vec<u8> {
     fn write_str(out: &mut Vec<u8>, s: &str) {
         let b = s.as_bytes();
@@ -1308,7 +1430,7 @@ fn sha256_hex(data: &[u8]) -> String {
     let digest = hasher.finalize();
     let mut s = String::with_capacity(digest.len() * 2);
     for b in digest.iter() {
-        // write! в зарезервированный буфер — без временной String на байт.
+
         let _ = write!(s, "{b:02x}");
     }
     s
@@ -1439,7 +1561,7 @@ pub async fn launch_game(
 ) -> Result<(), String> {
     let settings = settings::load_settings();
     let res =
-        prepare_and_launch(&app, &settings, &version, None, None, server.as_deref(), None, None).await;
+        prepare_and_launch(&app, &settings, &version, None, None, None, server.as_deref(), None, None).await;
     match &res {
         Ok(_) => {
 
@@ -1457,7 +1579,7 @@ pub async fn launch_build(app: AppHandle, build_id: String) -> Result<(), String
     let loader = match build.loader.as_str() {
         "fabric" | "quilt" | "forge" | "neoforge" => build.loader.clone(),
         other => {
-            let msg = format!("Загрузчик {other} не поддерживается");
+            let msg = format!("Этот загрузчик не поддерживается: {other}");
             emit(&app, "error", &msg, 0, 1);
             return Err(msg);
         }
@@ -1471,6 +1593,8 @@ pub async fn launch_build(app: AppHandle, build_id: String) -> Result<(), String
         &build.mc_version,
         Some(game_dir),
         Some(&loader),
+
+        Some(build.loader_version.as_str()).filter(|s| !s.is_empty()),
         None,
         Some(build_id.clone()),
         Some(&build.name),

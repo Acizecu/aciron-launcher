@@ -6,7 +6,7 @@ import type { PendingUser } from "../api";
 
 export default function FriendRequestToasts({ sound }: { sound: boolean }) {
   const { data } = useFriends();
-  // «Не беспокоить»: собственный статус присутствия dnd глушит всплывашки заявок.
+
   const dnd = data?.me?.status === "dnd";
   const [queue, setQueue] = useState<PendingUser[]>([]);
   const seen = useRef<Set<string> | null>(null);
@@ -25,8 +25,6 @@ export default function FriendRequestToasts({ sound }: { sound: boolean }) {
     seen.current = ids;
     if (fresh.length === 0) return;
 
-    // «Не беспокоить»: seen уже обновлён выше, поэтому после выключения DND старые
-    // заявки не вывалятся пачкой — просто не показываем и не пищим сейчас.
     if (dnd) return;
 
     setQueue((q) => [...q, ...fresh.filter((u) => !q.some((x) => x.id === u.id))]);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useClickOutside } from "../hooks/useClickOutside";
 import InstallModal from "./InstallModal";
+import { t } from "../i18n";
 import {
   getInstalledVersions,
   addInstalledVersion,
@@ -85,7 +86,7 @@ function Row({
       {onRemove && (
         <i
           onClick={onRemove}
-          title="Удалить версию"
+          title={t("Удалить версию")}
           className={`fa-solid fa-trash-can p-1 text-muted opacity-0 transition-opacity hover:text-[#ef4444] group-hover:opacity-100 ${
             active ? "absolute right-3" : ""
           }`}
@@ -175,10 +176,10 @@ export default function VersionMenu({
         </span>
         <div className="flex-1 text-left leading-tight">
           <div className="text-[11px] font-medium uppercase tracking-wide text-muted">
-            {selected?.isBuild ? "Сборка" : "Версия"}
+            {selected?.isBuild ? t("Сборка") : t("Версия")}
           </div>
           <div className="truncate text-sm font-semibold text-text">
-            {selected?.name ?? "Нет версий"}
+            {selected?.name ?? t("Нет версий")}
           </div>
         </div>
         <i
@@ -192,11 +193,11 @@ export default function VersionMenu({
         <div className="absolute bottom-full left-0 mb-2 w-72 overflow-hidden rounded-xl border border-border bg-panel shadow-xl shadow-black/40">
           <div className="max-h-72 overflow-y-auto">
             <div className="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-              Установленные версии
+              {t("Установленные версии")}
             </div>
             {installed.length === 0 && (
               <div className="px-3 py-3 text-center text-xs text-muted">
-                Пока ничего не установлено
+                {t("Пока ничего не установлено")}
               </div>
             )}
             {installed.map((v) => (
@@ -212,7 +213,7 @@ export default function VersionMenu({
             {builds.length > 0 && (
               <>
                 <div className="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Сборки
+                  {t("Сборки")}
                 </div>
                 {builds.map((v) => (
                   <Row key={v.id} v={v} active={selectedId === v.id} onClick={() => pick(v)} />
@@ -230,7 +231,7 @@ export default function VersionMenu({
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-card px-3 py-2 text-sm font-semibold text-accent transition-colors hover:bg-border/60"
             >
               <i className="fa-solid fa-download text-xs" />
-              Установить больше
+              {t("Установить больше")}
             </button>
           </div>
         </div>

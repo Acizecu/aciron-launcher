@@ -152,7 +152,7 @@ async fn read_error(resp: reqwest::Response) -> String {
     serde_json::from_str::<serde_json::Value>(&body)
         .ok()
         .and_then(|v| v["error"].as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| format!("Aciron ID: ошибка {status}"))
+        .unwrap_or_else(|| format!("Не удалось обратиться к аккаунту Aciron ID: {status}"))
 }
 
 fn id_skin_url(name: &str) -> String {
@@ -179,7 +179,7 @@ pub async fn aciron_login(
         return Err(format!("EMAIL_NOT_VERIFIED:{mail}"));
     }
     if !status.is_success() {
-        return Err(body["error"].as_str().unwrap_or("Aciron ID: ошибка входа").to_string());
+        return Err(body["error"].as_str().unwrap_or("Не удалось войти в Aciron ID").to_string());
     }
 
     let data: AuthResp = if body["twofaRequired"].as_bool() == Some(true) {

@@ -68,12 +68,6 @@ pub fn set_presence_privacy(show_game: bool, show_server: bool) {
     }
 }
 
-// Читаем только ХВОСТ файла: seek к концу минус `max`, а не весь файл в память.
-// Раньше std::fs::read засасывал весь latest.log целиком (за модовую сессию он
-// растёт до многих МБ) каждые 20с ради поиска в последних 128KB — лишний I/O и
-// вторая аллокация. Теперь читаем ровно хвост. Разрыв UTF-8/строки на границе
-// seek безвреден: from_utf8_lossy это переживёт, а искомая строка "Connecting to"
-// целиком лежит внутри хвоста. Поведение поиска не меняется.
 fn read_tail(path: &PathBuf, max: usize) -> String {
     use std::io::{Read, Seek, SeekFrom};
     let mut f = match std::fs::File::open(path) {
@@ -110,9 +104,6 @@ fn parse_server(tail: &str) -> Option<String> {
     found
 }
 
-// Чтение хвоста лога — блокирующий I/O; выносим его в spawn_blocking, чтобы не
-// занимать async-воркер tokio на время syscall (beat() крутится на том же
-// рантайме, что и realtime::connect_loop). Логика поиска сервера не меняется.
 async fn server_from_log(log_path: &Option<PathBuf>) -> Option<String> {
     let path = log_path.clone()?;
     tokio::task::spawn_blocking(move || {

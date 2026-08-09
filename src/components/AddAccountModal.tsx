@@ -13,6 +13,7 @@ import {
 } from "../api";
 import { MicrosoftIcon } from "./Icons";
 import { ACIRON_LOGIN_ENABLED } from "../config";
+import { t, ts } from "../i18n";
 
 type Step = "choose" | "offline" | "aciron" | "register" | "verify" | "microsoft";
 
@@ -67,7 +68,7 @@ export default function AddAccountModal({
 
     if (!/^[A-Za-z0-9_]{3,16}$/.test(nick)) {
       return setError(
-        "Ник: 3–16 символов, только латиница, цифры и _ (без пробелов, кириллицы и эмодзи)"
+        t("Ник: 3–16 символов, только латиница, цифры и _ (без пробелов, кириллицы и эмодзи)")
       );
     }
     setBusy(true);
@@ -75,7 +76,7 @@ export default function AddAccountModal({
       await addOfflineAccount(nick);
       done();
     } catch (e) {
-      setError(String(e));
+      setError(ts(String(e)));
     } finally {
       setBusy(false);
     }
@@ -84,23 +85,23 @@ export default function AddAccountModal({
   const submitAciron = async () => {
     setError("");
     setNotice("");
-    if (!login.trim() || !password) return setError("Введите ник/e-mail и пароль");
-    if (twofa && !code.trim()) return setError("Введите код 2FA");
+    if (!login.trim() || !password) return setError(t("Введите ник/e-mail и пароль"));
+    if (twofa && !code.trim()) return setError(t("Введите код 2FA"));
     setBusy(true);
     try {
       await acironLogin(login.trim(), password, twofa ? code.trim() : undefined);
       done();
     } catch (e) {
-      const msg = String(e).replace(/^Error:\s*/, "");
+      const msg = ts(String(e));
       if (msg === "2FA_REQUIRED") {
         setTwofa(true);
-        setNotice("У аккаунта включена 2FA — введите код из приложения или резервный код");
+        setNotice(t("У аккаунта включена 2FA — введите код из приложения или резервный код"));
       } else if (msg.startsWith("EMAIL_NOT_VERIFIED")) {
 
         setEmail(msg.slice("EMAIL_NOT_VERIFIED:".length) || login.trim());
         setCode("");
         setCooldown(RESEND_COOLDOWN);
-        setNotice("Почта ещё не подтверждена — мы выслали новый код");
+        setNotice(t("Почта ещё не подтверждена — мы выслали новый код"));
         setStep("verify");
       } else {
         setError(msg);
@@ -114,20 +115,20 @@ export default function AddAccountModal({
     setError("");
     setNotice("");
     if (!NICK_RE.test(regNick.trim()))
-      return setError("Ник: 3–16 символов, только латиница, цифры и _");
-    if (!EMAIL_RE.test(email.trim())) return setError("Введите корректный e-mail");
-    if (password.length < 8) return setError("Пароль минимум 8 символов");
-    if (password !== password2) return setError("Пароли не совпадают");
+      return setError(t("Ник: 3–16 символов, только латиница, цифры и _"));
+    if (!EMAIL_RE.test(email.trim())) return setError(t("Введите корректный e-mail"));
+    if (password.length < 8) return setError(t("Пароль минимум 8 символов"));
+    if (password !== password2) return setError(t("Пароли не совпадают"));
     setBusy(true);
     try {
       const mail = await acironRegister(regNick.trim(), email.trim(), password);
       setEmail(mail);
       setCode("");
       setCooldown(RESEND_COOLDOWN);
-      setNotice(`Код отправлен на ${mail}`);
+      setNotice(t("Код отправлен на {mail}", { mail }));
       setStep("verify");
     } catch (e) {
-      setError(String(e).replace(/^Error:\s*/, ""));
+      setError(ts(String(e)));
     } finally {
       setBusy(false);
     }
@@ -135,13 +136,13 @@ export default function AddAccountModal({
 
   const submitVerify = async () => {
     setError("");
-    if (code.trim().length < 6) return setError("Код из письма — 6 цифр");
+    if (code.trim().length < 6) return setError(t("Код из письма — 6 цифр"));
     setBusy(true);
     try {
       await acironVerifyEmail(email.trim(), code.trim());
       done();
     } catch (e) {
-      setError(String(e).replace(/^Error:\s*/, ""));
+      setError(ts(String(e)));
     } finally {
       setBusy(false);
     }
@@ -153,9 +154,9 @@ export default function AddAccountModal({
     setCooldown(RESEND_COOLDOWN);
     try {
       await acironResendCode(email.trim());
-      setNotice(`Новый код отправлен на ${email.trim()}`);
+      setNotice(t("Новый код отправлен на {mail}", { mail: email.trim() }));
     } catch (e) {
-      setError(String(e).replace(/^Error:\s*/, ""));
+      setError(ts(String(e)));
     }
   };
 
@@ -177,7 +178,7 @@ export default function AddAccountModal({
       await addMicrosoftAccount();
       done();
     } catch (e) {
-      setError(String(e));
+      setError(ts(String(e)));
     } finally {
       setBusy(false);
       unlisten?.();
@@ -186,16 +187,16 @@ export default function AddAccountModal({
 
   const title =
     step === "offline"
-      ? "Пиратский аккаунт"
+      ? t("Пиратский аккаунт")
       : step === "aciron"
-      ? "Вход в Aciron ID"
+      ? t("Вход в Aciron ID")
       : step === "register"
-      ? "Регистрация Aciron ID"
+      ? t("Регистрация Aciron ID")
       : step === "verify"
-      ? "Подтверждение e-mail"
+      ? t("Подтверждение e-mail")
       : step === "microsoft"
-      ? "Вход через Microsoft"
-      : "Добавить аккаунт";
+      ? t("Вход через Microsoft")
+      : t("Добавить аккаунт");
 
   return (
     <Modal title={title} icon="fa-user-plus" onClose={onClose}>
@@ -205,22 +206,22 @@ export default function AddAccountModal({
             <TypeButton
               icon="fa-user-secret"
               iconBg="bg-bg text-accent"
-              title="Пиратский аккаунт"
-              desc="Оффлайн аккаунт"
+              title={t("Пиратский аккаунт")}
+              desc={t("Оффлайн аккаунт")}
               onClick={() => setStep("offline")}
             />
             <TypeButton
               node={<MicrosoftIcon size={22} />}
               iconBg="bg-bg fill-accent"
-              title="Лицензия (Microsoft)"
-              desc="Официальный вход через аккаунт Microsoft"
+              title={t("Лицензия (Microsoft)")}
+              desc={t("Официальный вход через аккаунт Microsoft")}
               onClick={startMicrosoft}
             />
             <TypeButton
               node={<i className="fa-solid fa-key"></i>}
               iconBg="bg-bg text-accent"
-              title="Аккаунт Aciron"
-              desc="Единый аккаунт Aciron ID"
+              title={t("Аккаунт Aciron")}
+              desc={t("Единый аккаунт Aciron ID")}
               disabled={!ACIRON_LOGIN_ENABLED}
               onClick={
                 ACIRON_LOGIN_ENABLED
@@ -238,7 +239,7 @@ export default function AddAccountModal({
         {step === "offline" && (
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">Ник игрока</span>
+              <span className="mb-1.5 block text-xs text-muted">{t("Ник игрока")}</span>
               <input
                 autoFocus
                 className={inputCls}
@@ -252,7 +253,7 @@ export default function AddAccountModal({
             {error && <Err msg={error} />}
             <div className="flex gap-2 pt-1">
               <BackBtn onClick={() => setStep("choose")} />
-              <PrimaryBtn onClick={submitOffline} busy={busy} label="Добавить" />
+              <PrimaryBtn onClick={submitOffline} busy={busy} label={t("Добавить")} />
             </div>
           </div>
         )}
@@ -262,7 +263,7 @@ export default function AddAccountModal({
             {!authUrl && !error && (
               <div className="flex flex-col items-center gap-3 py-6 text-muted">
                 <i className="fa-solid fa-spinner fa-spin text-2xl" />
-                <span className="text-sm">Открываем вход Microsoft…</span>
+                <span className="text-sm">{t("Открываем вход Microsoft…")}</span>
               </div>
             )}
 
@@ -273,10 +274,10 @@ export default function AddAccountModal({
                     <i className="fa-brands fa-microsoft text-2xl" />
                   </div>
                   <p className="text-sm text-text">
-                    Мы открыли вход Microsoft в браузере.
+                    {t("Мы открыли вход Microsoft в браузере.")}
                   </p>
                   <p className="text-xs text-muted">
-                    Войдите там — окно закроется, а вход завершится здесь автоматически.
+                    {t("Войдите там — окно закроется, а вход завершится здесь автоматически.")}
                   </p>
                 </div>
                 <button
@@ -284,11 +285,11 @@ export default function AddAccountModal({
                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-bg px-5 py-2.5 text-sm font-medium text-text transition-colors hover:border-accent/50"
                 >
                   <i className="fa-solid fa-arrow-up-right-from-square" />
-                  Браузер не открылся? Открыть вручную
+                  {t("Браузер не открылся? Открыть вручную")}
                 </button>
                 <div className="flex items-center justify-center gap-2 text-xs text-muted">
                   <i className="fa-solid fa-spinner fa-spin" />
-                  Ожидание входа…
+                  {t("Ожидание входа…")}
                 </div>
               </>
             )}
@@ -310,12 +311,12 @@ export default function AddAccountModal({
         {step === "aciron" && (
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">Ник или e-mail</span>
+              <span className="mb-1.5 block text-xs text-muted">{t("Ник или e-mail")}</span>
               <input
                 autoFocus
                 className={inputCls}
                 value={login}
-                placeholder="Steve или you@example.com"
+                placeholder={t("Steve или you@example.com")}
                 onChange={(e) => {
                   setLogin(e.target.value);
                   setNotice("");
@@ -323,7 +324,7 @@ export default function AddAccountModal({
               />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">Пароль</span>
+              <span className="mb-1.5 block text-xs text-muted">{t("Пароль")}</span>
               <input
                 type="password"
                 className={inputCls}
@@ -338,7 +339,7 @@ export default function AddAccountModal({
             </label>
             {twofa && (
               <label className="block">
-                <span className="mb-1.5 block text-xs text-muted">Код 2FA</span>
+                <span className="mb-1.5 block text-xs text-muted">{t("Код 2FA")}</span>
                 <input
                   autoFocus
                   className={`${inputCls} text-center tracking-[0.3em]`}
@@ -356,10 +357,10 @@ export default function AddAccountModal({
             {notice && <Notice msg={notice} />}
             <div className="flex gap-2 pt-1">
               <BackBtn onClick={() => setStep("choose")} />
-              <PrimaryBtn onClick={submitAciron} busy={busy} label="Войти" />
+              <PrimaryBtn onClick={submitAciron} busy={busy} label={t("Войти")} />
             </div>
             <div className="pt-1 text-center text-xs text-muted">
-              Нет аккаунта?{" "}
+              {t("Нет аккаунта?")}{" "}
               <button
                 onClick={() => {
                   setError("");
@@ -369,7 +370,7 @@ export default function AddAccountModal({
                 }}
                 className="font-semibold text-accent transition-colors hover:text-accent-hover"
               >
-                Зарегистрироваться
+                {t("Зарегистрироваться")}
               </button>
             </div>
           </div>
@@ -378,7 +379,7 @@ export default function AddAccountModal({
         {step === "register" && (
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">Ник</span>
+              <span className="mb-1.5 block text-xs text-muted">{t("Ник")}</span>
               <input
                 autoFocus
                 className={inputCls}
@@ -388,7 +389,7 @@ export default function AddAccountModal({
                 onChange={(e) => setRegNick(e.target.value.replace(/[^A-Za-z0-9_]/g, ""))}
               />
               <span className="mt-1 block text-[11px] text-muted">
-                Под этим ником вас будут находить друзья и видеть в игре
+                {t("Под этим ником вас будут находить друзья и видеть в игре")}
               </span>
             </label>
             <label className="block">
@@ -402,17 +403,17 @@ export default function AddAccountModal({
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
-                <span className="mb-1.5 block text-xs text-muted">Пароль</span>
+                <span className="mb-1.5 block text-xs text-muted">{t("Пароль")}</span>
                 <input
                   type="password"
                   className={inputCls}
                   value={password}
-                  placeholder="от 8 символов"
+                  placeholder={t("от 8 символов")}
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-xs text-muted">Повтор пароля</span>
+                <span className="mb-1.5 block text-xs text-muted">{t("Повтор пароля")}</span>
                 <input
                   type="password"
                   className={inputCls}
@@ -426,7 +427,7 @@ export default function AddAccountModal({
             {error && <Err msg={error} />}
             <div className="flex gap-2 pt-1">
               <BackBtn onClick={() => setStep("aciron")} />
-              <PrimaryBtn onClick={submitRegister} busy={busy} label="Создать аккаунт" />
+              <PrimaryBtn onClick={submitRegister} busy={busy} label={t("Создать аккаунт")} />
             </div>
           </div>
         )}
@@ -437,7 +438,7 @@ export default function AddAccountModal({
               <div className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/15 text-accent">
                 <i className="fa-solid fa-envelope-open-text text-2xl" />
               </div>
-              <p className="text-sm text-text">Мы отправили 6-значный код на</p>
+              <p className="text-sm text-text">{t("Мы отправили 6-значный код на")}</p>
               <p className="break-all text-sm font-semibold text-accent">{email}</p>
             </div>
             <input
@@ -456,7 +457,9 @@ export default function AddAccountModal({
               disabled={cooldown > 0}
               className="w-full rounded-lg border border-border bg-bg px-4 py-2.5 text-sm text-muted transition-colors hover:text-text disabled:opacity-50"
             >
-              {cooldown > 0 ? `Отправить код снова через ${cooldown} с` : "Отправить код снова"}
+              {cooldown > 0
+                ? t("Отправить код снова через {n} с", { n: cooldown })
+                : t("Отправить код снова")}
             </button>
             <div className="flex gap-2 pt-1">
               <BackBtn
@@ -466,15 +469,15 @@ export default function AddAccountModal({
                   setStep("aciron");
                 }}
               />
-              <PrimaryBtn onClick={submitVerify} busy={busy} label="Подтвердить" />
+              <PrimaryBtn onClick={submitVerify} busy={busy} label={t("Подтвердить")} />
             </div>
             <p className="text-center text-[11px] leading-relaxed text-muted">
-              Письмо не пришло? Проверьте папку «Спам» или{" "}
+              {t("Письмо не пришло? Проверьте папку «Спам» или")}{" "}
               <button
                 onClick={() => openUrl(ACIRON_ID_WEB)}
                 className="text-accent transition-colors hover:text-accent-hover"
               >
-                откройте личный кабинет
+                {t("откройте личный кабинет")}
               </button>
             </p>
           </div>
@@ -520,7 +523,7 @@ function TypeButton({
           {disabled && (
             <span className="rounded bg-bg px-1.5 py-0.5 text-[10px] font-medium text-muted">
               <i className="fa-solid fa-lock mr-1" />
-              скоро
+              {t("скоро")}
             </span>
           )}
         </div>
@@ -556,7 +559,7 @@ function BackBtn({ onClick }: { onClick: () => void }) {
       className="flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
     >
       <i className="fa-solid fa-arrow-left text-xs" />
-      Назад
+      {t("Назад")}
     </button>
   );
 }

@@ -8,10 +8,6 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-// client_id для входа Microsoft. Значение «по умолчанию» вшивается на сборке
-// (option_env), но его можно ПЕРЕОПРЕДЕЛИТЬ в рантайме через ACIRON_MS_CLIENT_ID —
-// так дев-сборке не нужно печь секрет в бинарь, чтобы включить MS-вход (тот же
-// приём, что и у ACIRON_ID_BASE в aciron.rs). Это PKCE public-client: секрета нет.
 const DEFAULT_CLIENT_ID: &str = match option_env!("ACIRON_MS_CLIENT_ID") {
     Some(v) => v,
     None => "",
@@ -206,7 +202,7 @@ pub async fn interactive_login(app: AppHandle) -> Result<Account, String> {
 
     if let Some(err) = tok.get("error").and_then(|v| v.as_str()) {
         let desc = tok["error_description"].as_str().unwrap_or(err);
-        return Err(format!("Microsoft: {desc}"));
+        return Err(format!("Вход Microsoft не удался: {desc}"));
     }
     let ms_access = tok["access_token"]
         .as_str()
@@ -244,7 +240,7 @@ async fn wait_for_code(
 
             if let Some(err) = params.get("error") {
                 reply(&mut stream, "Вход не удался. Можно закрыть вкладку и вернуться в лаунчер.").await;
-                return Err(format!("Microsoft: {}", urldecode(err)));
+                return Err(format!("Вход Microsoft не удался: {}", urldecode(err)));
             }
             if let Some(code) = params.get("code") {
 
@@ -365,7 +361,7 @@ async fn finish_login(
             2148916233 => "У аккаунта Microsoft нет профиля Xbox — создайте его на xbox.com",
             2148916235 => "Xbox Live недоступен в вашем регионе",
             2148916236 | 2148916237 => "Требуется подтверждение возраста для Xbox",
-            2148916238 => "Детский аккаунт: добавьте его в семейную группу Microsoft",
+            2148916238 => "Это детский аккаунт — добавьте его в семейную группу Microsoft",
             _ => "Не удалось авторизоваться в Xbox (XSTS)",
         };
         return Err(msg.into());
@@ -393,7 +389,7 @@ async fn finish_login(
         .as_str()
         .ok_or_else(|| {
             let snippet: String = mc_text.chars().take(300).collect();
-            format!("Minecraft login [{mc_status}]: {snippet}")
+            format!("Не удалось войти в Minecraft: [{mc_status}] {snippet}")
         })?
         .to_string();
 

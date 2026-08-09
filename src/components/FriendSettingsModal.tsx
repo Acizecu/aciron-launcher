@@ -3,6 +3,7 @@ import Modal from "./Modal";
 import Head from "./Head";
 import { useToast } from "../ToastContext";
 import { patchFriends, restoreFriends } from "../friends";
+import { t, ts } from "../i18n";
 import {
   getAccounts,
   headSkinUrl,
@@ -127,7 +128,7 @@ export default function FriendSettingsModal({
     onChange(next);
   };
 
-  const fail = (e: unknown) => toast(String(e).replace(/^Error:\s*/, ""), "error");
+  const fail = (e: unknown) => toast(ts(String(e)), "error");
 
   const pickStatus = (id: PresenceStatus) => {
     patch({ status: id });
@@ -160,7 +161,7 @@ export default function FriendSettingsModal({
   };
 
   return (
-    <Modal title="Профиль" subtitle="Статус и приватность в разделе друзей" onClose={onClose}>
+    <Modal title={t("Профиль")} subtitle={t("Статус и приватность в разделе друзей")} onClose={onClose}>
       <div className="space-y-5 p-5">
         {}
         <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
@@ -178,12 +179,12 @@ export default function FriendSettingsModal({
                 className="h-2 w-2 rounded-full"
                 style={{ background: STATUS_META[status].color }}
               />
-              {STATUS_META[status].label}
+              {t(STATUS_META[status].label)}
             </div>
           </div>
           <button
             onClick={copyNick}
-            title="Скопировать ник — по нему вас добавят в друзья"
+            title={t("Скопировать ник — по нему вас добавят в друзья")}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-bg text-muted transition-colors hover:text-accent"
           >
             <i className={`fa-solid ${copied ? "fa-check text-accent" : "fa-copy"} text-sm`} />
@@ -193,7 +194,7 @@ export default function FriendSettingsModal({
         {}
         <div>
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Статус
+            {t("Статус")}
           </div>
           <div className="grid grid-cols-2 gap-2">
             {(Object.keys(STATUS_META) as PresenceStatus[]).map((id) => {
@@ -203,7 +204,7 @@ export default function FriendSettingsModal({
                 <button
                   key={id}
                   onClick={() => pickStatus(id)}
-                  title={m.hint}
+                  title={t(m.hint)}
                   className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition-colors ${
                     active
                       ? "border-accent bg-accent/10"
@@ -219,45 +220,46 @@ export default function FriendSettingsModal({
                       active ? "font-semibold text-accent" : "text-text"
                     }`}
                   >
-                    {m.label}
+                    {t(m.label)}
                   </span>
                 </button>
               );
             })}
           </div>
-          <p className="mt-2 text-[11px] text-muted">{STATUS_META[status].hint}</p>
+          <p className="mt-2 text-[11px] text-muted">{t(STATUS_META[status].hint)}</p>
         </div>
 
         {}
         <div>
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Приватность
+            {t("Приватность")}
           </div>
           <div className="space-y-2">
             <Toggle
               value={prefs.showGame}
               onChange={(v) => patch({ showGame: v })}
-              label="Показывать, во что играю"
-              hint="Версия или название сборки в списке друзей"
+              label={t("Показывать, во что играю")}
+              hint={t("Версия или название сборки в списке друзей")}
             />
             <Toggle
               value={prefs.showServer}
               onChange={(v) => patch({ showServer: v })}
-              label="Показывать сервер"
-              hint="Адрес сервера, на котором вы сейчас играете"
+              label={t("Показывать сервер")}
+              hint={t("Адрес сервера, на котором вы сейчас играете")}
             />
             <Toggle
               value={accepting}
               onChange={toggleAccepting}
-              label="Принимать заявки в друзья"
-              hint="Выключите, если не хотите получать новые заявки"
+              label={t("Принимать заявки в друзья")}
+              hint={t("Выключите, если не хотите получать новые заявки")}
             />
           </div>
         </div>
 
         <p className="text-[11px] leading-relaxed text-muted">
-          Статус и приём заявок хранятся в Aciron ID — их видят друзья. Скрытые версия, сборка
-          и сервер вообще не отправляются на сервис.
+          {t(
+            "Статус и приём заявок хранятся в Aciron ID — их видят друзья. Скрытые версия, сборка и сервер вообще не отправляются на сервис."
+          )}
         </p>
       </div>
     </Modal>
