@@ -239,7 +239,15 @@ async fn wait_for_code(
                 .collect();
 
             if let Some(err) = params.get("error") {
-                reply(&mut stream, "Вход не удался. Можно закрыть вкладку и вернуться в лаунчер.").await;
+                reply(
+                    &mut stream,
+                    crate::i18n::pick(
+                        "Вход не удался. Можно закрыть вкладку и вернуться в лаунчер.",
+                        "Sign-in failed. You can close this tab and go back to the launcher.",
+                        "Giriş yapılamadı. Bu sekmeyi kapatıp başlatıcıya dönebilirsiniz.",
+                    ),
+                )
+                .await;
                 return Err(format!("Вход Microsoft не удался: {}", urldecode(err)));
             }
             if let Some(code) = params.get("code") {
@@ -251,7 +259,15 @@ async fn wait_for_code(
                     let _ = stream.flush().await;
                     continue;
                 }
-                reply(&mut stream, "Готово! Вернитесь в Aciron Launcher — вкладку можно закрыть.").await;
+                reply(
+                    &mut stream,
+                    crate::i18n::pick(
+                        "Готово! Вернитесь в Aciron Launcher — вкладку можно закрыть.",
+                        "All set! Head back to Aciron Launcher — this tab can be closed.",
+                        "Hazır! Aciron Launcher'a dönebilirsiniz — bu sekmeyi kapatabilirsiniz.",
+                    ),
+                )
+                .await;
                 return Ok(urldecode(code));
             }
 
@@ -265,8 +281,9 @@ async fn wait_for_code(
 }
 
 async fn reply(stream: &mut tokio::net::TcpStream, msg: &str) {
+    let lang = crate::i18n::code();
     let body = format!(
-        "<!doctype html><html lang=ru><meta charset=utf-8>\
+        "<!doctype html><html lang={lang}><meta charset=utf-8>\
          <title>Aciron Launcher</title>\
          <body style=\"margin:0;height:100vh;display:grid;place-items:center;\
          font-family:system-ui,Segoe UI,sans-serif;background:#12131a;color:#e7e3dd\">\

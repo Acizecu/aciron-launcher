@@ -9,6 +9,7 @@ mod discord;
 mod forge;
 mod ftb;
 mod gamelog;
+mod i18n;
 mod importer;
 mod instance;
 mod launcher;
@@ -23,7 +24,6 @@ mod servers;
 mod settings;
 mod social;
 mod update;
-mod verify;
 mod wardrobe;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

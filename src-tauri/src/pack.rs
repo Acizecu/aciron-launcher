@@ -392,7 +392,11 @@ pub async fn export_build(
                 "game": "minecraft",
                 "versionId": "1.0.0",
                 "name": build.name,
-                "summary": "Экспортировано из Aciron Launcher",
+                "summary": crate::i18n::pick(
+                    "Экспортировано из Aciron Launcher",
+                    "Exported from Aciron Launcher",
+                    "Aciron Launcher'dan dışa aktarıldı",
+                ),
                 "dependencies": Value::Object(deps),
                 "files": index_files,
             }),
@@ -784,6 +788,17 @@ fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     Some(p)
 }
 
+fn is_plain_name(name: &str) -> bool {
+    let mut it = Path::new(name).components();
+    matches!(it.next(), Some(Component::Normal(_))) && it.next().is_none()
+}
+
+fn is_loader_version(v: &str) -> bool {
+    !v.is_empty()
+        && v.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+'))
+}
+
 #[tauri::command]
 pub async fn import_acpack(app: AppHandle, path: String) -> Result<ImportResult, String> {
     crate::cancel::reset(CKEY);
@@ -803,7 +818,7 @@ pub async fn import_acpack(app: AppHandle, path: String) -> Result<ImportResult,
     let bid = build.id.clone();
     build
         .mods
-        .retain(|m| builds::content_dir(&bid, &m.kind).join(&m.filename).exists());
+        .retain(|m| is_plain_name(&m.filename) && builds::content_dir(&bid, &m.kind).join(&m.filename).exists());
 
     builds::upsert_build(build.clone())?;
     emit_op(&app, "install", "done", "Сборка импортирована", 1, 1);
@@ -825,7 +840,13 @@ fn unpack_acpack(app: &AppHandle, path: &str) -> Result<(Build, Vec<RemoteFile>)
         serde_json::from_str(&s).map_err(|e| format!("Испорченный манифест: {e}"))?
     };
 
-    let name = manifest["name"].as_str().unwrap_or("Импортированная сборка");
+    let name = manifest["name"].as_str().unwrap_or_else(|| {
+        crate::i18n::pick(
+            "Импортированная сборка",
+            "Imported instance",
+            "İçe aktarılan derleme",
+        )
+    });
     let mc = manifest["mc_version"]
         .as_str()
         .filter(|s| !s.is_empty())
@@ -875,6 +896,7 @@ fn unpack_acpack(app: &AppHandle, path: &str) -> Result<(Build, Vec<RemoteFile>)
         .map(|a| {
             a.iter()
                 .filter_map(|v| serde_json::from_value::<InstalledMod>(v.clone()).ok())
+                .filter(|m| is_plain_name(&m.filename))
                 .filter(|m| {
                     builds::content_dir(&build.id, &m.kind).join(&m.filename).exists()
                         || remote
@@ -886,7 +908,11 @@ fn unpack_acpack(app: &AppHandle, path: &str) -> Result<(Build, Vec<RemoteFile>)
         .unwrap_or_default();
 
     build.mods = mods;
-    build.loader_version = manifest["loader_version"].as_str().unwrap_or("").to_string();
+    build.loader_version = manifest["loader_version"]
+        .as_str()
+        .filter(|v| is_loader_version(v))
+        .unwrap_or("")
+        .to_string();
     build.icon_url = manifest["icon_url"].as_str().unwrap_or("").to_string();
     build.source_id = manifest["source_id"].as_str().unwrap_or("").to_string();
 

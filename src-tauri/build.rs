@@ -16,7 +16,7 @@ fn main() {
 
     let channel = std::env::var("ACIRON_BUILD_CHANNEL").unwrap_or_default();
     let channel_eff = if channel.is_empty() {
-        "local".to_string()
+        "stable".to_string()
     } else {
         channel
     };

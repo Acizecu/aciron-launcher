@@ -62,6 +62,42 @@ export function MicrosoftIcon({ size = 20, className = "" }: IconProps) {
   );
 }
 
+export function CapeIcon({ size = 20, className = "" }: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      {}
+      <path d="M12 3.6c-2.1 0-3.7.8-4.6 1.7L4.4 19.2c-.2.9.5 1.8 1.5 1.8h4.7L12 19.3l1.4 1.7h4.7c1 0 1.7-.9 1.5-1.8L16.6 5.3c-.9-.9-2.5-1.7-4.6-1.7z" />
+      {}
+      <rect x="9" y="2" width="6" height="2.8" rx="1.4" />
+    </svg>
+  );
+}
+
+export function ElytraIcon({ size = 20, className = "" }: IconProps) {
+
+  const wing = "M12.9 3.9c3.4.4 6 2.1 7.1 4.7 1.1 2.5.4 6.7-1.9 10.3-.7 1.1-2.3.7-2.5-.5z";
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d={wing} />
+      <path d={wing} transform="translate(24 0) scale(-1 1)" />
+    </svg>
+  );
+}
+
 export function AcironIcon({ size = 20, className = "" }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg">

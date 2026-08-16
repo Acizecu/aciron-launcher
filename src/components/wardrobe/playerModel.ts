@@ -77,10 +77,13 @@ type Cube = {
   inflate?: number;
 };
 
+export type BackItem = "cape" | "elytra";
+
 export function buildPlayer(
   skin: HTMLImageElement,
   model: SkinModel,
-  cape: HTMLImageElement | null
+  cape: HTMLImageElement | null,
+  back: BackItem = "cape"
 ): PlayerRig {
   const texW = 64;
   const texH = skin.naturalHeight === 32 ? 32 : 64;
@@ -172,17 +175,57 @@ export function buildPlayer(
     bones.LeftLeg.scale.x = -1;
   }
 
+  const backParts: { dispose: () => void }[] = [];
+
   const capeBone = bone("Cape", [0, 24, -2], "Body");
   if (cape) {
     const ctex = textureFrom(cape);
-    const cgeo = new THREE.BoxGeometry(10, 16, 1);
-    setBoxUv(cgeo, 0, 0, 10, 16, 1, 64, 32);
-    const mesh = new THREE.Mesh(cgeo, new THREE.MeshLambertMaterial({ map: ctex }));
+    backParts.push(ctex);
 
-    mesh.position.set(0, -8, 0);
-    mesh.rotation.y = Math.PI;
-    capeBone.rotation.x = 0.18;
-    capeBone.add(mesh);
+    if (back === "elytra") {
+
+      const wingMat = new THREE.MeshLambertMaterial({
+        map: ctex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        alphaTest: 0.05,
+      });
+      backParts.push(wingMat);
+
+      const wing = (dir: 1 | -1) => {
+        const geo = new THREE.BoxGeometry(10, 20, 2);
+        setBoxUv(geo, 22, 0, 10, 20, 2, 64, 32);
+        const mesh = new THREE.Mesh(geo, wingMat);
+
+        mesh.position.set(-5 * dir, -10, -1);
+        mesh.scale.x = -dir;
+
+        mesh.position.z -= dir * 0.02;
+
+        const g = new THREE.Group();
+        g.add(mesh);
+        g.position.x = dir * 5;
+
+        g.position.y = -2;
+
+        g.rotation.z = -0.2618 * dir;
+        g.rotation.x = 0.2618;
+        return g;
+      };
+
+      capeBone.add(wing(1), wing(-1));
+    } else {
+      const cgeo = new THREE.BoxGeometry(10, 16, 1);
+      setBoxUv(cgeo, 0, 0, 10, 16, 1, 64, 32);
+      const cmat = new THREE.MeshLambertMaterial({ map: ctex });
+      backParts.push(cmat);
+      const mesh = new THREE.Mesh(cgeo, cmat);
+
+      mesh.position.set(0, -8, 0);
+      mesh.rotation.y = Math.PI;
+      capeBone.rotation.x = 0.18;
+      capeBone.add(mesh);
+    }
   }
 
   return {
@@ -195,6 +238,7 @@ export function buildPlayer(
       base.dispose();
       overlay.dispose();
       tex.dispose();
+      for (const p of backParts) p.dispose();
     },
   };
 }

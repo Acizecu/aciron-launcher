@@ -31,8 +31,6 @@
     "dialog:allow-save",
     "updater:default",
     "process:default",
-    "process:allow-restart",
-    "process:allow-exit",
-    "core:window:allow-create"
+    "process:allow-restart"
   ]
 }

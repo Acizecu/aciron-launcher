@@ -75,10 +75,45 @@ export function FlagEn({ size = 20, className }: Props) {
   );
 }
 
-export function LangFlag({ lang, size, className }: { lang: string } & Props) {
-  return lang === "ru" ? (
-    <FlagRu size={size} className={className} />
-  ) : (
-    <FlagEn size={size} className={className} />
+export function FlagTr({ size = 20, className }: Props) {
+  const id = useId();
+  const { width, height } = box(size);
+  return (
+    <svg
+      viewBox="0 0 20 14"
+      width={width}
+      height={height}
+      className={className}
+      aria-hidden
+      focusable="false"
+    >
+      <clipPath id={id}>
+        <rect width="20" height="14" rx="2.5" />
+      </clipPath>
+      <g clipPath={`url(#${id})`}>
+        <rect width="20" height="14" fill="#e30a17" />
+        {}
+        <circle cx="7.2" cy="7" r="3.5" fill="#ffffff" />
+        <circle cx="8.5" cy="7" r="2.85" fill="#e30a17" />
+        <path
+          d="M15.55 7 L13.996 6.494 L13.995 4.86 L13.034 6.182 L11.48 5.677 L12.44 7 L11.48 8.323 L13.034 7.818 L13.995 9.14 L13.996 7.506 Z"
+          fill="#ffffff"
+        />
+      </g>
+      <rect
+        width="20"
+        height="14"
+        rx="2.5"
+        fill="none"
+        stroke="rgba(0,0,0,0.25)"
+        strokeWidth="0.6"
+      />
+    </svg>
   );
+}
+
+export function LangFlag({ lang, size, className }: { lang: string } & Props) {
+  if (lang === "ru") return <FlagRu size={size} className={className} />;
+  if (lang === "tr") return <FlagTr size={size} className={className} />;
+  return <FlagEn size={size} className={className} />;
 }

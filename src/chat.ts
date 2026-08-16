@@ -13,6 +13,7 @@ import {
   sendTyping,
   type ChatMessage,
 } from "./api";
+import { KNOWN } from "./twemoji";
 
 export type SendState = "sending" | "failed";
 
@@ -188,11 +189,25 @@ export function encodeReaction(targetId: string, emoji: string): string {
   return `${RC_A}${targetId}${RC_B}${emoji}`;
 }
 
+function isReactionLike(s: string): boolean {
+  if (KNOWN.has(s)) return true;
+  if (s.length > 16 || /[\p{L}\p{N}\s]/u.test(s)) return false;
+
+  return /\p{Extended_Pictographic}/u.test(s) || /[\u{1F1E6}-\u{1F1FF}]/u.test(s);
+}
+
 export function parseReaction(body: string): { targetId: string; emoji: string } | null {
   if (!body.startsWith(RC_A)) return null;
   const b = body.indexOf(RC_B);
   if (b < 1) return null;
-  return { targetId: body.slice(1, b), emoji: body.slice(b + 1) };
+  const emoji = body.slice(b + 1);
+
+  if (emoji && !isReactionLike(emoji)) return null;
+  return { targetId: body.slice(1, b), emoji };
+}
+
+export function stripMarkers(s: string): string {
+  return s.replace(/[\uE011-\uE017]/g, "");
 }
 
 export type Reaction = { emoji: string; count: number; mine: boolean };
@@ -205,12 +220,15 @@ export function splitReactions(
 
   const latest = new Map<string, Map<string, string>>();
 
+  const known = new Set(messages.filter((m) => !parseReaction(m.body)).map((m) => m.id));
+
   for (const m of messages) {
     const r = parseReaction(m.body);
     if (!r) {
       visible.push(m);
       continue;
     }
+    if (!known.has(r.targetId)) continue;
     const who = m.from === friendId ? "them" : "me";
     const byWho = latest.get(r.targetId) ?? new Map<string, string>();
     byWho.set(who, r.emoji);

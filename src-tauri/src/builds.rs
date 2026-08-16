@@ -315,22 +315,6 @@ pub fn get_build(id: &str) -> Option<Build> {
     load_builds().into_iter().find(|b| b.id == id)
 }
 
-pub fn add_installed(build_id: &str, mods: Vec<InstalledMod>) -> Result<Build, String> {
-    let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
-    let mut list = load_builds();
-    let b = list
-        .iter_mut()
-        .find(|b| b.id == build_id)
-        .ok_or("Сборка не найдена")?;
-    for m in mods {
-        b.mods.retain(|x| x.project_id != m.project_id);
-        b.mods.push(m);
-    }
-    let updated = b.clone();
-    save_builds(&list)?;
-    Ok(updated)
-}
-
 pub fn upsert_build(build: Build) -> Result<(), String> {
     let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
     let mut list = load_builds();
@@ -399,6 +383,8 @@ pub fn delete_build(id: String) -> Result<(), String> {
         list.retain(|b| b.id != id);
         save_builds(&list)?;
     }
+
+    crate::recents::remove(&format!("build:{id}"));
     if dir.is_dir() {
         let _ = std::fs::remove_dir_all(&dir);
     }

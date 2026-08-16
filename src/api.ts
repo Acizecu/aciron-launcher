@@ -621,8 +621,9 @@ export type FriendProfile = {
   hasSkin: boolean;
   hasCape: boolean;
   skinModel: SkinModelId;
-  totalPlaytimeSecs: number;
-  createdAt: number;
+
+  totalPlaytimeSecs: number | null;
+  createdAt: number | null;
   presence: FriendPresence;
 };
 

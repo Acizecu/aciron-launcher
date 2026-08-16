@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PlayerView from "./wardrobe/PlayerView";
+import type { BackItem } from "./wardrobe/playerModel";
 import SkinThumb from "./wardrobe/SkinThumb";
 import Modal from "./Modal";
 import ConfirmModal from "./ConfirmModal";
 import AddAccountModal from "./AddAccountModal";
+import { CapeIcon, ElytraIcon } from "./Icons";
 import { useToast } from "../ToastContext";
 import { human, type CapeEntry, type CapeOrigin, type Instant } from "./wardrobe/types";
 import { CapeCard, Loading, Notice, OutfitCard, SectionHeader, SkinCard, TileButton } from "./wardrobe/cards";
@@ -406,6 +408,8 @@ export default function WardrobePage() {
       : null;
   const shownModel = instant?.model ?? data?.active.model ?? "classic";
 
+  const [back, setBack] = useState<BackItem>("cape");
+
   const skinActive = (key: string) =>
     instant?.skinKey !== undefined
       ? instant.skinKey === key
@@ -460,16 +464,44 @@ export default function WardrobePage() {
       <div className="flex min-h-0 flex-1 gap-6">
         {}
         <section className="flex w-[36%] min-w-[300px] max-w-[460px] shrink-0 flex-col">
-          <div className="min-h-0 flex-1 overflow-hidden rounded-2xl bg-card/40">
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-card/40">
             {skinUrl ? (
               <PlayerView
                 skinUrl={skinUrl}
                 capeUrl={capeUrl}
                 model={shownModel}
+                back={back}
                 className="h-full w-full"
               />
             ) : (
               <div className="grid h-full place-items-center text-sm text-muted">{t("Нет аккаунта")}</div>
+            )}
+
+            {}
+            {skinUrl && capeUrl && (
+              <div className="absolute left-3 top-3 flex gap-1 rounded-3xl bg-bg/70 p-1 backdrop-blur">
+                {(
+                  [
+                    { id: "cape", Icon: CapeIcon, label: tr("Плащ") },
+                    { id: "elytra", Icon: ElytraIcon, label: tr("Крылья") },
+                  ] as const
+                ).map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => setBack(b.id)}
+                    title={b.label}
+                    aria-label={b.label}
+                    aria-pressed={back === b.id}
+                    className={`grid h-8 w-8 place-items-center rounded-3xl transition-colors ${
+                      back === b.id
+                        ? "bg-accent/15 text-accent"
+                        : "text-muted hover:bg-white/5 hover:text-text"
+                    }`}
+                  >
+                    <b.Icon size={15} />
+                  </button>
+                ))}
+              </div>
             )}
           </div>
 

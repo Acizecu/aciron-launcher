@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 declare const process: { env: Record<string, string | undefined> };
 
 const APP_VERSION = process.env.npm_package_version ?? "0.0.0";
-const APP_CHANNEL = process.env.ACIRON_CHANNEL ?? "local";
+const APP_CHANNEL = process.env.ACIRON_CHANNEL ?? "stable";
 
 export default defineConfig(({ command, mode }) => {
 

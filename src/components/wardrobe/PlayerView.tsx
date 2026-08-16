@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { buildPlayer, type SkinModel } from "./playerModel";
+import { buildPlayer, type BackItem, type SkinModel } from "./playerModel";
 import { applyAnimation, idlePose, rememberBasePose, type Animation } from "./animation";
 import { createPoof, type Poof } from "./poof";
 
@@ -20,12 +20,15 @@ export default function PlayerView({
   skinUrl,
   capeUrl,
   model,
+  back = "cape",
   animation,
   className = "",
 }: {
   skinUrl: string;
   capeUrl?: string | null;
   model: SkinModel;
+
+  back?: BackItem;
 
   animation?: Animation | null;
   className?: string;
@@ -79,7 +82,7 @@ export default function PlayerView({
 
     void Promise.all([load(skinUrl), load(capeUrl || "")]).then(([skin, cape]) => {
       if (!alive || !skin) return;
-      rig = buildPlayer(skin, model, cape);
+      rig = buildPlayer(skin, model, cape, back);
       rememberBasePose(rig);
 
       rig.root.position.y = -16;
@@ -216,7 +219,7 @@ export default function PlayerView({
       host.removeChild(renderer.domElement);
     };
 
-  }, [skinUrl, capeUrl, model]);
+  }, [skinUrl, capeUrl, model, back]);
 
   return <div ref={hostRef} className={className} />;
 }

@@ -25,6 +25,14 @@ fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     Some(p)
 }
 
+fn sane_filename(name: &str, fallback: &str) -> String {
+    let mut it = Path::new(name).components();
+    match (it.next(), it.next()) {
+        (Some(Component::Normal(s)), None) => s.to_string_lossy().into_owned(),
+        _ => fallback.to_string(),
+    }
+}
+
 fn client() -> Result<&'static reqwest::Client, String> {
     static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
     CLIENT
@@ -159,7 +167,7 @@ pub async fn change_build_version(build_id: String, mc_version: String) -> Resul
                     .or_else(|| files.first());
                 if let Some(f) = file {
                     let url = f["url"].as_str().unwrap_or("");
-                    let filename = f["filename"].as_str().unwrap_or("mod.jar").to_string();
+                    let filename = sane_filename(f["filename"].as_str().unwrap_or("mod.jar"), "mod.jar");
 
                     let _ = std::fs::remove_file(dir.join(&m.filename));
                     download_to(&cl, url, &dir.join(&filename)).await?;
@@ -310,7 +318,10 @@ async fn build_from_mrpack(
         } else {
             "fabric"
         };
-        let name = index["name"].as_str().unwrap_or("Модпак").to_string();
+        let name = index["name"]
+            .as_str()
+            .unwrap_or_else(|| crate::i18n::pick("Модпак", "Modpack", "Mod paketi"))
+            .to_string();
 
         let build = builds::create_build(name, mc, loader.to_string())?;
         let dir = builds::build_dir(&build.id);
@@ -718,7 +729,7 @@ async fn project_title(cl: &reqwest::Client, project_id: &str) -> (String, Strin
 
 #[tauri::command]
 pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Build, String> {
-    let build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
+    let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
     let loader = build.loader.clone();
     let mc = build.mc_version.clone();
     let cl = http()?;
@@ -733,8 +744,6 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
 
     let mut seen: HashSet<String> = build.mods.iter().map(|m| m.project_id.clone()).collect();
     let mut queue: Vec<(String, bool)> = vec![(project_id.clone(), true)];
-
-    let mut added: Vec<InstalledMod> = Vec::new();
 
     while let Some((pid, is_root)) = queue.pop() {
         if seen.contains(&pid) {
@@ -772,7 +781,7 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
         let (url, filename) = match file {
             Some(f) => (
                 f["url"].as_str().unwrap_or("").to_string(),
-                f["filename"].as_str().unwrap_or("file.jar").to_string(),
+                sane_filename(f["filename"].as_str().unwrap_or("file.jar"), "file.jar"),
             ),
             None => {
                 if is_root {
@@ -790,7 +799,7 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
 
         let version_id = ver["id"].as_str().unwrap_or("").to_string();
         let (title, icon) = project_title(&cl, &pid).await;
-        added.push(InstalledMod {
+        build.mods.push(InstalledMod {
             project_id: pid.clone(),
             version_id,
             name: title,
@@ -815,7 +824,8 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
         }
     }
 
-    builds::add_installed(&build_id, added)
+    builds::upsert_build(build.clone())?;
+    Ok(build)
 }
 
 #[tauri::command]
@@ -838,7 +848,7 @@ pub async fn modrinth_install_version(
     project_id: String,
     version_id: String,
 ) -> Result<Build, String> {
-    let build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
+    let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
     let loader = build.loader.clone();
     let mc = build.mc_version.clone();
     let cl = http()?;
@@ -863,17 +873,16 @@ pub async fn modrinth_install_version(
         .or_else(|| files.first())
         .ok_or("Нет файла для скачивания")?;
     let url = file["url"].as_str().unwrap_or("").to_string();
-    let filename = file["filename"].as_str().unwrap_or("file.jar").to_string();
+    let filename = sane_filename(file["filename"].as_str().unwrap_or("file.jar"), "file.jar");
 
     if let Some(old) = build.mods.iter().find(|m| m.project_id == project_id) {
         let _ = std::fs::remove_file(builds::content_dir(&build_id, &old.kind).join(&old.filename));
     }
-
-    let mut added: Vec<InstalledMod> = Vec::new();
+    build.mods.retain(|m| m.project_id != project_id);
 
     download_to(&cl, &url, &dir.join(&filename)).await?;
     let (title, icon) = project_title(&cl, &project_id).await;
-    added.push(InstalledMod {
+    build.mods.push(InstalledMod {
         project_id: project_id.clone(),
         version_id: version_id.clone(),
         name: title,
@@ -884,13 +893,7 @@ pub async fn modrinth_install_version(
     });
 
     if is_mod {
-
-        let mut seen: HashSet<String> = build
-            .mods
-            .iter()
-            .chain(added.iter())
-            .map(|m| m.project_id.clone())
-            .collect();
+        let mut seen: HashSet<String> = build.mods.iter().map(|m| m.project_id.clone()).collect();
         let mut queue: Vec<String> = Vec::new();
         if let Some(deps) = ver["dependencies"].as_array() {
             for d in deps {
@@ -914,10 +917,10 @@ pub async fn modrinth_install_version(
                     .or_else(|| dfiles.first())
                 {
                     let durl = f["url"].as_str().unwrap_or("").to_string();
-                    let dname = f["filename"].as_str().unwrap_or("mod.jar").to_string();
+                    let dname = sane_filename(f["filename"].as_str().unwrap_or("mod.jar"), "mod.jar");
                     download_to(&cl, &durl, &builds::mods_dir(&build_id).join(&dname)).await?;
                     let (t, ic) = project_title(&cl, &pid).await;
-                    added.push(InstalledMod {
+                    build.mods.push(InstalledMod {
                         project_id: pid.clone(),
                         version_id: v["id"].as_str().unwrap_or("").to_string(),
                         name: t,
@@ -942,5 +945,6 @@ pub async fn modrinth_install_version(
         }
     }
 
-    builds::add_installed(&build_id, added)
+    builds::upsert_build(build.clone())?;
+    Ok(build)
 }

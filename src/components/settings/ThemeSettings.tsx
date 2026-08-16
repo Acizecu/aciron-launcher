@@ -12,14 +12,8 @@ import {
   type Palette,
 } from "../../ThemeContext";
 import { useToast } from "../../ToastContext";
-import { Card, iconBtnCls } from "./controls";
+import { Card, Field, iconBtnCls, inputCls } from "./controls";
 import { t as tr } from "../../i18n";
-
-const ghostBtnCls =
-  "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/10 disabled:text-muted disabled:hover:bg-transparent";
-
-const cardActionCls =
-  "grid h-6 w-6 place-items-center rounded-md bg-black/45 text-white/75 backdrop-blur-sm transition-colors hover:text-white";
 
 export const THEME_GRID_CLS = "mx-auto grid w-full max-w-[624px] grid-cols-3 gap-3";
 
@@ -60,19 +54,14 @@ export function ThemeCard({
   );
 }
 
-function ColorRow({
-  label,
-  hint,
+function ColorInput({
   value,
   onChange,
-  onReset,
+  title,
 }: {
-  label: string;
-  hint?: string;
   value: string;
   onChange: (v: string) => void;
-
-  onReset?: () => void;
+  title?: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const commit = (raw: string) => {
@@ -81,36 +70,13 @@ function ColorRow({
     setDraft(null);
   };
   return (
-    <div className="flex items-center gap-3.5 px-4 py-3">
-      {}
-      <label className="relative h-9 w-9 shrink-0 cursor-pointer" title={tr("Выбрать цвет")}>
-        <span
-          className="block h-full w-full rounded-full border border-border/70 transition-transform hover:scale-105"
-          style={{ background: value }}
-        />
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        />
-      </label>
-
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-text">{label}</div>
-        {hint && <div className="mt-0.5 text-[11px] leading-snug text-muted">{hint}</div>}
-      </div>
-
-      {onReset && (
-        <button
-          onClick={onReset}
-          title={tr("Вернуть автоматический цвет")}
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition-colors hover:text-accent"
-        >
-          <i className="fa-solid fa-rotate-left text-[11px]" />
-        </button>
-      )}
-
+    <div className="flex items-center gap-2" title={title}>
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
+      />
       <input
         value={draft ?? value.toUpperCase()}
         spellCheck={false}
@@ -120,7 +86,7 @@ function ColorRow({
           if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
           if (e.key === "Escape") setDraft(null);
         }}
-        className="w-[76px] shrink-0 rounded-md bg-transparent px-1.5 py-1 text-right font-mono text-[11px] uppercase text-muted outline-none transition-colors hover:text-text focus:bg-bg focus:text-text"
+        className="w-[86px] rounded-lg border border-border bg-bg px-2 py-1.5 text-center font-mono text-[11px] uppercase text-text outline-none transition-colors focus:border-accent"
       />
     </div>
   );
@@ -177,8 +143,6 @@ export default function ThemeSettings() {
 
   const pal = useMemo(() => customPalette(theme), [theme]);
 
-  const activeSaved = theme.id === "custom" ? theme.activeSavedId : null;
-
   return (
     <>
         <h2 className="text-lg font-bold text-text">{tr("Тема оформления")}</h2>
@@ -195,64 +159,39 @@ export default function ThemeSettings() {
           <ThemeCard
             label={tr("Своя тема")}
             palette={pal}
-            active={theme.id === "custom" && !activeSaved}
+            active={theme.id === "custom"}
             onClick={() => setTheme("custom")}
           />
-          {}
-          {themePresets.map((p) => (
-            <div key={p.id} className="group relative">
-              <ThemeCard
-                label={p.name}
-                palette={p.palette}
-                active={activeSaved === p.id}
-                onClick={() => applySaved(p)}
-              />
-              {}
-              <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-                <button
-                  onClick={() => {
-                    void navigator.clipboard.writeText(exportTheme(p.name, p.palette));
-                    toast(tr("Код темы скопирован"), "success");
-                  }}
-                  title={tr("Скопировать код темы")}
-                  className={cardActionCls}
-                >
-                  <i className="fa-solid fa-share-nodes text-[10px]" />
-                </button>
-                <button
-                  onClick={() => deleteSaved(p.id)}
-                  title={tr("Удалить тему")}
-                  className={`${cardActionCls} hover:text-[#fca5a5]`}
-                >
-                  <i className="fa-solid fa-xmark text-[11px]" />
-                </button>
-              </div>
-            </div>
-          ))}
         </div>
 
         {theme.id === "custom" && (
           <>
             {}
             <Card>
-              <ColorRow
+              <Field
                 label={tr("Акцент")}
                 hint={tr("Кнопки, иконки, выделение. Оттенки для наведения и нажатия считаются сами.")}
-                value={theme.seed.accent}
-                onChange={(v) => setSeed({ accent: v })}
-              />
-              <ColorRow
+              >
+                <ColorInput
+                  value={theme.seed.accent}
+                  onChange={(v) => setSeed({ accent: v })}
+                />
+              </Field>
+              <Field
                 label={tr("Фон")}
                 hint={tr("Панели, карточки и границы выводятся из него ступенями. Светлый фон делает тему светлой.")}
-                value={theme.seed.base}
-                onChange={(v) => setSeed({ base: v })}
-              />
-              <ColorRow
+              >
+                <ColorInput value={theme.seed.base} onChange={(v) => setSeed({ base: v })} />
+              </Field>
+              <Field
                 label={tr("Текст")}
                 hint={tr("По умолчанию подбирается под яркость фона.")}
-                value={pal.text}
-                onChange={(v) => setSeed({ text: v })}
-              />
+              >
+                <ColorInput
+                  value={pal.text}
+                  onChange={(v) => setSeed({ text: v })}
+                />
+              </Field>
             </Card>
 
             <ContrastNotice palette={pal} />
@@ -278,26 +217,40 @@ export default function ThemeSettings() {
                 />
               </button>
               {tokensOpen && (
-                <div className="divide-y divide-border/40">
-                  {TOKENS.map((t) => (
-                    <ColorRow
-                      key={t.key}
-                      label={tr(t.label)}
-                      hint={t.hint ? tr(t.hint) : undefined}
-                      value={pal[t.key]}
-                      onChange={(v) => setToken(t.key, v)}
-                      onReset={t.key in theme.overrides ? () => setToken(t.key, null) : undefined}
-                    />
-                  ))}
+                <div className="space-y-2 px-4 py-3.5">
+                  {TOKENS.map((t) => {
+                    const overridden = t.key in theme.overrides;
+                    return (
+                      <div key={t.key} className="flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] text-text">{tr(t.label)}</div>
+                          {t.hint && (
+                            <div className="text-[11px] text-muted">{tr(t.hint)}</div>
+                          )}
+                        </div>
+                        {overridden && (
+                          <button
+                            onClick={() => setToken(t.key, null)}
+                            title={tr("Вернуть автоматический цвет")}
+                            className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted transition-colors hover:text-accent"
+                          >
+                            <i className="fa-solid fa-rotate-left text-[11px]" />
+                          </button>
+                        )}
+                        <ColorInput
+                          value={pal[t.key]}
+                          onChange={(v) => setToken(t.key, v)}
+                        />
+                      </div>
+                    );
+                  })}
                   {Object.keys(theme.overrides).length > 0 && (
-                    <div className="px-4 py-2.5">
-                      <button
-                        onClick={resetTokens}
-                        className="text-[11px] text-muted underline-offset-2 transition-colors hover:text-accent hover:underline"
-                      >
-                        {tr("Сбросить все ручные правки")}
-                      </button>
-                    </div>
+                    <button
+                      onClick={resetTokens}
+                      className="mt-1 text-[11px] text-muted underline-offset-2 transition-colors hover:text-accent hover:underline"
+                    >
+                      {tr("Сбросить все ручные правки")}
+                    </button>
                   )}
                 </div>
               )}
@@ -307,10 +260,9 @@ export default function ThemeSettings() {
 
         {}
         <Card>
-          {}
-          <div className="flex items-center gap-2 px-4 py-2">
+          <div className="flex items-center gap-2 px-4 py-3.5">
             <input
-              className="w-full bg-transparent py-1.5 text-sm text-text outline-none placeholder:text-muted/60"
+              className={inputCls}
               value={presetName}
               maxLength={24}
               placeholder={tr("Название темы")}
@@ -331,64 +283,109 @@ export default function ThemeSettings() {
                 toast(tr("Тема сохранена"), "success");
               }}
               disabled={!presetName.trim()}
-              className={ghostBtnCls}
+              className="flex shrink-0 items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-50"
             >
-              <i className="fa-solid fa-floppy-disk text-xs" />
+              <i className="fa-solid fa-floppy-disk" />
               {tr("Сохранить")}
             </button>
           </div>
         </Card>
 
         {}
+        {themePresets.length > 0 && (
+          <div>
+            <span className="mb-2 block text-xs text-muted">{tr("Мои темы")}</span>
+            <div className="flex flex-wrap gap-2">
+              {themePresets.map((p) => (
+                <div
+                  key={p.id}
+                  className="group flex items-center gap-2 rounded-xl border border-border bg-card py-1.5 pl-2 pr-1.5 transition-colors hover:border-accent/50"
+                >
+                  <button
+                    onClick={() => applySaved(p)}
+                    className="flex items-center gap-2"
+                    title={tr("Применить тему")}
+                  >
+                    {}
+                    <span
+                      className="flex h-6 w-6 shrink-0 overflow-hidden rounded-md border"
+                      style={{ borderColor: p.palette.border }}
+                    >
+                      <span className="w-1/2" style={{ background: p.palette.bg }} />
+                      <span className="w-1/2" style={{ background: p.palette.accent }} />
+                    </span>
+                    <span className="text-sm font-medium text-text">{p.name}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      void navigator.clipboard.writeText(exportTheme(p.name, p.palette));
+                      toast(tr("Код темы скопирован"), "success");
+                    }}
+                    title={tr("Скопировать код темы")}
+                    className="grid h-6 w-6 place-items-center rounded-md text-muted transition-colors hover:text-accent"
+                  >
+                    <i className="fa-solid fa-share-nodes text-[11px]" />
+                  </button>
+                  <button
+                    onClick={() => deleteSaved(p.id)}
+                    title={tr("Удалить тему")}
+                    className="grid h-6 w-6 place-items-center rounded-md text-muted transition-colors hover:text-[#ef4444]"
+                  >
+                    <i className="fa-solid fa-xmark text-xs" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {}
         <Card>
-          <div className="flex items-center gap-4 px-4 py-3.5">
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-text">{tr("Поделиться темой")}</div>
-              <div className="mt-0.5 text-[11px] leading-snug text-muted">
-                {tr("Код можно отправить другу — он вставит его сюда и получит ровно эти цвета.")}
-              </div>
+          <Field
+            label={tr("Поделиться темой")}
+            hint={tr("Код можно отправить другу — он вставит его сюда и получит ровно эти цвета.")}
+            column
+          >
+            <div className="flex items-center gap-2">
+              <input
+                className={`${inputCls} font-mono text-[11px]`}
+                value={shareCode}
+                spellCheck={false}
+                placeholder="aciron-theme-1:…"
+                onChange={(e) => setShareCode(e.target.value)}
+              />
+              <button
+                onClick={() => {
+                  void navigator.clipboard.writeText(
+                    exportTheme(presetName.trim() || tr("Тема"), palette)
+                  );
+                  toast(tr("Код текущей темы скопирован"), "success");
+                }}
+                title={tr("Скопировать код текущей темы")}
+                className={iconBtnCls}
+              >
+                <i className="fa-solid fa-copy text-xs" />
+              </button>
+              <button
+                onClick={() => {
+                  const parsed = importTheme(shareCode);
+                  if (!parsed) {
+                    toast(tr("Код темы не распознан"), "error");
+                    return;
+                  }
+                  savePreset(parsed.name, parsed.palette);
+                  applySaved({ id: "tmp", name: parsed.name, palette: parsed.palette });
+                  setShareCode("");
+                  toast(tr("Тема «{name}» добавлена", { name: parsed.name }), "success");
+                }}
+                disabled={!shareCode.trim()}
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium text-text transition-colors hover:border-accent/50 hover:text-accent disabled:opacity-40"
+              >
+                <i className="fa-solid fa-file-import text-xs" />
+                {tr("Применить")}
+              </button>
             </div>
-            <button
-              onClick={() => {
-                void navigator.clipboard.writeText(
-                  exportTheme(presetName.trim() || tr("Тема"), palette)
-                );
-                toast(tr("Код текущей темы скопирован"), "success");
-              }}
-              title={tr("Скопировать код текущей темы")}
-              className={iconBtnCls}
-            >
-              <i className="fa-solid fa-copy text-xs" />
-            </button>
-          </div>
-          <div className="flex items-center gap-2 px-4 py-2">
-            <input
-              className="w-full bg-transparent py-1.5 font-mono text-[11px] text-text outline-none placeholder:text-muted/60"
-              value={shareCode}
-              spellCheck={false}
-              placeholder="aciron-theme-1:…"
-              onChange={(e) => setShareCode(e.target.value)}
-            />
-            <button
-              onClick={() => {
-                const parsed = importTheme(shareCode);
-                if (!parsed) {
-                  toast(tr("Код темы не распознан"), "error");
-                  return;
-                }
-                savePreset(parsed.name, parsed.palette);
-                applySaved({ id: "tmp", name: parsed.name, palette: parsed.palette });
-                setShareCode("");
-                toast(tr("Тема «{name}» добавлена", { name: parsed.name }), "success");
-              }}
-              disabled={!shareCode.trim()}
-              className={ghostBtnCls}
-            >
-              <i className="fa-solid fa-file-import text-xs" />
-              {tr("Применить")}
-            </button>
-          </div>
+          </Field>
         </Card>
     </>
   );

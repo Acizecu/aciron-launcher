@@ -37,6 +37,14 @@ fn safe_join(base: &Path, rel: &str) -> Option<PathBuf> {
     Some(p)
 }
 
+fn sane_filename(name: &str, fallback: &str) -> String {
+    let mut it = Path::new(name).components();
+    match (it.next(), it.next()) {
+        (Some(Component::Normal(s)), None) => s.to_string_lossy().into_owned(),
+        _ => fallback.to_string(),
+    }
+}
+
 fn build_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .user_agent("AcironLauncher/0.1 (aciron.pro)")
@@ -55,6 +63,19 @@ fn http() -> Result<reqwest::Client, String> {
     let c = build_client()?;
 
     Ok(CLIENT.get_or_init(|| c).clone())
+}
+
+pub(crate) fn dl_client() -> Result<reqwest::Client, String> {
+    static C: OnceLock<reqwest::Client> = OnceLock::new();
+    if let Some(c) = C.get() {
+        return Ok(c.clone());
+    }
+    let c = reqwest::Client::builder()
+        .user_agent("AcironLauncher/0.1 (aciron.pro)")
+        .connect_timeout(Duration::from_secs(8))
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(C.get_or_init(|| c).clone())
 }
 
 pub fn proxy_headers() -> reqwest::header::HeaderMap {
@@ -348,9 +369,13 @@ pub async fn curseforge_project_versions(project_id: String) -> Result<Value, St
 // что убирает пик ~1× размера файла в RAM на каждую параллельную загрузку.
 // Поведение то же: тот же путь назначения, та же семантика ошибок (любая
 // сетевая/IO-ошибка → Err), файл создаётся целиком при успехе.
-async fn download_to(cl: &reqwest::Client, url: &str, path: &Path) -> Result<(), String> {
+async fn download_to(url: &str, path: &Path) -> Result<(), String> {
     use futures::StreamExt;
     use tokio::io::AsyncWriteExt;
+
+    // Качаем клиентом без ключа прокси: url сюда приходит из ответа API и
+    // указывает на чужой CDN (см. dl_client).
+    let cl = dl_client()?;
 
     if let Some(p) = path.parent() {
         tokio::fs::create_dir_all(p).await.map_err(|e| e.to_string())?;
@@ -520,7 +545,7 @@ fn required_deps(f: &Value) -> Vec<i64> {
 /// Устанавливает проект CurseForge в сборку (последняя совместимая версия + зависимости).
 #[tauri::command]
 pub async fn curseforge_install(build_id: String, project_id: String) -> Result<Build, String> {
-    let build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
+    let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
     let loader = build.loader.clone();
     let mc = build.mc_version.clone();
     let cl = http()?;
@@ -537,10 +562,6 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
         .collect();
     // (modId, is_root)
     let mut queue: Vec<(i64, bool)> = vec![(root_id, true)];
-    // Установленное копим отдельно и дописываем под локом: снимок сборки,
-    // прочитанный до закачки, затирает чужие параллельные установки, и мод,
-    // который скачался, пропадает из списка (см. builds::add_installed).
-    let mut added: Vec<InstalledMod> = Vec::new();
 
     while let Some((mid, is_root)) = queue.pop() {
         if seen.contains(&mid) {
@@ -570,17 +591,17 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
             }
         };
 
-        let filename = file["fileName"].as_str().unwrap_or("file.jar").to_string();
+        let filename = sane_filename(file["fileName"].as_str().unwrap_or("file.jar"), "file.jar");
         let url = file_download_url(&cl, mid, &file).await?;
         let dest_dir = if is_root {
             builds::content_dir(&build_id, &kind)
         } else {
             builds::mods_dir(&build_id)
         };
-        download_to(&cl, &url, &dest_dir.join(&filename)).await?;
+        download_to(&url, &dest_dir.join(&filename)).await?;
 
         let (title, icon, _c) = mod_info(&cl, mid).await;
-        added.push(InstalledMod {
+        build.mods.push(InstalledMod {
             project_id: format!("cf:{mid}"),
             version_id: file["id"].as_i64().unwrap_or_default().to_string(),
             name: title,
@@ -600,7 +621,8 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
         }
     }
 
-    builds::add_installed(&build_id, added)
+    builds::upsert_build(build.clone())?;
+    Ok(build)
 }
 
 /// Устанавливает КОНКРЕТНУЮ версию (файл) проекта CurseForge (вкладка «Версии»).
@@ -610,7 +632,7 @@ pub async fn curseforge_install_version(
     project_id: String,
     version_id: String,
 ) -> Result<Build, String> {
-    let build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
+    let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
     let loader = build.loader.clone();
     let mc = build.mc_version.clone();
     let cl = http()?;
@@ -626,7 +648,7 @@ pub async fn curseforge_install_version(
     if file.is_null() {
         return Err("Файл не найден".into());
     }
-    let filename = file["fileName"].as_str().unwrap_or("file.jar").to_string();
+    let filename = sane_filename(file["fileName"].as_str().unwrap_or("file.jar"), "file.jar");
     let url = file_download_url(&cl, mid, &file).await?;
 
     // Убираем прежнюю версию этого проекта (файл + запись).
@@ -634,13 +656,10 @@ pub async fn curseforge_install_version(
     if let Some(old) = build.mods.iter().find(|m| m.project_id == pid) {
         let _ = std::fs::remove_file(builds::content_dir(&build_id, &old.kind).join(&old.filename));
     }
+    build.mods.retain(|m| m.project_id != pid);
 
-    // Установленное копим отдельно и дописываем под локом: снимок сборки,
-    // прочитанный до закачки, затирает чужие параллельные установки.
-    let mut added: Vec<InstalledMod> = Vec::new();
-
-    download_to(&cl, &url, &builds::content_dir(&build_id, &kind).join(&filename)).await?;
-    added.push(InstalledMod {
+    download_to(&url, &builds::content_dir(&build_id, &kind).join(&filename)).await?;
+    build.mods.push(InstalledMod {
         project_id: pid,
         version_id: version_id.clone(),
         name: title,
@@ -652,12 +671,9 @@ pub async fn curseforge_install_version(
 
     // Обязательные зависимости (только для модов) — лучшая версия под сборку.
     if is_mod {
-        // Уже установленное плюс только что добавленное — чтобы не качать
-        // зависимость повторно внутри одной установки.
         let mut seen: HashSet<i64> = build
             .mods
             .iter()
-            .chain(added.iter())
             .filter_map(|m| strip_id(&m.project_id).parse::<i64>().ok())
             .collect();
         let mut queue: Vec<i64> = required_deps(&file);
@@ -667,14 +683,14 @@ pub async fn curseforge_install_version(
             }
             seen.insert(mid);
             if let Some(f) = best_file(&cl, mid, Some(loader.as_str()), &mc).await? {
-                let fname = f["fileName"].as_str().unwrap_or("mod.jar").to_string();
+                let fname = sane_filename(f["fileName"].as_str().unwrap_or("mod.jar"), "mod.jar");
                 let durl = match file_download_url(&cl, mid, &f).await {
                     Ok(u) => u,
                     Err(_) => continue,
                 };
-                download_to(&cl, &durl, &builds::mods_dir(&build_id).join(&fname)).await?;
+                download_to(&durl, &builds::mods_dir(&build_id).join(&fname)).await?;
                 let (t, ic, _c) = mod_info(&cl, mid).await;
-                added.push(InstalledMod {
+                build.mods.push(InstalledMod {
                     project_id: format!("cf:{mid}"),
                     version_id: f["id"].as_i64().unwrap_or_default().to_string(),
                     name: t,
@@ -692,7 +708,8 @@ pub async fn curseforge_install_version(
         }
     }
 
-    builds::add_installed(&build_id, added)
+    builds::upsert_build(build.clone())?;
+    Ok(build)
 }
 
 /// Устанавливает модпак CurseForge в новую сборку: качает .zip, разбирает manifest.json,
@@ -814,7 +831,16 @@ async fn cf_install_inner(
             "neoforge" => "neoforge",
             _ => "forge",
         };
-        let name = manifest["name"].as_str().unwrap_or("Модпак CurseForge").to_string();
+        let name = manifest["name"]
+            .as_str()
+            .unwrap_or_else(|| {
+                crate::i18n::pick(
+                    "Модпак CurseForge",
+                    "CurseForge modpack",
+                    "CurseForge mod paketi",
+                )
+            })
+            .to_string();
         let overrides = manifest["overrides"].as_str().unwrap_or("overrides").to_string();
 
         let build = builds::create_build(name, mc, loader.to_string())?;
@@ -879,9 +905,9 @@ async fn cf_install_inner(
                     let dl_file = &fj["data"];
                     if let Ok(durl) = file_download_url(&cl, pid, dl_file).await {
                         let filename =
-                            dl_file["fileName"].as_str().unwrap_or("mod.jar").to_string();
+                            sane_filename(dl_file["fileName"].as_str().unwrap_or("mod.jar"), "mod.jar");
                         let dest = mods_dir.join(&filename);
-                        if download_to(&cl, &durl, &dest).await.is_ok() {
+                        if download_to(&durl, &dest).await.is_ok() {
                             entry = Some(InstalledMod {
                                 project_id: format!("cf:{pid}"),
                                 version_id: fid.to_string(),
@@ -931,7 +957,7 @@ async fn cf_install_inner(
             .unwrap_or("png")
             .to_string();
         let filename = format!("cover.{ext}");
-        if download_to(&cl, &icon, &build_dir.join(&filename)).await.is_ok() {
+        if download_to(&icon, &build_dir.join(&filename)).await.is_ok() {
             build.image = filename;
         }
         build.icon_url = icon;

@@ -20,13 +20,3 @@ const isSplash = new URLSearchParams(location.search).get("window") === "splash"
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>{isSplash ? <Splash /> : <App />}</React.StrictMode>
 );
-
-if (!isSplash) {
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      void import("@tauri-apps/api/event")
-        .then(({ emit }) => emit("app-ready"))
-        .catch(() => {});
-    })
-  );
-}

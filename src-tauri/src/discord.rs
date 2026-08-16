@@ -98,7 +98,14 @@ pub fn set_enabled(on: bool) {
 }
 
 fn download_button() -> Vec<Button<'static>> {
-    vec![Button::new("Скачать лаунчер", DOWNLOAD_URL)]
+    vec![Button::new(
+        crate::i18n::pick("Скачать лаунчер", "Get the launcher", "Başlatıcıyı indir"),
+        DOWNLOAD_URL,
+    )]
+}
+
+fn playing(tpl: &'static str, what: &str) -> String {
+    tpl.replace("{v}", what)
 }
 
 fn apply(act: Activity) {
@@ -112,6 +119,7 @@ fn apply(act: Activity) {
     }
 }
 
+/// «Просто в лаунчере».
 pub fn set_idle() {
     if let Ok(mut s) = last_state().lock() {
         *s = State::Idle;
@@ -121,13 +129,14 @@ pub fn set_idle() {
     }
     apply(
         Activity::new()
-            .details("В лаунчере")
-            .state("Отдыхает")
+            .details(crate::i18n::pick("В лаунчере", "In the launcher", "Başlatıcıda"))
+            .state(crate::i18n::pick("Отдыхает", "Idle", "Boşta"))
             .assets(Assets::new().large_image("logo").large_text(large_text()))
             .buttons(download_button()),
     );
 }
 
+/// «Играет на <версия>» — маленькая картинка всегда grass (обычная версия).
 pub fn set_version(version: &str) {
     if let Ok(mut s) = last_state().lock() {
         *s = State::Version(version.to_string());
@@ -135,9 +144,13 @@ pub fn set_version(version: &str) {
     if !configured() || !enabled() {
         return;
     }
+    let details = playing(
+        crate::i18n::pick("Играет на {v}", "Playing {v}", "{v} oynuyor"),
+        version,
+    );
     apply(
         Activity::new()
-            .details(&format!("Играет на {version}"))
+            .details(&details)
             .state("Minecraft")
             .assets(
                 Assets::new()
@@ -151,6 +164,7 @@ pub fn set_version(version: &str) {
     );
 }
 
+/// «Играет в <сборка>» — логотип + трава (обложку по названию не ищем).
 pub fn set_build(name: &str) {
     if let Ok(mut s) = last_state().lock() {
         *s = State::Build { name: name.to_string() };
@@ -158,10 +172,18 @@ pub fn set_build(name: &str) {
     if !configured() || !enabled() {
         return;
     }
+    let details = playing(
+        crate::i18n::pick("Играет в {v}", "Playing {v}", "{v} oynuyor"),
+        name,
+    );
     apply(
         Activity::new()
-            .details(&format!("Играет в {name}"))
-            .state("Сборка Minecraft")
+            .details(&details)
+            .state(crate::i18n::pick(
+                "Сборка Minecraft",
+                "Minecraft instance",
+                "Minecraft derlemesi",
+            ))
             .assets(
                 Assets::new()
                     .large_image("logo")

@@ -209,7 +209,7 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                 title={t("Язык")}
                 desc={t("Интерфейс лаунчера. Язык игры от этого не зависит.")}
               >
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   {LANGS.map((l, i) => (
                     <Choice
                       key={l.id}
@@ -217,7 +217,7 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                       on={lang === l.id}
                       onClick={() => setLang(l.id)}
                       title={l.label}
-                      sub={l.id === "ru" ? t("Русский язык") : "English"}
+                      sub={t(l.name)}
                       flag={l.id}
                     />
                   ))}

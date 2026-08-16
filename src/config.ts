@@ -8,7 +8,7 @@ export const APP_VERSION: string =
 export const APP_CHANNEL: string =
   typeof __APP_CHANNEL__ !== "undefined" ? __APP_CHANNEL__ : "local";
 
-export const APP_STAGE = "";
+export const APP_STAGE = "beta";
 
 export const DEBUG_TOOLS: boolean = APP_CHANNEL !== "stable";
 

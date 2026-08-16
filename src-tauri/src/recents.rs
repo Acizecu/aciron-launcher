@@ -81,9 +81,17 @@ pub fn get_recents() -> Vec<Recent> {
     list
 }
 
+pub fn remove(id: &str) {
+    let mut list = load();
+    let before = list.len();
+    list.retain(|r| r.id != id);
+
+    if list.len() != before {
+        save(&list);
+    }
+}
+
 #[tauri::command]
 pub fn remove_recent(id: String) {
-    let mut list = load();
-    list.retain(|r| r.id != id);
-    save(&list);
+    remove(&id);
 }

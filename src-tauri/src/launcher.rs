@@ -333,24 +333,10 @@ pub(crate) async fn download_file_checked(
             tokio::task::spawn_blocking(move || {
                 if content_addressed {
                     // Имя = SHA1: достаточно наличия и размера.
-                    return file_meta_matches(&p, size);
+                    file_meta_matches(&p, size)
+                } else {
+                    file_matches(&p, sha1_owned.as_deref(), size)
                 }
-                // Имя — maven-путь, а не хэш, поэтому честная проверка означает
-                // прочитать файл целиком. Если его уже проверяли и с тех пор не
-                // трогали — верим отпечатку и не читаем заново: иначе каждый
-                // запуск пере-хеширует весь classpath (см. verify.rs).
-                if let Some(expected) = sha1_owned.as_deref() {
-                    if crate::verify::is_verified(&p, expected, size) {
-                        return true;
-                    }
-                }
-                let ok = file_matches(&p, sha1_owned.as_deref(), size);
-                if ok {
-                    if let Some(expected) = sha1_owned.as_deref() {
-                        crate::verify::remember(&p, expected);
-                    }
-                }
-                ok
             })
             .await
             .unwrap_or(false)
@@ -380,13 +366,6 @@ pub(crate) async fn download_file_checked(
             return Err(format!(
                 "Хэш SHA1 не совпал: ожидалось {expected}, получено {actual}"
             ));
-        }
-        // Только что посчитали хэш по свежим байтам — запоминаем, чтобы
-        // следующий запуск не считал его снова.
-        if !content_addressed {
-            let p = path.to_path_buf();
-            let e = expected.to_string();
-            let _ = tokio::task::spawn_blocking(move || crate::verify::remember(&p, &e)).await;
         }
     }
     Ok(())
@@ -450,25 +429,6 @@ fn file_meta_matches(path: &Path, size: Option<u64>) -> bool {
         }
     }
     true
-}
-
-/// Отпечаток состояния нативов: какие jar распаковывали и сколько файлов вышло.
-///
-/// Имена и размеры jar ловят смену версии или загрузчика, число файлов в папке —
-/// удалённые вручную DLL. Оба признака дешёвые: метаданные, без чтения архивов.
-fn natives_stamp(jars: &[PathBuf], natives_dir: &Path) -> String {
-    let mut parts: Vec<String> = jars
-        .iter()
-        .map(|j| {
-            let size = std::fs::metadata(j).map(|m| m.len()).unwrap_or(0);
-            format!("{}:{size}", j.file_name().unwrap_or_default().to_string_lossy())
-        })
-        .collect();
-    parts.sort();
-    let files = std::fs::read_dir(natives_dir)
-        .map(|d| d.filter_map(|e| e.ok()).count())
-        .unwrap_or(0);
-    format!("{}|{files}", parts.join(","))
 }
 
 /// Распаковывает натив-jar в папку natives (только библиотеки, без META-INF).
@@ -731,45 +691,32 @@ async fn prepare_and_launch(
         ensure_fullscreen(&game_dir);
     }
 
+    emit(app, "manifest", "Получение списка версий", 0, 1);
+    let manifest = get_json(&client, MANIFEST).await?;
+    let ver_url = manifest["versions"]
+        .as_array()
+        .and_then(|arr| {
+            arr.iter()
+                .find(|v| v["id"].as_str() == Some(version))
+                .and_then(|v| v["url"].as_str())
+        })
+        .ok_or_else(|| format!("Версия не найдена в манифесте: {version}"))?
+        .to_string();
+    emit(app, "manifest", "Список версий получен", 1, 1);
+
+    emit(app, "version", "Загрузка описания версии", 0, 1);
+    let version_json = get_json(&client, &ver_url).await?;
     let json_path = version_dir.join(format!("{version}.json"));
-    let cached = tokio::fs::read(&json_path)
-        .await
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
-
-        .filter(|v| v["downloads"]["client"]["url"].as_str().is_some());
-
-    let version_json = match cached {
-        Some(v) => {
-            emit(app, "version", "Описание версии на месте", 1, 1);
-            v
-        }
-        None => {
-            emit(app, "manifest", "Получение списка версий", 0, 1);
-            let manifest = get_json(&client, MANIFEST).await?;
-            let ver_url = manifest["versions"]
-                .as_array()
-                .and_then(|arr| {
-                    arr.iter()
-                        .find(|v| v["id"].as_str() == Some(version))
-                        .and_then(|v| v["url"].as_str())
-                })
-                .ok_or_else(|| format!("Версия не найдена в манифесте: {version}"))?
-                .to_string();
-            emit(app, "manifest", "Список версий получен", 1, 1);
-
-            emit(app, "version", "Загрузка описания версии", 0, 1);
-            let v = get_json(&client, &ver_url).await?;
-            if let Some(p) = json_path.parent() {
-                tokio::fs::create_dir_all(p).await.ok();
-            }
-            tokio::fs::write(&json_path, serde_json::to_vec_pretty(&v).unwrap_or_default())
-                .await
-                .ok();
-            emit(app, "version", "Описание версии загружено", 1, 1);
-            v
-        }
-    };
+    if let Some(p) = json_path.parent() {
+        tokio::fs::create_dir_all(p).await.ok();
+    }
+    tokio::fs::write(
+        &json_path,
+        serde_json::to_vec_pretty(&version_json).unwrap_or_default(),
+    )
+    .await
+    .ok();
+    emit(app, "version", "Описание версии загружено", 1, 1);
 
     let client_download = &version_json["downloads"]["client"];
     let client_url = client_download["url"]
@@ -872,16 +819,9 @@ async fn prepare_and_launch(
         let natives = native_jars.clone();
         let natives_dir2 = natives_dir.clone();
         tokio::task::spawn_blocking(move || -> Result<(), String> {
-
-            let stamp = natives_stamp(&natives, &natives_dir2);
-            let marker = natives_dir2.join(".aciron-natives");
-            if std::fs::read_to_string(&marker).ok().as_deref() == Some(stamp.as_str()) {
-                return Ok(());
-            }
             for jar in &natives {
                 extract_natives(jar, &natives_dir2)?;
             }
-            let _ = std::fs::write(&marker, natives_stamp(&natives, &natives_dir2));
             Ok(())
         })
         .await
@@ -1005,51 +945,30 @@ async fn prepare_and_launch(
                 .map(|s| (s.to_string(), o["size"].as_u64()))
         })
         .collect();
+    let total = entries.len() as u64;
+    let done = Arc::new(AtomicU64::new(0));
     let objects_dir = assets_dir.join("objects");
 
-    let missing: Vec<(String, Option<u64>)> = {
+    stream::iter(entries.into_iter().map(|(hash, size)| {
+        let client = dl_client.clone();
+        let done = done.clone();
+        let app = app.clone();
         let objects_dir = objects_dir.clone();
-        tokio::task::spawn_blocking(move || {
-            entries
-                .into_iter()
-                .filter(|(hash, size)| {
-                    let path = objects_dir.join(&hash[0..2]).join(hash);
-                    !file_meta_matches(&path, *size)
-                })
-                .collect()
-        })
-        .await
-        .map_err(|e| e.to_string())?
-    };
+        async move {
+            let sub = &hash[0..2];
+            let path = objects_dir.join(sub).join(&hash);
+            let url = format!("{RESOURCES}/{sub}/{hash}");
 
-    let total = missing.len() as u64;
-    if total > 0 {
-        let done = Arc::new(AtomicU64::new(0));
-        emit(app, "assets", "Загрузка ресурсов", 0, total);
-        stream::iter(missing.into_iter().map(|(hash, size)| {
-            let client = dl_client.clone();
-            let done = done.clone();
-            let app = app.clone();
-            let objects_dir = objects_dir.clone();
-            async move {
-                let sub = &hash[0..2];
-                let path = objects_dir.join(sub).join(&hash);
-                let url = format!("{RESOURCES}/{sub}/{hash}");
-
-                let _ = download_file_checked(&client, &url, &path, Some(&hash), size, true).await;
-                let n = done.fetch_add(1, Ordering::Relaxed) + 1;
-                if n % 25 == 0 || n == total {
-                    emit(&app, "assets", "Загрузка ресурсов", n, total);
-                }
+            let _ = download_file_checked(&client, &url, &path, Some(&hash), size, true).await;
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            if n % 25 == 0 || n == total {
+                emit(&app, "assets", "Загрузка ресурсов", n, total);
             }
-        }))
-        .buffer_unordered(16)
-        .collect::<Vec<_>>()
-        .await;
-    }
-    emit(app, "assets", "Ресурсы на месте", 1, 1);
-
-    let _ = tokio::task::spawn_blocking(crate::verify::flush).await;
+        }
+    }))
+    .buffer_unordered(16)
+    .collect::<Vec<_>>()
+    .await;
 
     let sep = if cfg!(windows) { ";" } else { ":" };
     classpath.push((String::new(), client_jar.clone()));
@@ -1338,9 +1257,19 @@ fn version_ge_1_20(version: &str) -> bool {
     major > 1 || (major == 1 && minor >= 20)
 }
 
-const TEST_SERVER_NAME: &str = "Aciron — тестовый сервер";
+fn test_server_name() -> &'static str {
+    crate::i18n::pick(
+        "Aciron — тестовый сервер",
+        "Aciron — test server",
+        "Aciron — test sunucusu",
+    )
+}
+
 const TEST_SERVER_IP: &str = "mc.aciron.pro";
 
+/// Пишет <game_dir>/servers.dat с тестовым сервером, если файла ещё нет.
+/// servers.dat — НЕсжатый NBT. Существующий файл не трогаем, чтобы не потерять
+/// серверы игрока (append в NBT без парсинга невозможен).
 fn ensure_test_server(game_dir: &Path) {
     let path = game_dir.join("servers.dat");
     if path.exists() {
@@ -1349,10 +1278,12 @@ fn ensure_test_server(game_dir: &Path) {
     if let Some(p) = path.parent() {
         let _ = std::fs::create_dir_all(p);
     }
-    let data = build_servers_nbt(&[(TEST_SERVER_NAME, TEST_SERVER_IP)]);
+    let data = build_servers_nbt(&[(test_server_name(), TEST_SERVER_IP)]);
     let _ = std::fs::write(&path, data);
 }
 
+/// Включает полноэкранный режим через <game_dir>/options.txt (строка `fullscreen:true`).
+/// Существующий options.txt не перетираем — только правим/добавляем нужную строку.
 fn ensure_fullscreen(game_dir: &Path) {
     let path = game_dir.join("options.txt");
     let _ = std::fs::create_dir_all(game_dir);
@@ -1373,6 +1304,8 @@ fn ensure_fullscreen(game_dir: &Path) {
     let _ = std::fs::write(&path, lines.join("\n") + "\n");
 }
 
+/// Собирает бинарь servers.dat (несжатый NBT): root-compound → list "servers"
+/// из compound'ов {name, ip, acceptTextures}.
 fn build_servers_nbt(servers: &[(&str, &str)]) -> Vec<u8> {
     fn write_str(out: &mut Vec<u8>, s: &str) {
         let b = s.as_bytes();
@@ -1515,6 +1448,8 @@ pub fn remove_installed_version(id: String) -> Result<(), String> {
     let mut list = read_installed();
     list.retain(|v| v.id != id);
     write_installed(&list)?;
+
+    crate::recents::remove(&id);
 
     let s = settings::load_settings();
     let dir = PathBuf::from(&s.versions_dir).join(&id);

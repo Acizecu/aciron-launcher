@@ -11,33 +11,17 @@ const SKIP_DIRS = new Set([
   "node_modules", "dist", "dist-ssr", "target", "gen", ".git",
   ".idea", ".vscode", "github-export", "aciron-launcher",
   ".cargo",
-
-  "icons-dev",
 ]);
 const SKIP_FILES = new Set([
   "TODO.md", "launcher-screenshot.png", ".DS_Store", "Thumbs.db",
-
-  "DEV_ONBOARDING.md", "run-dev.ps1", "release-dev.yml", "tauri.dev.conf.json",
 ]);
 
-const SKIP_RE = [
-  /\.local$/,
-  /\.log$/,
-  /^\.env/,
-  /\.key$/,
-  /\.pem$/,
-  /\.effective\./,
-  /secret/i,
-  /apikeys/i,
-];
-
-const KEEP = new Set(["secret.rs"]);
+const SKIP_RE = [/\.local$/, /\.log$/, /^\.env/, /\.key$/, /\.pem$/, /secret/i, /apikeys/i, /\.effective\./i];
 
 const CODE_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".rs", ".java"]);
 
 const skipName = (name) =>
-  !KEEP.has(name) &&
-  (SKIP_DIRS.has(name) || SKIP_FILES.has(name) || SKIP_RE.some((re) => re.test(name)));
+  SKIP_DIRS.has(name) || SKIP_FILES.has(name) || SKIP_RE.some((re) => re.test(name));
 
 function stripComments(src) {
   let out = "";

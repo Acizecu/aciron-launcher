@@ -163,8 +163,17 @@ export default function ProfileModal({
             <div className="text-xs text-muted">{presenceText(p.presence)}</div>
 
             <div className="mt-2 grid gap-2">
-              <Stat label={t("Наиграно")} value={playtime(p.totalPlaytimeSecs)} />
-              <Stat label={t("С нами с")} value={joined(p.createdAt)} />
+              {}
+              <Stat
+                label={t("Наиграно")}
+                value={
+                  p.totalPlaytimeSecs === null ? t("Скрыто") : playtime(p.totalPlaytimeSecs)
+                }
+              />
+              <Stat
+                label={t("С нами с")}
+                value={p.createdAt === null ? t("Скрыто") : joined(p.createdAt)}
+              />
               <Stat
                 label={t("Облик")}
                 value={

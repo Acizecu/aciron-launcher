@@ -1,7 +1,7 @@
 {
   "name": "aciron-launcher",
   "private": true,
-  "version": "0.9.3",
+  "version": "0.9.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,12 +11,7 @@
     "github-export": "node tools/make-github-export.mjs",
     "sync-version": "node tools/sync-version.mjs",
     "make-latest-json": "node tools/make-latest-json.mjs",
-    "tauri:build": "tauri build",
-    "tauri:build:stable": "cross-env ACIRON_CHANNEL=stable ACIRON_BUILD_CHANNEL=stable tauri build",
-    "tauri:dev:stable": "cross-env ACIRON_CHANNEL=stable ACIRON_BUILD_CHANNEL=stable tauri dev",
-    "dev:config": "node tools/gen-dev-config.mjs",
-    "tauri:build:dev": "npm run dev:config && cross-env ACIRON_CHANNEL=dev ACIRON_BUILD_CHANNEL=dev tauri build --features dev-channel --config src-tauri/tauri.dev.effective.conf.json",
-    "tauri:dev:dev": "npm run dev:config && cross-env ACIRON_CHANNEL=dev ACIRON_BUILD_CHANNEL=dev tauri dev --features dev-channel --config src-tauri/tauri.dev.effective.conf.json"
+    "tauri:build": "cross-env ACIRON_CHANNEL=stable ACIRON_BUILD_CHANNEL=stable tauri build"
   },
   "dependencies": {
     "@fontsource-variable/geologica": "^5.3.0",

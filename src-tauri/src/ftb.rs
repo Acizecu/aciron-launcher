@@ -212,9 +212,11 @@ pub async fn ftb_project_versions(project_id: String) -> Result<Value, String> {
     Ok(Value::Array(versions))
 }
 
-async fn download_to(cl: &reqwest::Client, url: &str, path: &Path) -> Result<(), String> {
+async fn download_to(url: &str, path: &Path) -> Result<(), String> {
     use futures::StreamExt;
     use tokio::io::AsyncWriteExt;
+
+    let cl = crate::curseforge::dl_client()?;
 
     if let Some(p) = path.parent() {
         tokio::fs::create_dir_all(p).await.map_err(|e| e.to_string())?;
@@ -288,7 +290,10 @@ async fn ftb_install_inner(
     let id = strip_id(&project_id).to_string();
 
     let pack = get_json(&cl, &format!("{API}/modpack/{id}")).await?;
-    let name = pack["name"].as_str().unwrap_or("Модпак FTB").to_string();
+    let name = pack["name"]
+        .as_str()
+        .unwrap_or_else(|| crate::i18n::pick("Модпак FTB", "FTB modpack", "FTB mod paketi"))
+        .to_string();
     let icon = art_url(&pack, "square");
     let vid = match version_id.filter(|s| !s.is_empty()) {
         Some(v) => v,
@@ -367,7 +372,7 @@ async fn ftb_install_inner(
 
             if !crate::cancel::is_cancelled("legacy") {
               if let Some(url) = resolve_url(&cl, &f).await {
-                if download_to(&cl, &url, &dest).await.is_ok()
+                if download_to(&url, &dest).await.is_ok()
                     && rel.replace('\\', "/").starts_with("mods")
                     && fname.ends_with(".jar")
                 {
@@ -421,7 +426,7 @@ async fn ftb_install_inner(
             .unwrap_or("png")
             .to_string();
         let filename = format!("cover.{ext}");
-        if download_to(&cl, &icon, &build_dir.join(&filename)).await.is_ok() {
+        if download_to(&icon, &build_dir.join(&filename)).await.is_ok() {
             build.image = filename;
         }
         build.icon_url = icon;

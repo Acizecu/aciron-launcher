@@ -1,9 +1,15 @@
 import { useSyncExternalStore } from "react";
 import { getSettings, isTauri, saveSettings } from "./api";
 
-export type Lang = "ru" | "en";
+export type Lang = "ru" | "en" | "tr";
 
 const STORAGE_KEY = "aciron:lang";
+
+const ALL: readonly Lang[] = ["ru", "en", "tr"];
+
+function isLang(v: unknown): v is Lang {
+  return typeof v === "string" && (ALL as readonly string[]).includes(v);
+}
 
 const EN: Record<string, string> = {
 
@@ -41,6 +47,7 @@ const EN: Record<string, string> = {
   "Язык": "Language",
   "Русский": "Russian",
   "Английский": "English",
+  "Турецкий": "Turkish",
   "Тема": "Theme",
   "Аккаунт": "Account",
   "Сначала установите версию": "Install a version first",
@@ -165,6 +172,8 @@ const EN: Record<string, string> = {
   "Интерфейс лаунчера. Язык игры от этого не зависит.":
     "Launcher interface only — the game's own language is separate.",
   "Русский язык": "Russian",
+  "Английский язык": "English",
+  "Турецкий язык": "Turkish",
   "versions и builds будут внутри этой папки":
     "versions and builds will live inside this folder",
   "Память для игры": "Memory for the game",
@@ -267,7 +276,6 @@ const EN: Record<string, string> = {
   "Скопировать код темы": "Copy theme code",
   "Скопировать код текущей темы": "Copy current theme code",
   "Вернуть автоматический цвет": "Back to automatic colour",
-  "Выбрать цвет": "Pick colour",
   "Сбросить все ручные правки": "Reset all manual tweaks",
   "Есть несохранённые изменения": "You have unsaved changes",
   "Сохранение…": "Saving…",
@@ -487,6 +495,7 @@ const EN: Record<string, string> = {
   "Удалить образ": "Delete outfit",
   "Удалить из гардероба": "Remove from wardrobe",
   "Плащ": "Cape",
+  "Крылья": "Elytra",
   "Скин": "Skin",
   "Плавающие кубики на фоне лаунчера": "Floating cubes behind the launcher",
 
@@ -524,8 +533,6 @@ const EN: Record<string, string> = {
   "Списком": "List",
   "Плиткой": "Grid",
 
-  "Запуск": "Starting",
-  "Не удалось открыть окно лаунчера": "Could not open the launcher window",
   "Проверка обновлений": "Checking for updates",
   "Проверка обновлений отключена": "Update check is off",
   "Актуальная версия": "You're up to date",
@@ -534,6 +541,7 @@ const EN: Record<string, string> = {
   "Локальная сборка": "Local build",
 
   "Действия": "Actions",
+  "Скрыто": "Hidden",
   "Уведомления заглушены": "Notifications muted",
   "Удалить {name} из друзей? Переписка останется, но заново добавить придётся по заявке.":
     "Remove {name} from your friends? The chat stays, but adding them back will need a new request.",
@@ -933,20 +941,1006 @@ const EN: Record<string, string> = {
   "Шейдер не подходит этой сборке. Выберите другую версию": "This shader doesn't fit this build. Pick another version",
   "Это детский аккаунт — добавьте его в семейную группу Microsoft": "This is a child account — add it to a Microsoft family group",
   "Этот загрузчик не поддерживается": "This loader isn't supported",
+  "Недопустимая версия загрузчика": "Invalid loader version",
   "manifest.json не найден в модпаке": "manifest.json is missing from the modpack",
   "Xbox Live недоступен в вашем регионе": "Xbox Live is not available in your region",
 };
 
-const DICTS: Record<Lang, Record<string, string>> = { ru: {}, en: EN };
+const TR: Record<string, string> = {
+
+  "Главная": "Ana sayfa",
+  "Гардероб": "Gardırop",
+  "Сборки": "Derlemeler",
+  "Сервера": "Sunucular",
+  "Друзья": "Arkadaşlar",
+  "Настройка лаунчера": "Başlatıcı ayarları",
+  "Играть": "Oyna",
+  "Закрыть": "Kapat",
+  "Отмена": "İptal",
+  "Назад": "Geri",
+  "Далее": "İleri",
+  "Готово": "Bitti",
+  "Удалить": "Sil",
+  "Сохранить": "Kaydet",
+  "Обновить": "Güncelle",
+  "Добавить": "Ekle",
+  "Пропустить": "Atla",
+  "Продолжить": "Devam et",
+  "Поиск": "Ara",
+  "Скачивание…": "İndiriliyor…",
+  "Загрузка…": "Yükleniyor…",
+  "Установка…": "Kuruluyor…",
+  "Установлено": "Kuruldu",
+  "Скачать": "İndir",
+  "Установить": "Kur",
+  "Описание": "Hakkında",
+  "Версии": "Sürümler",
+  "Категории": "Kategoriler",
+  "Ссылки": "Bağlantılar",
+  "Исходники": "Kaynak kodu",
+  "Проблемы": "Sorunlar",
+  "Язык": "Dil",
+  "Русский": "Rusça",
+  "Английский": "İngilizce",
+  "Турецкий": "Türkçe",
+  "Тема": "Tema",
+  "Аккаунт": "Hesap",
+  "Сначала установите версию": "Önce bir sürüm kurun",
+
+  "Последние запуски": "Son oynananlar",
+  "Здесь появятся версии и сборки, в которые вы играли. Запустите игру снизу.":
+    "Oynadığınız sürümler ve derlemeler burada görünecek. Oyunu aşağıdan başlatın.",
+  "Перейти к сборке": "Derlemeye git",
+  "Убрать из списка": "Listeden kaldır",
+
+  "Мои сборки": "Derlemelerim",
+  "Популярные": "Popüler",
+  "Создать сборку": "Derleme oluştur",
+  "Импорт": "İçe aktar",
+  "Экспорт": "Dışa aktar",
+  "Экспорт сборки": "Derlemeyi dışa aktar",
+  "Импортировать .mrpack (Modrinth-модпак)": ".mrpack içe aktar (Modrinth mod paketi)",
+  "Сборок пока нет": "Henüz derleme yok",
+  "Создайте сборку, выберите ядро и добавьте моды с Modrinth":
+    "Bir derleme oluşturun, yükleyici seçin ve Modrinth'ten mod ekleyin",
+  "Моды": "Modlar",
+  "Ресурспаки": "Kaynak paketleri",
+  "Шейдеры": "Shader'lar",
+  "Консоль": "Konsol",
+  "Список пока пуст..": "Liste henüz boş..",
+  "Все": "Tümü",
+  "Включённые": "Etkin",
+  "Выключенные": "Devre dışı",
+  "Есть обновление": "Güncelleme var",
+  "Все сборки": "Tüm derlemeler",
+  "Ничего не нашлось": "Hiçbir şey bulunamadı",
+  "Выделить все": "Tümünü seç",
+  "Выделить": "Seç",
+  "Снять выделение": "Seçimi kaldır",
+  "Удалить сборку": "Derlemeyi sil",
+  "Сборка запущена": "Derleme çalışıyor",
+  "Запустить сборку": "Derlemeyi başlat",
+  "Изменить обложку": "Kapağı değiştir",
+  "Настройка сборки": "Derleme ayarları",
+  "Открыть папку сборки": "Derleme klasörünü aç",
+  "Обновить список (подхватить ручные файлы)": "Listeyi yenile (elle eklenen dosyaları algıla)",
+  "Закрепить": "Sabitle",
+  "Открепить": "Sabitlemeyi kaldır",
+  "Закреплено": "Sabitlendi",
+  "элементов": "öğe",
+  "модов": "mod",
+  "Игра запускается": "Oyun başlatılıyor",
+  "Запустите игру, чтобы увидеть её вывод": "Çıktıyı görmek için oyunu başlatın",
+  "Под фильтр ничего не подходит": "Filtreye uyan bir şey yok",
+  "Всё": "Tümü",
+  "Ошибки": "Hatalar",
+  "Предупреждения": "Uyarılar",
+  "Информация": "Bilgi",
+  "Отладка": "Hata ayıklama",
+  "Скопировать показанное": "Görüneni kopyala",
+  "Прокручивать за новыми строками": "Yeni satırları takip et",
+  "Не прокручивать за новыми строками": "Yeni satırları takip etme",
+  "Отпустите — разложим по папкам": "Bırakın — klasörlere biz yerleştirelim",
+  "Моды (.jar) уйдут в mods, архивы — в ресурспаки или шейдеры, .acpack станет сборкой":
+    "Modlar (.jar) mods klasörüne, arşivler kaynak paketlerine veya shader'lara gider, .acpack ise derleme olur",
+  "Отпустите — импортируем сборку": "Bırakın — derlemeyi biz içe aktaralım",
+  "Подойдут .acpack и .mrpack": ".acpack ve .mrpack dosyaları uygundur",
+  "Что включить": "Dahil edilecekler",
+  "выбрано": "seçili",
+  "В папке сборки пока пусто": "Derleme klasörü şimdilik boş",
+  "Логи, краши и служебные папки в архив не попадают никогда.":
+    "Loglar, çökme raporları ve dahili klasörler arşive asla girmez.",
+  "Упаковываем…": "Paketleniyor…",
+  "Экспортировать": "Dışa aktar",
+  "Наш формат. Открывается двойным кликом — лаунчер поставит сборку сам.":
+    "Bizim formatımız. Çift tıklayınca açılır — başlatıcı derlemeyi kendisi kurar.",
+  "Общий формат: Modrinth App, Prism и другие. Легче — часть файлов уедет ссылками.":
+    "Ortak format: Modrinth App, Prism ve diğerleri. Daha hafif — dosyaların bir kısmı bağlantı olarak gider.",
+
+  "Запросы": "İstekler",
+  "Найти друзей": "Arkadaş bul",
+  "Переписки": "Sohbetler",
+  "Написать": "Mesaj yaz",
+  "Заглушить": "Sessize al",
+  "Включить уведомления": "Bildirimleri aç",
+  "В чёрный список": "Engelle",
+  "Удалить из друзей": "Arkadaşlıktan çıkar",
+  "Открыть профиль": "Profili aç",
+  "Заявок пока нет": "Henüz istek yok",
+  "Хочет добавить вас": "Sizi eklemek istiyor",
+  "Заявка отправлена": "İstek gönderildi",
+  "Отправить заявку в друзья": "Arkadaşlık isteği gönder",
+  "Принять": "Kabul et",
+  "Отклонить": "Reddet",
+  "Отменить заявку": "İsteği iptal et",
+  "Выберите, с кем поговорить": "Konuşacağınız kişiyi seçin",
+  "Друзей пока нет. Добавить можно на главной — в панели справа.":
+    "Henüz arkadaşınız yok. Ana sayfadan, sağdaki panelden ekleyebilirsiniz.",
+  "Ответить": "Yanıtla",
+  "В ответ": "Yanıt",
+  "Копировать": "Kopyala",
+  "Переслать": "İlet",
+  "Отправить": "Gönder",
+  "Эмодзи": "Emoji",
+  "Отправить снова": "Yeniden gönder",
+  "Убрать": "Kaldır",
+  "Загружаем": "Yükleniyor",
+  "Прокрутите вверх, чтобы показать раннее": "Önceki mesajları görmek için yukarı kaydırın",
+
+  "Добро пожаловать": "Hoş geldiniz",
+  "Настроим лаунчер под вас": "Başlatıcıyı size göre ayarlayalım",
+  "Это займёт меньше минуты. Всё, что выберете, потом можно поменять в настройках.":
+    "Bir dakikadan kısa sürer. Seçtiğiniz her şeyi sonradan ayarlardan değiştirebilirsiniz.",
+  "Начать настройку": "Kuruluma başla",
+  "Папка игры": "Oyun klasörü",
+  "Куда складывать версии, сборки и файлы игры":
+    "Sürümlerin, derlemelerin ve oyun dosyalarının saklanacağı yer",
+  "Выбрать папку": "Klasör seç",
+  "Внешний вид": "Görünüm",
+  "Выберите тему — её видно сразу": "Bir tema seçin — anında görünür",
+  "Вход в аккаунт": "Hesaba giriş",
+  "Аккаунт нужен для друзей, чата, скинов и плащей. Можно и пропустить — играть это не мешает.":
+    "Arkadaşlar, sohbet, skinler ve pelerinler için hesap gerekir. İsterseniz atlayabilirsiniz — oyun oynamanıza engel olmaz.",
+  "Войти в Aciron ID": "Aciron ID'ye giriş yap",
+  "Всё готово": "Her şey hazır",
+  "Приятной игры!": "İyi oyunlar!",
+  "Шаг {n} из {total}": "Adım {n} / {total}",
+  "Интерфейс лаунчера. Язык игры от этого не зависит.":
+    "Başlatıcı arayüzü. Oyunun dili bundan etkilenmez.",
+  "Русский язык": "Rusça",
+  "Английский язык": "İngilizce",
+  "Турецкий язык": "Türkçe",
+  "versions и builds будут внутри этой папки": "versions ve builds bu klasörün içinde olacak",
+  "Память для игры": "Oyun için RAM",
+  "Вернуть прежнюю тему": "Önceki temaya dön",
+  "Вы вошли — всё готово": "Giriş yaptınız — her şey hazır",
+  "Или создать новый аккаунт — это бесплатно": "Ya da yeni bir hesap oluşturun — ücretsiz",
+  "Открыть мастер настройки (F7)": "Kurulum sihirbazını aç (F7)",
+  "1 ГБ": "1 GB",
+
+  "Аккаунты": "Hesaplar",
+  "Аккаунт Aciron": "Aciron hesabı",
+  "Добавить аккаунт": "Hesap ekle",
+  "Нет аккаунта": "Hesap yok",
+  "Личный кабинет": "Hesabım",
+  "откройте личный кабинет": "hesap sayfanızı açın",
+  "Лицензия подключена": "Lisans bağlandı",
+  "Подключить лицензию": "Lisans bağla",
+  "Ник": "Kullanıcı adı",
+  "Ник игрока": "Kullanıcı adı",
+  "Ник или e-mail": "Kullanıcı adı veya e-posta",
+  "Пароль": "Parola",
+  "Повтор пароля": "Parola tekrarı",
+  "от 8 символов": "en az 8 karakter",
+  "Код 2FA": "2FA kodu",
+  "Зарегистрироваться": "Kayıt ol",
+  "Продолжить и войти": "Devam et ve giriş yap",
+  "Под этим ником вас будут находить друзья и видеть в игре":
+    "Arkadaşlarınız sizi bu kullanıcı adıyla bulur, oyunda da bu ad görünür",
+  "Steve или you@example.com": "Steve veya you@example.com",
+  "Мы отправили 6-значный код на": "6 haneli kodu şu adrese gönderdik",
+  "Открываем вход Microsoft…": "Microsoft girişi açılıyor…",
+  "Мы открыли вход Microsoft в браузере.": "Microsoft girişini tarayıcıda açtık.",
+  "Войдите там — окно закроется, а вход завершится здесь автоматически.":
+    "Orada giriş yapın — pencere kapanır ve giriş burada otomatik olarak tamamlanır.",
+  "Браузер не открылся? Открыть вручную": "Tarayıcı açılmadı mı? Elle açın",
+  "Ожидание входа…": "Giriş bekleniyor…",
+  "сменится на лицензионный": "lisanslı olanla değişecek",
+  "только свою": "yalnızca kendinize ait olanı",
+  "не ответственность Aciron": "Aciron'un sorumluluğunda değil",
+  "Скопировать ник — по нему вас добавят в друзья":
+    "Kullanıcı adını kopyala — arkadaşlarınız sizi bu adla ekler",
+  "хочет добавить вас в друзья": "sizi arkadaş olarak eklemek istiyor",
+
+  "Название": "Ad",
+  "Название сборки": "Derleme adı",
+  "Моя сборка": "Derlemem",
+  "Папка сборки на диске не изменится.": "Derlemenin diskteki klasörü değişmez.",
+  "Версия Minecraft": "Minecraft sürümü",
+  "Ядро (загрузчик модов)": "Yükleyici (mod yükleyicisi)",
+  "Обложка": "Kapak",
+  "Обложку можно поменять позже.": "Kapağı daha sonra değiştirebilirsiniz.",
+  "Баннер карточки": "Kart banner'ı",
+  "Добавить баннер": "Banner ekle",
+  "Сменить": "Değiştir",
+  "Показывается на карточке сборки. Рекомендуемый размер — 570×300.":
+    "Derleme kartında görünür. Önerilen boyut — 570×300.",
+  "Снапшоты": "Snapshot'lar",
+  "Выберите версию": "Bir sürüm seçin",
+  "Выберите версию — она установится как отдельная сборка.":
+    "Bir sürüm seçin — ayrı bir derleme olarak kurulur.",
+  "Версий не найдено.": "Sürüm bulunamadı.",
+  "Поиск версии…": "Sürüm ara…",
+  "Поиск модпаков…": "Mod paketi ara…",
+  "Установленные версии": "Kurulu sürümler",
+  "Пока ничего не установлено": "Henüz hiçbir şey kurulmadı",
+  "Установить больше": "Daha fazlasını kur",
+  "Удалить версию": "Sürümü sil",
+  "Установить в": "Şuraya kur",
+  "Каталог": "Katalog",
+  "Обзор": "Genel bakış",
+  "Сортировка": "Sıralama",
+  "Сбросить категории": "Kategorileri sıfırla",
+  "Ничего не найдено": "Hiçbir şey bulunamadı",
+  "Открыть страницу проекта": "Proje sayfasını aç",
+  "Открыть страницу модпака": "Mod paketi sayfasını aç",
+  "Список версий и установка — во вкладке «Версии».":
+    "Sürüm listesi ve kurulum “Sürümler” sekmesinde.",
+  "FTB — это готовые сборки": "FTB, hazır derlemelerdir",
+  "вручную": "elle",
+  "Доступно обновление — скачать": "Güncelleme mevcut — indir",
+  "Игра": "Oyun",
+  "Файл": "Dosya",
+  "Убрать из последних запусков": "Son oynananlardan kaldır",
+
+  "Логи, краши, сейвы и скриншоты в архив не попадают — экспортируется сама сборка.":
+    "Loglar, çökme raporları, kayıtlar ve ekran görüntüleri arşive dahil edilmez — yalnızca derlemenin kendisi dışa aktarılır.",
+
+  "Папки лаунчера": "Başlatıcı klasörleri",
+  "Поведение лаунчера": "Başlatıcı davranışı",
+  "Путь к java.exe": "java.exe yolu",
+  "Путь к Java дирректории": "Java klasörünün yolu",
+  "Определить автоматически": "Otomatik algıla",
+  "Тема оформления": "Görünüm teması",
+  "Мои темы": "Temalarım",
+  "Название темы": "Tema adı",
+  "Например: зимний": "Örneğin: kış",
+  "Отдельные цвета": "Ayrı renkler",
+  "Применить тему": "Temayı uygula",
+  "Удалить тему": "Temayı sil",
+  "Скопировать код темы": "Tema kodunu kopyala",
+  "Скопировать код текущей темы": "Mevcut tema kodunu kopyala",
+  "Вернуть автоматический цвет": "Otomatik renge dön",
+  "Сбросить все ручные правки": "Elle yapılan tüm değişiklikleri sıfırla",
+  "Есть несохранённые изменения": "Kaydedilmemiş değişiklikler var",
+  "Сохранение…": "Kaydediliyor…",
+  "Сохранено": "Kaydedildi",
+  "Вы изменили расположение папок. Перенести существующие файлы в новое место?":
+    "Klasör konumlarını değiştirdiniz. Mevcut dosyalar yeni konuma taşınsın mı?",
+  "Перенести": "Taşı",
+  "Перенести и сохранить": "Taşı ve kaydet",
+  "Просто сохранить": "Sadece kaydet",
+  "Перенос…": "Taşınıyor…",
+  "Перенос занимает мгновение. После него окно перезагрузится автоматически.":
+    "Taşıma işlemi çok kısa sürer. Ardından pencere otomatik olarak yeniden yüklenir.",
+  "Приватность": "Gizlilik",
+  "Статус": "Durum",
+  "Тип рук": "Kol tipi",
+  "Без плаща": "Pelerinsiz",
+  "В разработке": "Geliştirme aşamasında",
+  "скоро": "yakında",
+  "сброс": "sıfırla",
+
+  "Обновление перезапустит лаунчер. Убедитесь, что игра не запущена.":
+    "Güncelleme, başlatıcıyı yeniden başlatır. Oyunun çalışmadığından emin olun.",
+  "Не спрашивать про эту версию": "Bu sürüm için bir daha sorma",
+  "Отложить": "Daha sonra",
+  "Локальная сборка из исходников — автообновление отключено":
+    "Kaynak kodundan yerel derleme — otomatik güncelleme kapalı",
+
+  "Отменить": "İptal",
+  "Отменить загрузку": "İndirmeyi iptal et",
+  "Отменить ответ": "Yanıtı iptal et",
+  "Применить": "Uygula",
+  "Переименовать": "Yeniden adlandır",
+  "Повторить": "Tekrar dene",
+  "Сбросить": "Sıfırla",
+  "Выбрать": "Seç",
+  "Открыть": "Aç",
+  "Открыть папку": "Klasörü aç",
+  "Очистить": "Temizle",
+  "Скрыть": "Gizle",
+  "Свернуть": "Küçült",
+  "Закрыть (Esc)": "Kapat (Esc)",
+  "Список пуст": "Liste boş",
+  "Предыдущая": "Önceki",
+  "Следующая": "Sonraki",
+  "Предыдущая страница": "Önceki sayfa",
+  "Следующая страница": "Sonraki sayfa",
+  "Уменьшить": "Uzaklaştır",
+  "Увеличить (до 5×)": "Yakınlaştır (en fazla 5×)",
+  "Вернуть 100%": "%100'e dön",
+  "Скопировать адрес": "Adresi kopyala",
+  "Поиск сервера": "Sunucu ara",
+  "Ошибок и предупреждений за сессию": "Bu oturumdaki hata ve uyarılar",
+  "Кому переслать": "Kime iletilecek",
+  "Отправляется": "Gönderiliyor",
+  "Не отправлено": "Gönderilmedi",
+  "печатает": "yazıyor",
+  "Удалить свои из выбранных": "Seçilenlerden kendi mesajlarınızı sil",
+  "Игра запущена": "Oyun çalışıyor",
+  "Список пуст. Хочешь попасть сюда? Покупай слот на https:":
+    "Liste boş. Buraya girmek ister misiniz? Slot satın alın: https:",
+
+  "Настройки": "Ayarlar",
+  "Несохранённые изменения": "Kaydedilmemiş değişiklikler",
+  "Вы изменили настройки, но не сохранили их. Закрыть без сохранения?":
+    "Ayarları değiştirdiniz ama kaydetmediniz. Kaydetmeden kapatılsın mı?",
+  "Закрыть без сохранения": "Kaydetmeden kapat",
+  "Папка версий": "Sürümler klasörü",
+  "Папка сборок": "Derlemeler klasörü",
+  "Папки изменены": "Klasörler değiştirildi",
+  "Перенос данных Aciron": "Aciron verileri taşınıyor",
+  "Оперативная память": "RAM",
+  "Сколько ОЗУ выделять игре": "Oyuna ne kadar RAM ayrılacağı",
+  "JVM-аргументы": "JVM argümanları",
+  "Доп. флаги виртуальной машины при запуске (через пробел)":
+    "Başlatırken kullanılacak ek sanal makine bayrakları (boşlukla ayırın)",
+  "Размер окна игры": "Oyun penceresi boyutu",
+  "Если полноэкранный режим выключен": "Tam ekran modu kapalıysa kullanılır",
+  "Запуск в полноэкранном режиме": "Tam ekran modunda başlat",
+  "Игра будет открываться на весь экран": "Oyun tam ekranda açılacak",
+  "Скрывать лаунчер при запуске игры": "Oyun başlarken başlatıcıyı gizle",
+  "Спрячется, пока игра открыта, и вернётся после её закрытия":
+    "Oyun açıkken gizlenir, oyun kapanınca geri gelir",
+  "Размер интерфейса": "Arayüz boyutu",
+  "Масштаб окна лаунчера — работает и в развёрнутом/полноэкранном окне":
+    "Başlatıcı penceresinin ölçeği — büyütülmüş/tam ekran pencerede de çalışır",
+  "Авто добавление серверов": "Sunucuları otomatik ekle",
+  "Добавляет топ 5 серверов из категории Сервера в список серверов":
+    "Sunucular kategorisindeki ilk 5 sunucuyu sunucu listesine ekler",
+  "Анимация фона": "Arka plan animasyonu",
+  "Проверять обновления при запуске": "Açılışta güncellemeleri denetle",
+  "Только уведомляет о доступном обновлении. Установка — всегда вручную.":
+    "Yalnızca yeni bir güncelleme olduğunu bildirir. Kurulum her zaman elle yapılır.",
+  "Dev Mode — отключить автообновление": "Dev Mode — otomatik güncellemeyi kapat",
+  "Полностью отключает проверку/установку. Рекомендуется, пока правите код.":
+    "Denetlemeyi ve kurulumu tamamen kapatır. Kodu düzenlerken önerilir.",
+  "Пропущенная версия": "Atlanan sürüm",
+  "Канал сборки": "Derleme kanalı",
+  "Звук нажатия": "Tıklama sesi",
+  "Щелчок при нажатии на кнопки": "Düğmelere basıldığında duyulan tık sesi",
+  "Звук наведения": "Üzerine gelme sesi",
+  "Тихий отклик при наведении на кнопку": "Düğmenin üzerine gelince hafif bir ses",
+  "Звук уведомлений": "Bildirim sesi",
+  "Сигнал при заявке в друзья и других всплывающих уведомлениях":
+    "Arkadaşlık isteklerinde ve diğer açılır bildirimlerde çalan ses",
+  "Показывать в Discord, во что вы играете": "Ne oynadığınızı Discord'da göster",
+
+  "Своя тема": "Özel tema",
+  "Фон": "Arka plan",
+  "Панели, карточки и границы выводятся из него ступенями. Светлый фон делает тему светлой.":
+    "Paneller, kartlar ve kenarlıklar bundan kademeli olarak türetilir. Açık bir arka plan temayı açık yapar.",
+  "Акцент": "Vurgu",
+  "Кнопки, иконки, выделение. Оттенки для наведения и нажатия считаются сами.":
+    "Düğmeler, simgeler, seçim. Üzerine gelme ve basma tonları kendiliğinden hesaplanır.",
+  "Текст": "Metin",
+  "По умолчанию подбирается под яркость фона.":
+    "Varsayılan olarak arka planın parlaklığına göre seçilir.",
+  "Название видно только вам": "Ad yalnızca size görünür",
+  "Поделиться темой": "Temayı paylaş",
+  "Код можно отправить другу — он вставит его сюда и получит ровно эти цвета.":
+    "Kodu bir arkadaşınıza gönderebilirsiniz — buraya yapıştırdığında tam olarak bu renkleri alır.",
+
+  "Войти": "Giriş yap",
+  "Создать аккаунт": "Hesap oluştur",
+  "Единый аккаунт Aciron ID": "Tek hesap: Aciron ID",
+  "Оффлайн аккаунт": "Çevrimdışı hesap",
+  "Пиратский аккаунт": "Korsan hesap",
+  "Лицензия (Microsoft)": "Lisans (Microsoft)",
+  "Официальный вход через аккаунт Microsoft": "Microsoft hesabıyla resmi giriş",
+  "Подключение лицензии": "Lisans bağlama",
+  "Профиль": "Profil",
+  "Статус и приватность в разделе друзей": "Durum ve gizlilik Arkadaşlar bölümünde",
+  "Принимать заявки в друзья": "Arkadaşlık isteklerini kabul et",
+  "Выключите, если не хотите получать новые заявки": "Yeni istek almak istemiyorsanız kapatın",
+  "Показывать, во что играю": "Ne oynadığımı göster",
+  "Версия или название сборки в списке друзей": "Arkadaş listesinde sürüm veya derleme adı",
+  "Показывать сервер": "Sunucuyu göster",
+  "Адрес сервера, на котором вы сейчас играете": "Şu anda oynadığınız sunucunun adresi",
+  "Наиграно": "Oynanan süre",
+  "С нами с": "Aramıza katıldı",
+  "в игре": "oyunda",
+  "Не удалось обновить данные — показаны сохранённые. Проверьте соединение с Aciron ID.":
+    "Veriler yenilenemedi — kayıtlı veriler gösteriliyor. Aciron ID bağlantınızı kontrol edin.",
+  "Заблокировать": "Engelle",
+  "Подтвердить": "Onayla",
+  "Загрузить": "Yükle",
+  "Мои скины": "Skinlerim",
+  "Облик": "Görünüm",
+  "Новый образ": "Yeni kombin",
+  "Новый скин": "Yeni skin",
+  "PNG 64×64 или 64×32": "PNG 64×64 veya 64×32",
+  "Сохранить текущий образ": "Mevcut kombini kaydet",
+  "Запомнит текущий скин, плащ и модель": "Mevcut skin, pelerin ve modeli hatırlar",
+  "Кастом (Aciron)": "Özel (Aciron)",
+  "Каталог Aciron": "Aciron kataloğu",
+  "С лицензии Minecraft": "Minecraft lisansından",
+  "На аккаунте Minecraft нет плащей.": "Bu Minecraft hesabında pelerin yok.",
+  "Скины видны только игрокам, зашедшим в игру через лаунчер Aciron.":
+    "Skinler yalnızca oyuna Aciron başlatıcısıyla giren oyunculara görünür.",
+  "Кастомные плащи видят только игроки, зашедшие в игру через лаунчер Aciron.":
+    "Özel pelerinleri yalnızca oyuna Aciron başlatıcısıyla giren oyuncular görür.",
+
+  "Новая сборка": "Yeni derleme",
+  "Установить версию": "Sürüm kur",
+  "Импорт сборок": "Derlemeleri içe aktar",
+  "Нашли сборки в других лаунчерах — перенести их в Aciron?":
+    "Diğer başlatıcılarda derlemeler bulduk — Aciron'a aktaralım mı?",
+  "Доступно обновление": "Güncelleme mevcut",
+
+  "Плащи": "Pelerinler",
+  "Образы": "Kombinler",
+  "Поведение": "Davranış",
+  "Папки": "Klasörler",
+  "Релевантность": "Alaka düzeyi",
+  "Загрузки": "İndirme",
+  "Подписки": "Takipçi",
+  "Новые": "En yeni",
+  "Обновлённые": "Son güncellenen",
+  "Все типы": "Tüm türler",
+  "Все версии MC": "Tüm MC sürümleri",
+  "Релиз": "Release",
+  "В сети": "Çevrimiçi",
+  "Нет на месте": "Boşta",
+  "Не беспокоить": "Rahatsız etmeyin",
+  "Невидимка": "Görünmez",
+
+  "Выключить": "Kapat",
+  "Включить": "Aç",
+  "Открыть страницу": "Sayfayı aç",
+  "Файл не опознан на Modrinth": "Dosya Modrinth'te tanınmadı",
+  "Создать": "Oluştur",
+  "Заглушён": "Sessize alındı",
+  "Сегодня": "Bugün",
+  "Вчера": "Dün",
+  "Здесь пока пусто. Напишите {who} первым.":
+    "Burası şimdilik boş. {who} kişisine ilk mesajı siz yazın.",
+  "Уже в сборке": "Zaten derlemede",
+  "Скачать в сборку": "Derlemeye indir",
+  "Текущая": "Şu anki",
+  "Показать все ({n})": "Tümünü göster ({n})",
+  "Никого не нашлось": "Kimse bulunamadı",
+  "Пока никого — найдите друзей по нику": "Şimdilik kimse yok — kullanıcı adıyla arkadaş bulun",
+  "Сессия Aciron ID истекла — войдите заново, чтобы вернуть список друзей.":
+    "Aciron ID oturumunuz sona erdi — arkadaş listenizi geri almak için yeniden giriş yapın.",
+  "Друзья работают с аккаунтом Aciron ID — войдите, чтобы видеть, кто в игре.":
+    "Arkadaşlar için Aciron ID hesabı gerekir — kimin oyunda olduğunu görmek için giriş yapın.",
+  "Сессия Aciron ID истекла — войдите заново, чтобы вернуть свои скины и плащи.":
+    "Aciron ID oturumunuz sona erdi — skinlerinizi ve pelerinlerinizi geri almak için yeniden giriş yapın.",
+  "Скины и плащи хранятся в аккаунте Aciron ID. Войдите, чтобы собрать свой гардероб.":
+    "Skinler ve pelerinler Aciron ID hesabınızda saklanır. Gardırobunuzu oluşturmak için giriş yapın.",
+  "Клаcсический": "Klasik",
+  "Тонкий": "İnce",
+  "Стив — 4 px": "Steve — 4 px",
+  "Алекс — 3 px": "Alex — 3 px",
+  "Добавить скин": "Skin ekle",
+  "Максимум {n} скинов": "En fazla {n} skin",
+  "Удалить образ": "Kombini sil",
+  "Удалить из гардероба": "Gardıroptan sil",
+  "Плащ": "Pelerin",
+  "Крылья": "Elytra",
+  "Скин": "Skin",
+  "Плавающие кубики на фоне лаунчера": "Başlatıcının arka planında süzülen küpler",
+
+  "Загрузка": "İndiriliyor",
+  "Ошибка": "Hata",
+  "Не удалось загрузить": "İndirilemedi",
+  "Подготовка…": "Hazırlanıyor…",
+  "Среда Java": "Java ortamı",
+  "Список версий": "Sürüm listesi",
+  "Описание версии": "Sürüm açıklaması",
+  "Клиент игры": "Oyun istemcisi",
+  "Библиотеки": "Kütüphaneler",
+  "Нативные библиотеки": "Yerel kütüphaneler",
+  "Игровые ресурсы": "Oyun kaynakları",
+  "Загрузчик модов": "Mod yükleyicisi",
+  "Проверка входа": "Giriş doğrulaması",
+  "Моды сборки": "Derleme modları",
+  "Сборка": "Derleme",
+
+  "Версия {loader}": "{loader} sürümü",
+  "Последняя (обновляется сама)": "En son (otomatik güncellenir)",
+  "{version} · рекомендуется": "{version} · önerilen",
+  "{version} · нет в списке": "{version} · listede yok",
+  "Список версий ядра не загрузился — будет поставлена последняя.":
+    "Yükleyici sürüm listesi yüklenemedi — en son sürüm kurulacak.",
+  "Ядро: {loader} {version}": "Yükleyici: {loader} {version}",
+  "Ядро: {loader}, последняя версия": "Yükleyici: {loader}, en son sürüm",
+  "Моды пишут под конкретное ядро: установленные под {from} на {to} скорее всего не заработают. Файлы останутся на месте — их можно выключить или удалить вручную.":
+    "Modlar belirli bir yükleyici için yazılır: {from} için kurduklarınız {to} üzerinde büyük olasılıkla çalışmaz. Dosyalar yerinde kalır — bunları elle kapatabilir veya silebilirsiniz.",
+
+  "Реакция": "Tepki ekle",
+  "Ещё эмодзи": "Daha fazla emoji",
+  "Убрать свою реакцию": "Tepkinizi kaldır",
+  "Поставить такую же": "Aynı tepkiyi ver",
+  "Списком": "Liste",
+  "Плиткой": "Izgara",
+
+  "Проверка обновлений": "Güncellemeler denetleniyor",
+  "Проверка обновлений отключена": "Güncelleme denetimi kapalı",
+  "Актуальная версия": "Sürümünüz güncel",
+  "Найдено обновление v{version}": "v{version} güncellemesi bulundu",
+  "Не удалось проверить обновления": "Güncellemeler denetlenemedi",
+  "Локальная сборка": "Yerel derleme",
+
+  "Действия": "İşlemler",
+  "Скрыто": "Gizli",
+  "Уведомления заглушены": "Bildirimler sessize alındı",
+  "Удалить {name} из друзей? Переписка останется, но заново добавить придётся по заявке.":
+    "{name} arkadaş listenizden çıkarılsın mı? Yazışmanız kalır, ancak yeniden eklemek için arkadaşlık isteği göndermeniz gerekecek.",
+
+  "Не в сети": "Çevrimdışı",
+  "В лаунчере": "Başlatıcıda",
+  "В игре": "Oyunda",
+  "Был в сети {when}": "Son görülme {when}",
+  "На сервере {server}": "{server} sunucusunda",
+  "Играет: {name}": "Oynuyor: {name}",
+  "Играет в {version}": "{version} oynuyor",
+  "только что": "az önce",
+  "вчера": "dün",
+  "{n} мин. назад": "{n} dk önce",
+  "{n} ч. назад": "{n} sa önce",
+  "{n} дн. назад": "{n} gün önce",
+
+  "Отменить экспорт": "Dışa aktarmayı iptal et",
+  "Отменить импорт": "İçe aktarmayı iptal et",
+  "Открывается двойным кликом. Моды с Modrinth и CurseForge едут ссылками — архив лёгкий.":
+    "Çift tıklayarak açılır. Modrinth ve CurseForge'daki modlar bağlantı olarak aktarılır — arşiv hafif kalır.",
+  "Общий формат: Modrinth App, Prism и другие. Ссылками уходит только то, что есть на Modrinth.":
+    "Ortak format: Modrinth App, Prism ve diğerleri. Yalnızca Modrinth'te bulunanlar bağlantı olarak aktarılır.",
+  "на диске": "diskte",
+  "Моды, ресурспаки и шейдеры из репозиториев в архив не кладутся — вместо них едет ссылка, поэтому файл получится заметно легче.":
+    "Depolardaki modlar, kaynak paketleri ve shader'lar arşive konmaz — yerlerine bir bağlantı eklenir, böylece dosya belirgin şekilde daha hafif olur.",
+
+  "Загрузка библиотек": "Kütüphaneler indiriliyor",
+  "Загрузка клиента": "İstemci indiriliyor",
+  "Клиент загружен": "İstemci indirildi",
+  "Загрузка ресурсов": "Kaynaklar indiriliyor",
+  "Загрузка списка ресурсов": "Kaynak listesi indiriliyor",
+  "Загрузка описания версии": "Sürüm açıklaması indiriliyor",
+  "Описание версии загружено": "Sürüm açıklaması indirildi",
+  "Загрузка среды Java": "Java ortamı indiriliyor",
+  "Проверка среды Java": "Java ortamı denetleniyor",
+  "Загрузка загрузчика модов": "Mod yükleyicisi indiriliyor",
+  "Загрузчик модов готов": "Mod yükleyicisi hazır",
+  "Загрузка установщика Forge": "Forge kurulum dosyası indiriliyor",
+  "Установка Forge (может занять минуту)…": "Forge kuruluyor (bir dakika sürebilir)…",
+  "Доустановка файлов Forge…": "Kalan Forge dosyaları kuruluyor…",
+  "Forge установлен": "Forge kuruldu",
+  "Запуск игры": "Oyun başlatılıyor",
+  "Получение списка версий": "Sürüm listesi alınıyor",
+  "Список версий получен": "Sürüm listesi alındı",
+  "Загрузка модпака": "Mod paketi indiriliyor",
+  "Скачивание модпака": "Mod paketi indiriliyor",
+  "Модпак установлен": "Mod paketi kuruldu",
+  "Чтение манифеста": "Manifest okunuyor",
+  "Чтение файла модпака": "Mod paketi dosyası okunuyor",
+  "Перенос данных": "Veriler taşınıyor",
+  "Перенос файлов": "Dosyalar taşınıyor",
+  "Файлы перенесены": "Dosyalar taşındı",
+  "Данные перенесены": "Veriler taşındı",
+  "Читаем файл сборки": "Derleme dosyası okunuyor",
+  "Читаем файлы сборки": "Derleme dosyaları okunuyor",
+  "Ищем файлы на Modrinth": "Dosyalar Modrinth'te aranıyor",
+  "Ищем файлы на CurseForge": "Dosyalar CurseForge'da aranıyor",
+  "Упаковываем": "Paketleniyor",
+  "Распаковываем": "Paket açılıyor",
+  "Скачиваем моды": "Modlar indiriliyor",
+  "Сборка экспортирована": "Derleme dışa aktarıldı",
+  "Сборка импортирована": "Derleme içe aktarıldı",
+
+  "Сборка не найдена": "Derleme bulunamadı",
+  "Папка сборки не найдена": "Derleme klasörü bulunamadı",
+  "Нечего экспортировать: ничего не выбрано": "Dışa aktarılacak bir şey yok: hiçbir şey seçilmedi",
+  "Аккаунт не найден": "Hesap bulunamadı",
+  "Файл не найден": "Dosya bulunamadı",
+  "Нет файла для скачивания": "İndirilecek dosya yok",
+  "Это не архив .acpack": "Bu bir .acpack arşivi değil",
+  "В архиве нет aciron.pack.json — это не сборка Aciron":
+    "Arşivde aciron.pack.json yok — bu bir Aciron derlemesi değil",
+  "В архиве не указана версия Minecraft": "Arşivde Minecraft sürümü belirtilmemiş",
+  "В модпаке не указана версия Minecraft": "Mod paketinde Minecraft sürümü belirtilmemiş",
+  "modrinth.index.json не найден в .mrpack": ".mrpack içinde modrinth.index.json bulunamadı",
+  "Введите название сборки": "Derleme adını girin",
+  "Выберите версию Minecraft": "Minecraft sürümünü seçin",
+  "Неверная версия Minecraft": "Geçersiz Minecraft sürümü",
+  "Автор запретил загрузку этого файла через сторонние лаунчеры":
+    "Yazar, bu dosyanın üçüncü taraf başlatıcılar üzerinden indirilmesini engelledi",
+  "У модпака нет версий": "Mod paketinin sürümü yok",
+  "У модпака нет файлов": "Mod paketinin dosyası yok",
+  "У модпака нет файла .mrpack": "Mod paketinin .mrpack dosyası yok",
+  "Нет ссылки на .mrpack": ".mrpack bağlantısı yok",
+  "Нет ссылки на client.jar": "client.jar bağlantısı yok",
+  "Не удалось прочитать инстанс": "Derleme okunamadı",
+  "У инстанса не определены версия/загрузчик": "Derlemenin sürümü/yükleyicisi belirlenmemiş",
+  "Скачанный установщик Forge пуст": "İndirilen Forge kurulum dosyası boş",
+  "Установщик Forge повреждён или это не jar-архив":
+    "Forge kurulum dosyası bozuk ya da bir jar arşivi değil",
+  "В установщике нет version.json с полем id": "Kurulum dosyasında id alanı olan version.json yok",
+  "На этом аккаунте Microsoft не куплен Minecraft":
+    "Bu Microsoft hesabında Minecraft satın alınmamış",
+  "Нет refresh-токена — войдите в Microsoft заново":
+    "Refresh token yok — Microsoft'a yeniden giriş yapın",
+  "Сессия Microsoft истекла — войдите заново": "Microsoft oturumu sona erdi — yeniden giriş yapın",
+  "Окно входа Microsoft закрыто — вход отменён":
+    "Microsoft giriş penceresi kapatıldı — giriş iptal edildi",
+  "Время ожидания входа истекло, попробуйте снова": "Giriş zaman aşımına uğradı, tekrar deneyin",
+  "Вход Microsoft не настроен в этой сборке (нет client_id)":
+    "Bu derlemede Microsoft girişi yapılandırılmamış (client_id yok)",
+  "Microsoft: не получен токен доступа": "Microsoft: erişim token'ı alınamadı",
+  "Xbox Live: не удалось получить токен": "Xbox Live: token alınamadı",
+  "XSTS: не удалось получить токен": "XSTS: token alınamadı",
+  "XSTS: отсутствует uhs": "XSTS: uhs eksik",
+  "Aciron ID: ошибка входа": "Aciron ID: giriş hatası",
+  "Лицензию можно подключить только к аккаунту Aciron ID":
+    "Lisans yalnızca bir Aciron ID hesabına bağlanabilir",
+  "Ник: 3–16 символов, только латиница, цифры и _":
+    "Kullanıcı adı: 3–16 karakter, yalnızca Latin harfleri, rakamlar ve _",
+  "Файл не является PNG": "Dosya PNG değil",
+  "Файл слишком большой для текстуры": "Dosya doku için çok büyük",
+  "Неверный id CurseForge": "Geçersiz CurseForge id'si",
+
+  "Не открыть файл": "Dosya açılamıyor",
+  "Не прочитать файл": "Dosya okunamıyor",
+  "Не прочитать папку": "Klasör okunamıyor",
+  "Не распаковать файл": "Dosyanın paketi açılamıyor",
+  "Ссылка не по https": "Bağlantı https değil",
+  "Не создать файл": "Dosya oluşturulamıyor",
+  "Не сохранить архив": "Arşiv kaydedilemiyor",
+  "Испорченный манифест": "Bozuk manifest",
+  "Не удалось прочитать файл": "Dosya okunamadı",
+  "Не удалось запустить Java": "Java başlatılamadı",
+  "Не удалось запустить установщик Forge": "Forge kurulum dosyası başlatılamadı",
+  "Не удалось открыть локальный порт": "Yerel port açılamadı",
+  "Установщик Forge завершился с ошибкой": "Forge kurulumu hatayla sonlandı",
+  "Игра закрылась с ошибкой": "Oyun hatayla kapandı",
+
+  " · {n} мод(ов) выключено (нет под эту версию)": " · {n} mod devre dışı (bu sürüm için yok)",
+  " · найдено {total}": " · {total} bulundu",
+  "«{name}» закреплена": "“{name}” sabitlendi",
+  "«{name}» обновлён": "“{name}” güncellendi",
+  "«{name}» откреплена": "“{name}” sabitlemesi kaldırıldı",
+  "«{name}» удалён": "“{name}” silindi",
+  "«{name}» установлен": "“{name}” kuruldu",
+  "«{title}» {version} установлен": "“{title}” {version} kuruldu",
+  "«{title}» установлен": "“{title}” kuruldu",
+  "{current} / {total} файлов": "{current} / {total} dosya",
+  "{h} ч": "{h} sa",
+  "{h} ч {m} мин": "{h} sa {m} dk",
+  "{h}ч {m}м": "{h}sa {m}dk",
+  "{loader} · ядро менять нельзя": "{loader} · yükleyici değiştirilemez",
+  "{m} мин": "{m} dk",
+  "{m}м": "{m}dk",
+  "{n} версий": "{n} sürüm",
+  "{n} ГБ": "{n} GB",
+  "{n} мод(ов)": "{n} mod",
+  "{n} сообщение": "{n} mesaj",
+  "{n} сообщений": "{n} mesaj",
+  "{n}мин.": "{n}dk.",
+  "{n}ч.": "{n}sa.",
+  "{name} в чёрном списке": "{name} kara listede",
+  "{name} теперь у вас в друзьях": "{name} artık arkadaşınız",
+  "{name} удалён из друзей": "{name} arkadaş listenizden çıkarıldı",
+  "{name}: новых сообщений {n}": "{name}: {n} yeni mesaj",
+  "{size} Б": "{size} B",
+  "{size} ГБ": "{size} GB",
+  "{size} КБ": "{size} KB",
+  "{size} МБ": "{size} MB",
+  "< 1мин.": "< 1dk.",
+  "<1м": "<1dk",
+  "Адрес {ip} скопирован": "{ip} adresi kopyalandı",
+  "Акцент: наведение": "Vurgu: üzerine gelme",
+  "Акцент: нажатие": "Vurgu: basma",
+  "Баннер обновлён": "Banner güncellendi",
+  "Баннер убран": "Banner kaldırıldı",
+  "Без названия": "Adsız",
+  "боковое меню, нижняя панель": "yan menü, alt çubuk",
+  "в:": "nereye:",
+  "Ваши данные (аккаунты, сборки, настройки) находятся в старом расположении. Они будут перенесены в папку лаунчера — так их не потеряет удаление старой папки.":
+    "Verileriniz (hesaplar, derlemeler, ayarlar) eski konumda bulunuyor. Başlatıcı klasörüne taşınacak — böylece eski klasör silindiğinde kaybolmaz.",
+  "Введите код 2FA": "2FA kodunu girin",
+  "Введите корректный e-mail": "Geçerli bir e-posta girin",
+  "Введите ник/e-mail и пароль": "Kullanıcı adı/e-posta ve parola girin",
+  "Версии сборки — {title}": "Derleme sürümleri — {title}",
+  "Версия": "Sürüm",
+  "Версия изменена на {v}": "Sürüm {v} olarak değiştirildi",
+  "Версия v{version}": "Sürüm v{version}",
+  "включён": "etkin",
+  "Восстановить": "Geri yükle",
+  "Все цвета собираются автоматически": "Tüm renkler otomatik olarak oluşturulur",
+  "всего в системе: {n} ГБ": "sistemde toplam: {n} GB",
+  "Вход в Aciron ID": "Aciron ID girişi",
+  "Вход через Microsoft": "Microsoft ile giriş",
+  "Вы": "Siz",
+  "Вы играли {time}": "{time} oynadınız",
+  "Вы привяжете лицензию Minecraft (Microsoft) к аккаунту {name} и будете играть через неё.":
+    "Minecraft (Microsoft) lisansını {name} hesabına bağlayıp oyunu bu lisansla oynayacaksınız.",
+  "Выберите PNG, чтобы увидеть скин": "Skini görmek için bir PNG seçin",
+  "Выбрано: {n}": "Seçilen: {n}",
+  "Выбрать картинку": "Görsel seç",
+  "Выбрать PNG…": "PNG seç…",
+  "выключен": "devre dışı",
+  "Гардероб доступен с аккаунтом Aciron ID": "Gardırop, Aciron ID hesabıyla kullanılabilir",
+  "ГБ": "GB",
+  "Границы": "Kenarlıklar",
+  "Дизайн Aciron": "Aciron tasarımı",
+  "Дизайн Mojang": "Mojang tasarımı",
+  "Для друзей вы офлайн": "Arkadaşlarınıza çevrimdışı görünüyorsunuz",
+  "Для друзей нужен вход в Aciron ID": "Arkadaşlar için Aciron ID girişi gerekir",
+  "Добавлено файлов: {n}": "Eklenen dosya: {n}",
+  "Добавьте аккаунт": "Bir hesap ekleyin",
+  "Доставлено": "İletildi",
+  "Доступно обновление v{version}": "v{version} güncellemesi mevcut",
+  "Друзей пока нет": "Henüz arkadaş yok",
+  "Друзья видят, что вы в лаунчере": "Arkadaşlarınız başlatıcıda olduğunuzu görür",
+  "Заблокировать {name}? Он пропадёт из друзей, и вы перестанете получать друг от друга сообщения и заявки.":
+    "{name} engellensin mi? Arkadaş listenizden çıkarılacak ve birbirinizden mesaj ve arkadaşlık isteği alamayacaksınız.",
+  "Загрузка версий": "Sürümler yükleniyor",
+  "Загрузка из {source} появится в одном из ближайших обновлений. Пока используйте Modrinth.":
+    "{source} üzerinden indirme yakın güncellemelerden birinde gelecek. Şimdilik Modrinth'i kullanın.",
+  "заливка при наведении": "üzerine gelme dolgusu",
+  "Запуск «{name}»…": "“{name}” başlatılıyor…",
+  "Запуск {version} и подключение к {name}…":
+    "{version} başlatılıyor ve {name} sunucusuna bağlanılıyor…",
+  "Запустить {version} и зайти на сервер": "{version} başlat ve sunucuya gir",
+  "Заявка отправлена {name}": "{name} kullanıcısına arkadaşlık isteği gönderildi",
+  "из:": "nereden:",
+  "Изменено вручную: {n}": "Elle değiştirilen: {n}",
+  "Изображение": "Görsel",
+  "Импорт .acpack": ".acpack içe aktarılıyor",
+  "Импорт .mrpack": ".mrpack içe aktarılıyor",
+  "Импорт… {done}/{total}": "İçe aktarılıyor… {done}/{total}",
+  "Импортировано сборок: {n}": "İçe aktarılan derleme: {n}",
+  "Импортировать": "İçe aktar",
+  "Используется": "Kullanılıyor",
+  "Используйте только свою лицензию. Взлом, кража или использование чужих аккаунтов — не ответственность Aciron.":
+    "Yalnızca kendi lisansınızı kullanın. Hesap ele geçirme, hırsızlık veya başkasının hesabını kullanma Aciron'un sorumluluğunda değildir.",
+  "истёк вход в Microsoft — перепривяжите лицензию":
+    "Microsoft girişinin süresi doldu — lisansı yeniden bağlayın",
+  "Карточки": "Kartlar",
+  "карточки, поля ввода": "kartlar, giriş alanları",
+  "Классика": "Klasik",
+  "Классика, много модов": "Klasik, çok sayıda mod",
+  "Кнопки окна": "Pencere düğmeleri",
+  "кнопки, иконки, выделение": "düğmeler, simgeler, seçim",
+  "Код из письма — 6 цифр": "E-postadaki kod 6 haneli",
+  "Код отправлен на {mail}": "Kod {mail} adresine gönderildi",
+  "Код текущей темы скопирован": "Mevcut temanın kodu kopyalandı",
+  "Код темы не распознан": "Tema kodu tanınmadı",
+  "Код темы скопирован": "Tema kodu kopyalandı",
+  "Копировать выбранные": "Seçilenleri kopyala",
+  "Лаунчер": "Başlatıcı",
+  "Лёгкий, современные версии": "Hafif, modern sürümler",
+  "Локальная · v{version}": "Yerel · v{version}",
+  "Локальная сборка: автообновление недоступно":
+    "Yerel derleme: otomatik güncelleme kullanılamıyor",
+  "меньше минуты": "bir dakikadan az",
+  "Мод «{name}» {state}": "“{name}” modu {state}",
+  "Моды будут пере-подобраны под {v}; те, которых под неё нет, — выключены.":
+    "Modlar {v} için yeniden eşleştirilecek; bu sürüm için olmayanlar devre dışı bırakılacak.",
+  "На аккаунте": "Hesabınızda",
+  "На лицензию не применилось: {msg}": "Lisanslı hesaba uygulanamadı: {msg}",
+  "Не скачалось: {list}": "İndirilemedi: {list}",
+  "Не спрашивать про v{version}": "v{version} için sorma",
+  "Нельзя удалить сборку, пока она запущена или идёт скачивание":
+    "Derleme çalışırken veya indirme sürerken silinemez",
+  "Нет аккаунта?": "Hesabınız yok mu?",
+  "Нет версий": "Sürüm yok",
+  "Ник аккаунта сменится на лицензионный — именно он будет отображаться в игре и на серверах.":
+    "Hesabınızın kullanıcı adı lisanslı hesaptaki adla değiştirilecek — oyunda ve sunucularda görünecek ad bu olacak.",
+  "Ник: 3–16 символов, только латиница, цифры и _ (без пробелов, кириллицы и эмодзи)":
+    "Kullanıcı adı: 3–16 karakter, yalnızca Latin harfleri, rakamlar ve _ (boşluk, Kiril ve emoji olmaz)",
+  "Ничего не добавили: подходят только .jar и .zip":
+    "Hiçbir şey eklenmedi: yalnızca .jar ve .zip uygundur",
+  "Ничего не импортировано": "Hiçbir şey içe aktarılmadı",
+  "Новое сообщение": "Yeni mesaj",
+  "Новый код отправлен на {mail}": "Yeni kod {mail} adresine gönderildi",
+  "Обложка обновлена": "Kapak güncellendi",
+  "Обновление · {name}": "Güncelleme · {name}",
+  "Обновление устанавливается…": "Güncelleme kuruluyor…",
+  "Образ сохранён": "Kombin kaydedildi",
+  "Ожидание входа Microsoft…": "Microsoft girişi bekleniyor…",
+  "онлайн": "çevrimiçi",
+  "Опубликованный канал автообновления": "Yayınlanan otomatik güncelleme kanalı",
+  "основной": "birincil",
+  "Основной текст на этом фоне читается плохо (контраст {v} при рекомендуемых 4.5).":
+    "Bu arka planda ana metin zor okunuyor (kontrast {v}, önerilen 4.5).",
+  "от": "yapan",
+  "от {author}": "yapan {author}",
+  "от {name}": "yapan {name}",
+  "Откройте сборку — тогда моды и паки можно бросать прямо в неё":
+    "Önce bir derleme açın — sonra modları ve paketleri doğrudan içine bırakabilirsiniz",
+  "Открываем вход Microsoft в браузере…": "Microsoft girişi tarayıcıda açılıyor…",
+  "Отменено": "İptal edildi",
+  "Отправить код снова": "Kodu yeniden gönder",
+  "Отправить код снова через {n} с": "{n} sn sonra kodu yeniden gönder",
+  "оффлайн": "çevrimdışı",
+  "Оффлайн": "Çevrimdışı",
+  "Панели": "Paneller",
+  "Пароли не совпадают": "Parolalar eşleşmiyor",
+  "Пароль минимум 8 символов": "Parola en az 8 karakter olmalı",
+  "Перенос файлов: {e}": "Dosya taşıma: {e}",
+  "Переписка доступна с аккаунтом Aciron ID — войдите в него на главной.":
+    "Yazışma Aciron ID hesabıyla kullanılabilir — ana sayfadan giriş yapın.",
+  "Переслано от {name}": "{name} kişisinden iletildi",
+  "Переслано: {n}": "İletilen: {n}",
+  "Письмо не пришло? Проверьте папку «Спам» или":
+    "E-posta gelmedi mi? “Spam” klasörünü kontrol edin ya da",
+  "Плащ добавлен": "Pelerin eklendi",
+  "Плащей с аккаунта Minecraft нет: лицензия не привязана к Aciron ID. Привязать можно в меню аккаунта.":
+    "Minecraft hesabına ait pelerin yok: Aciron ID'nize bağlı bir lisans bulunmuyor. Bağlama işlemini hesap menüsünden yapabilirsiniz.",
+  "Плащи с аккаунта Minecraft не видны: лицензия привязана без доступа к профилю — переподключите её в меню аккаунта.":
+    "Minecraft hesabındaki pelerinler görünmüyor: lisans, profil erişimi olmadan bağlanmış — hesap menüsünden yeniden bağlayın.",
+  "Плащи с аккаунта Minecraft не загрузились: {msg}":
+    "Minecraft hesabındaki pelerinler yüklenemedi: {msg}",
+  "подписи и подсказки": "etiketler ve ipuçları",
+  "Подтверждение e-mail": "E-posta doğrulama",
+  "Поиск: {kind} на {source}…": "Arama: {source} üzerinde {kind}…",
+  "Полное описание и список изменений — на странице проекта (кнопка со стрелкой вверху). Версии — во вкладке «Версии».":
+    "Tam açıklama ve değişiklik listesi proje sayfasındadır (yukarıdaki ok düğmesi). Sürümler ise “Sürümler” sekmesindedir.",
+  "Помогает сделать фон темнее или текст светлее.":
+    "Arka planı daha koyu ya da metni daha açık yapmak yardımcı olur.",
+  "Почта ещё не подтверждена — мы выслали новый код":
+    "E-posta henüz doğrulanmadı — yeni bir kod gönderdik",
+  "Пропущено: {n}": "Atlanan: {n}",
+  "Профиль: статус и приватность": "Profil: durum ve gizlilik",
+  "Прочитано": "Okundu",
+  "Развернуть": "Büyüt",
+  "рамки и разделители": "çerçeveler ve ayırıcılar",
+  "Регистрация Aciron ID": "Aciron ID kaydı",
+  "самый нижний слой": "en alttaki katman",
+  "Сборка «{name}» импортирована": "“{name}” derlemesi içe aktarıldı",
+  "Сборка «{name}» удалена": "“{name}” derlemesi silindi",
+  "Сборка «{title}» ({version}) установлена": "“{title}” ({version}) derlemesi kuruldu",
+  "Сборка создана": "Derleme oluşturuldu",
+  "Сборка экспортирована · {size}": "Derleme dışa aktarıldı · {size}",
+  "Сборка Aciron или модпак Modrinth": "Aciron derlemesi veya Modrinth mod paketi",
+  "Свой плащ": "Özel pelerin",
+  "Свой скин": "Özel skin",
+  "Свой скин и плащ": "Özel skin ve pelerin",
+  "сервер Aciron сейчас не отвечает от Mojang, попробуйте позже":
+    "Aciron sunucusu şu anda Mojang'dan yanıt alamıyor, daha sonra tekrar deneyin",
+  "Сессия Aciron ID истекла — войдите заново":
+    "Aciron ID oturumunuzun süresi doldu — yeniden giriş yapın",
+  "Сессия Aciron ID истекла — войдите заново.":
+    "Aciron ID oturumunuzun süresi doldu — yeniden giriş yapın.",
+  "Скин добавлен": "Skin eklendi",
+  "Скопировано": "Kopyalandı",
+  "Скопируются моды, ресурспаки, шейдеры и конфиги. Оригинальные сборки в других лаунчерах не изменятся.":
+    "Modlar, kaynak paketleri, shader'lar ve config dosyaları kopyalanacak. Diğer başlatıcılardaki orijinal derlemeler değişmeyecek.",
+  "Слишком длинное: {n} из {max}": "Çok uzun: {n} / {max}",
+  "Сменить баннер": "Banner'ı değiştir",
+  "сменить язык": "dili değiştir",
+  "Снова не вышло": "Yine olmadı",
+  "Совместим с Fabric": "Fabric ile uyumlu",
+  "Сообщение для {name}": "{name} için mesaj",
+  "Сообщение не отправлено": "Mesaj gönderilemedi",
+  "Сообщения скопированы": "Mesajlar kopyalandı",
+  "Список контента обновлён": "İçerik listesi yenilendi",
+  "Ставится автоматически при простое": "Boşta kaldığınızda otomatik olarak ayarlanır",
+  "Стандартный": "Varsayılan",
+  "Статус и приём заявок хранятся в Aciron ID — их видят друзья. Скрытые версия, сборка и сервер вообще не отправляются на сервис.":
+    "Durumunuz ve arkadaşlık isteği kabul ayarı Aciron ID'de saklanır — arkadaşlarınız bunları görür. Gizlenen sürüm, derleme ve sunucu ise servise hiç gönderilmez.",
+  "Текст тусклый": "Soluk metin",
+  "Текстура плаща PNG 64×32": "Pelerin dokusu PNG 64×32",
+  "Текстура PNG": "PNG dokusu",
+  "Тема «{name}» добавлена": "“{name}” teması eklendi",
+  "Тема сохранена": "Tema kaydedildi",
+  "Тонкие руки": "İnce kollar",
+  "Тусклый текст почти не виден (контраст {v}).":
+    "Soluk metin neredeyse görünmüyor (kontrast {v}).",
+  "У аккаунта включена 2FA — введите код из приложения или резервный код":
+    "Bu hesapta 2FA etkin — uygulamadaki kodu veya bir yedek kodu girin",
+  "У Feed The Beast нет отдельных модов — только целые модпаки. Найти их можно во вкладке «Сборки» → «Популярные».":
+    "Feed The Beast'te ayrı modlar yok — yalnızca komple mod paketleri var. Bunları “Derlemeler” → “Popüler” sekmesinde bulabilirsiniz.",
+  "Уведомления от друзей не приходят": "Arkadaşlarınızdan bildirim gelmez",
+  "Удалено: {n} шт.": "Silinen: {n} adet",
+  "Удалите один из своих скинов, чтобы добавить новый":
+    "Yeni bir tane eklemek için skinlerinizden birini silin",
+  "Удалить «{name}» из сборки? Файл будет стёрт с диска.":
+    "“{name}” derlemeden silinsin mi? Dosya diskten silinecek.",
+  "Удалить «{name}»? Файл текстуры будет стёрт с сервера.":
+    "“{name}” silinsin mi? Doku dosyası sunucudan silinecek.",
+  "Удалить ({n})": "Sil ({n})",
+  "Удалить {n} шт. из сборки? Файлы будут стёрты с диска.":
+    "{n} adet öğe derlemeden silinsin mi? Dosyalar diskten silinecek.",
+  "Удалить {name} из друзей? Вернуться можно будет только новой заявкой.":
+    "{name} arkadaşlıktan çıkarılsın mı? Geri dönmek ancak yeni bir arkadaşlık isteğiyle mümkün olur.",
+  "Удалить выбранное": "Seçilenleri sil",
+  "Удалить сборку «{name}» вместе со всеми модами? Это действие нельзя отменить.":
+    "“{name}” derlemesi tüm modlarıyla birlikte silinsin mi? Bu işlem geri alınamaz.",
+  "Удалить файл": "Dosyayı sil",
+  "Удалять можно только свои сообщения": "Yalnızca kendi mesajlarınızı silebilirsiniz",
+  "Файл добавлен в сборку": "Dosya derlemeye eklendi",
+  "Файлы перенесены в новое место": "Dosyalar yeni konuma taşındı",
+  "Фон окна": "Pencere arka planı",
+  "Форк Forge, 1.20.1+": "Forge türevi, 1.20.1+",
+  "Читаю файл…": "Dosya okunuyor…",
+  "Экспорт · {name}": "Dışa aktarma · {name}",
+  "Это не файл сборки: нужен .acpack или .mrpack":
+    "Bu bir derleme dosyası değil: .acpack veya .mrpack gerekli",
+  "Язык игры от этого не зависит": "Oyunun dili bundan etkilenmez",
+  "Язык интерфейса": "Arayüz dili",
+  "Aciron ID · лицензия": "Aciron ID · lisanslı",
+
+  "«{name}»: {e}": "“{name}”: {e}",
+  "В установщике нет нужного файла": "Kurulum dosyasında gerekli dosya yok",
+  "Версия не найдена в манифесте": "Sürüm manifest dosyasında bulunamadı",
+  "Вход Microsoft не удался": "Microsoft girişi başarısız oldu",
+  "Жесты": "El hareketleri",
+  "Загрузка отменена": "İndirme iptal edildi",
+  "Игра неожиданно закрылась. Смотрите logs/aciron-latest.log.":
+    "Oyun beklenmedik şekilde kapandı. logs/aciron-latest.log dosyasına bakın.",
+  "Импортировать сборку .acpack или модпак .mrpack":
+    "Bir .acpack derlemesi veya .mrpack mod paketi içe aktarın",
+  "Мод не подходит этой сборке. Выберите другую версию":
+    "Bu mod bu derlemeye uymuyor. Başka bir sürüm seçin",
+  "Не удалось авторизоваться в Xbox (XSTS)": "Xbox'a giriş yapılamadı (XSTS)",
+  "Не удалось войти в Aciron ID": "Aciron ID'ye giriş yapılamadı",
+  "Не удалось войти в Minecraft": "Minecraft'a giriş yapılamadı",
+  "Не удалось выполнить запрос к Aciron ID": "Aciron ID'ye yapılan istek başarısız oldu",
+  "Не удалось обратиться к аккаунту Aciron ID": "Aciron ID hesabına erişilemedi",
+  "Не удалось получить Java, и системной тоже нет": "Java alınamadı, sistemde de kurulu değil",
+  "Не удалось скачать установщик": "Kurulum dosyası indirilemedi",
+  "неизвестно": "bilinmiyor",
+  "Нет версии загрузчика под эту Minecraft": "Bu Minecraft için yükleyici sürümü yok",
+  "Нет сборки Forge под эту версию Minecraft":
+    "Bu Minecraft sürümü için uygun bir Forge sürümü yok",
+  "Нет сборки NeoForge под эту версию Minecraft":
+    "Bu Minecraft sürümü için uygun bir NeoForge sürümü yok",
+  "Нужен вход Microsoft — открыли браузер": "Microsoft girişi gerekiyor — tarayıcı açıldı",
+  "Образ": "Kombin",
+  "Подтверждение": "Onay",
+  "Прочее": "Diğer",
+  "Размер файла не совпал": "Dosya boyutu eşleşmedi",
+  "Ресурспак не подходит этой сборке. Выберите другую версию":
+    "Bu kaynak paketi bu derlemeye uymuyor. Başka bir sürüm seçin",
+  "Сервис Aciron ID недоступен": "Aciron ID servisi kullanılamıyor",
+  "Сердца": "Kalpler",
+  "Требуется подтверждение возраста для Xbox": "Xbox için yaş doğrulaması gerekiyor",
+  "У аккаунта Microsoft нет профиля Xbox — создайте его на xbox.com":
+    "Bu Microsoft hesabının Xbox profili yok — xbox.com'da bir tane oluşturun",
+  "Улыбки": "Gülen yüzler",
+  "Установщик не создал нужный файл — удалите папку версии и попробуйте снова":
+    "Kurulum dosyası gerekli dosyayı oluşturmadı — sürüm klasörünü silip tekrar deneyin",
+  "Установщик не создал профиль версии — проверьте Java и интернет":
+    "Kurulum dosyası sürüm profilini oluşturmadı — Java'yı ve internet bağlantınızı kontrol edin",
+  "Хэш SHA1 не совпал": "SHA1 özeti eşleşmedi",
+  "Шейдер не подходит этой сборке. Выберите другую версию":
+    "Bu shader bu derlemeye uymuyor. Başka bir sürüm seçin",
+  "Это детский аккаунт — добавьте его в семейную группу Microsoft":
+    "Bu bir çocuk hesabı — Microsoft aile grubuna ekleyin",
+  "Этот загрузчик не поддерживается": "Bu yükleyici desteklenmiyor",
+  "Недопустимая версия загрузчика": "Geçersiz yükleyici sürümü",
+  "manifest.json не найден в модпаке": "Mod paketinde manifest.json bulunamadı",
+  "Xbox Live недоступен в вашем регионе": "Xbox Live bölgenizde kullanılamıyor",
+};;
+
+const DICTS: Record<Lang, Record<string, string>> = { ru: {}, en: EN, tr: TR };
 
 function detect(): Lang {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "ru" || saved === "en") return saved;
+    if (isLang(saved)) return saved;
   } catch {
 
   }
-  return navigator.language?.toLowerCase().startsWith("ru") ? "ru" : "en";
+
+  const nav = navigator.language?.toLowerCase() ?? "";
+  if (nav.startsWith("ru")) return "ru";
+  if (nav.startsWith("tr")) return "tr";
+  return "en";
 }
 
 let lang: Lang = detect();
@@ -980,9 +1974,13 @@ export async function syncLangFromSettings(): Promise<void> {
   if (!isTauri) return;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "ru" || saved === "en") return;
     const s = await getSettings();
-    if (s.language === "ru" || s.language === "en") setLang(s.language);
+    if (isLang(saved)) {
+      if (s.language !== saved) await saveSettings({ ...s, language: saved });
+      return;
+    }
+    if (isLang(s.language)) setLang(s.language);
+    else await saveSettings({ ...s, language: lang });
   } catch {
 
   }
@@ -997,8 +1995,10 @@ export function t(ru: string, vars?: Record<string, string | number>): string {
   return out;
 }
 
+const LOCALES: Record<Lang, string> = { ru: "ru-RU", en: "en-US", tr: "tr-TR" };
+
 export function locale(): string {
-  return lang === "ru" ? "ru-RU" : "en-US";
+  return LOCALES[lang];
 }
 
 const FMT_CACHE = new Map<string, Intl.DateTimeFormat>();
@@ -1041,7 +2041,8 @@ export function useLang(): { lang: Lang; t: typeof t } {
   return { lang: cur, t };
 }
 
-export const LANGS: { id: Lang; label: string; short: string }[] = [
-  { id: "ru", label: "Русский", short: "RU" },
-  { id: "en", label: "English", short: "EN" },
+export const LANGS: { id: Lang; label: string; short: string; name: string }[] = [
+  { id: "ru", label: "Русский", short: "RU", name: "Русский язык" },
+  { id: "en", label: "English", short: "EN", name: "Английский язык" },
+  { id: "tr", label: "Türkçe", short: "TR", name: "Турецкий язык" },
 ];

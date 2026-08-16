@@ -14,6 +14,7 @@ import {
   discard,
   encodeForward,
   encodeReply,
+  stripMarkers,
   loadOlder,
   myReaction,
   notifyTyping,
@@ -415,7 +416,8 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       setSending(true);
       wasAtBottom.current = true;
 
-      const body = reply ? encodeReply(reply.author, reply.text, text) : text;
+      const clean = stripMarkers(text);
+      const body = reply ? encodeReply(reply.author, reply.text, clean) : clean;
       setReply(null);
       try {
         await send(friend.id, body);

@@ -28,9 +28,6 @@ RELEASE.md
 
 latest.json
 
-# Эффективный дев-конфиг СОДЕРЖИТ вшитый ACIRON_DEV_UPDATE_TOKEN — не коммитить.
-src-tauri/tauri.dev.effective.conf.json
-
 *.log
 npm-debug.log*
 .cache
@@ -43,8 +40,3 @@ Thumbs.db
 .vscode
 *.suo
 *.user
-
-# Артефакты tsc: vite.config.js перекрывал настоящий vite.config.ts
-vite.config.js
-vite.config.d.ts
-*.tsbuildinfo
