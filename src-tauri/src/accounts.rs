@@ -31,6 +31,15 @@ pub struct Account {
 
     #[serde(default)]
     pub token_expires: u64,
+
+    #[serde(default)]
+    pub mojang_look: String,
+
+    #[serde(default)]
+    pub mojang_skin: String,
+
+    #[serde(default)]
+    pub mojang_cape: String,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -99,6 +108,28 @@ pub fn active_account() -> Option<Account> {
 
 pub fn save_account(acc: Account) -> Account {
     let mut store = load();
+    let prev = store
+        .accounts
+        .iter()
+        .find(|a| a.kind == acc.kind && (a.uuid == acc.uuid || a.username == acc.username))
+        .cloned();
+
+    let mut acc = acc;
+    if let Some(p) = prev {
+        if !p.uuid.is_empty() && p.uuid == acc.uuid {
+            if acc.refresh_token.is_empty() {
+                acc.refresh_token = p.refresh_token;
+            }
+            if acc.access_token.is_empty() || acc.access_token == "0" {
+                acc.access_token = p.access_token;
+                acc.token_expires = p.token_expires;
+            }
+            acc.mojang_look = p.mojang_look;
+            acc.mojang_skin = p.mojang_skin;
+            acc.mojang_cape = p.mojang_cape;
+        }
+    }
+
     store
         .accounts
         .retain(|a| !(a.kind == acc.kind && (a.uuid == acc.uuid || a.username == acc.username)));
@@ -170,6 +201,9 @@ pub fn add_offline_account(username: String) -> Result<Account, String> {
         aciron_name: String::new(),
         licensed: false,
         token_expires: 0,
+        mojang_look: String::new(),
+        mojang_skin: String::new(),
+        mojang_cape: String::new(),
     };
     store.active = acc.id.clone();
     store.accounts.push(acc.clone());

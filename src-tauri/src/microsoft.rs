@@ -452,6 +452,9 @@ async fn finish_login(
         aciron_name: String::new(),
         licensed: false,
         token_expires,
+        mojang_look: String::new(),
+        mojang_skin: String::new(),
+        mojang_cape: String::new(),
     };
     Ok(acc)
 }

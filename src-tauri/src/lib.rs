@@ -15,6 +15,7 @@ mod instance;
 mod launcher;
 mod microsoft;
 mod modrinth;
+mod mojang;
 mod pack;
 mod presence;
 mod realtime;
@@ -61,6 +62,13 @@ pub fn run() {
             tauri::async_runtime::spawn(presence::heartbeat_loop());
 
             tauri::async_runtime::spawn(realtime::connect_loop(app.handle().clone()));
+
+            tauri::async_runtime::spawn(async {
+                let r = mojang::sync_look().await;
+                if let Some(e) = r.error {
+                    eprintln!("[mojang] облик не синхронизирован при старте: {e}");
+                }
+            });
 
             pack::watch_inbox(app.handle().clone());
             Ok(())

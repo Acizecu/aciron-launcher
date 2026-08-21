@@ -753,10 +753,11 @@ export async function wardrobeApply(id: string): Promise<ApplyResult> {
   return r;
 }
 
-export async function wardrobeDelete(id: string): Promise<void> {
-  if (!isTauri) return;
-  await invoke("wardrobe_delete", { id });
+export async function wardrobeDelete(id: string): Promise<ApplyResult> {
+  if (!isTauri) return { synced: false };
+  const r = await invoke<ApplyResult>("wardrobe_delete", { id });
   cacheBust("wardrobe");
+  return r;
 }
 
 export async function wardrobeRename(
@@ -769,10 +770,11 @@ export async function wardrobeRename(
   cacheBust("wardrobe");
 }
 
-export async function wardrobeCapeOff(): Promise<void> {
-  if (!isTauri) return;
-  await invoke("wardrobe_cape_off");
+export async function wardrobeCapeOff(): Promise<ApplyResult> {
+  if (!isTauri) return { synced: false };
+  const r = await invoke<ApplyResult>("wardrobe_cape_off");
   cacheBust("wardrobe");
+  return r;
 }
 
 export type CatalogCape = { id: string; name: string; url: string; by: string };
@@ -787,10 +789,11 @@ export async function capeCatalog(force = false): Promise<CatalogCape[]> {
   );
 }
 
-export async function capeCatalogApply(id: string): Promise<void> {
-  if (!isTauri) return;
-  await invoke("cape_catalog_apply", { id });
+export async function capeCatalogApply(id: string): Promise<ApplyResult> {
+  if (!isTauri) return { synced: false };
+  const r = await invoke<ApplyResult>("cape_catalog_apply", { id });
   cacheBust("wardrobe");
+  return r;
 }
 
 export type CatalogSkin = { id: string; name: string; url: string; model: SkinModelId };
@@ -848,10 +851,11 @@ export async function outfitAdd(
   return o;
 }
 
-export async function outfitApply(id: string): Promise<void> {
-  if (!isTauri) return;
-  await invoke("outfit_apply", { id });
+export async function outfitApply(id: string): Promise<ApplyResult> {
+  if (!isTauri) return { synced: false };
+  const r = await invoke<ApplyResult>("outfit_apply", { id });
   cacheBust("wardrobe");
+  return r;
 }
 
 export async function outfitDelete(id: string): Promise<void> {

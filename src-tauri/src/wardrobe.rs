@@ -103,14 +103,7 @@ pub struct WardrobeData {
     pub licensed: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ApplyResult {
-    #[serde(default)]
-    pub synced: bool,
-    #[serde(default)]
-    pub error: Option<String>,
-}
+pub use crate::mojang::ApplyResult;
 
 async fn check(resp: reqwest::Response) -> Result<reqwest::Response, String> {
     if resp.status().is_success() {
@@ -198,21 +191,15 @@ pub async fn read_texture(path: String) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn wardrobe_apply(id: String) -> Result<ApplyResult, String> {
-    let body: serde_json::Value = send(post(&format!("/api/wardrobe/item/{id}/apply"))?)
-        .await?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(serde_json::from_value(body["licenseSync"].clone()).unwrap_or(ApplyResult {
-        synced: false,
-        error: None,
-    }))
+    send(post(&format!("/api/wardrobe/item/{id}/apply"))?).await?;
+    Ok(crate::mojang::sync_look().await)
 }
 
 #[tauri::command]
-pub async fn wardrobe_delete(id: String) -> Result<(), String> {
+pub async fn wardrobe_delete(id: String) -> Result<ApplyResult, String> {
     send(delete(&format!("/api/wardrobe/item/{id}"))?).await?;
-    Ok(())
+
+    Ok(crate::mojang::sync_look().await)
 }
 
 #[tauri::command]
@@ -226,9 +213,10 @@ pub async fn wardrobe_rename(id: String, name: String, model: String) -> Result<
 }
 
 #[tauri::command]
-pub async fn wardrobe_cape_off() -> Result<(), String> {
+pub async fn wardrobe_cape_off() -> Result<ApplyResult, String> {
     send(post("/api/wardrobe/cape/off")?).await?;
-    Ok(())
+
+    Ok(crate::mojang::sync_look().await)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -253,9 +241,9 @@ pub async fn cape_catalog() -> Result<Vec<CatalogCape>, String> {
 }
 
 #[tauri::command]
-pub async fn cape_catalog_apply(id: String) -> Result<(), String> {
+pub async fn cape_catalog_apply(id: String) -> Result<ApplyResult, String> {
     send(post(&format!("/api/wardrobe/catalog/{id}/apply"))?).await?;
-    Ok(())
+    Ok(crate::mojang::sync_look().await)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,28 +269,11 @@ pub async fn skin_catalog() -> Result<Vec<CatalogSkin>, String> {
 
 #[tauri::command]
 pub async fn skin_catalog_apply(id: String) -> Result<ApplyResult, String> {
-    let body: serde_json::Value = send(
-        post(&format!("/api/wardrobe/skin-catalog/{id}/apply"))?,
-    )
-    .await?
-    .json()
-    .await
-    .map_err(|e| e.to_string())?;
-    Ok(serde_json::from_value(body["licenseSync"].clone()).unwrap_or(ApplyResult {
-        synced: false,
-        error: None,
-    }))
+    send(post(&format!("/api/wardrobe/skin-catalog/{id}/apply"))?).await?;
+    Ok(crate::mojang::sync_look().await)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LicenseCape {
-    pub id: String,
-    pub name: String,
-    pub url: String,
-    #[serde(default)]
-    pub active: bool,
-}
+pub use crate::mojang::LicenseCape;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -315,21 +286,22 @@ pub struct LicenseCapes {
 
 #[tauri::command]
 pub async fn license_capes() -> Result<LicenseCapes, String> {
-    send(get("/api/wardrobe/license-capes")?)
-        .await?
-        .json()
-        .await
-        .map_err(|e| e.to_string())
+    let linked = crate::accounts::active_account()
+        .map(|a| a.licensed)
+        .unwrap_or(false);
+    Ok(LicenseCapes {
+        linked,
+        capes: if linked {
+            crate::mojang::capes().await?
+        } else {
+            vec![]
+        },
+    })
 }
 
 #[tauri::command]
 pub async fn license_cape_apply(cape_id: Option<String>) -> Result<(), String> {
-    send(
-        post("/api/wardrobe/license-cape")?
-            .json(&json!({ "capeId": cape_id })),
-    )
-    .await?;
-    Ok(())
+    crate::mojang::set_cape(cape_id).await
 }
 
 #[tauri::command]
@@ -359,9 +331,9 @@ pub async fn outfit_add(
 }
 
 #[tauri::command]
-pub async fn outfit_apply(id: String) -> Result<(), String> {
+pub async fn outfit_apply(id: String) -> Result<ApplyResult, String> {
     send(post(&format!("/api/wardrobe/outfit/{id}/apply"))?).await?;
-    Ok(())
+    Ok(crate::mojang::sync_look().await)
 }
 
 #[tauri::command]

@@ -56,11 +56,9 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "outfits", label: "Образы" },
 ];
 
-function licenseError(raw: string): string {
-  if (/fetch failed|ECONNRESET|ETIMEDOUT|ENETUNREACH/i.test(raw))
-    return t("сервер Aciron сейчас не отвечает от Mojang, попробуйте позже");
-  if (/401|403|token/i.test(raw)) return t("истёк вход в Microsoft — перепривяжите лицензию");
-  return raw;
+function syncWarning(...results: (ApplyResult | undefined)[]): string {
+  const first = results.find((r) => r?.error)?.error;
+  return first ?? "";
 }
 
 export default function WardrobePage() {
@@ -179,8 +177,9 @@ export default function WardrobePage() {
   const act = async (key: string, fn: () => Promise<unknown>, ok?: string) => {
     setBusy(key);
     try {
-      await fn();
+      const warn = syncWarning((await fn()) as ApplyResult | undefined);
       if (ok) toast(ok, "success");
+      if (warn) toast(t("На лицензию не применилось: {msg}", { msg: warn }), "warning");
       await load();
     } catch (e) {
       toast(human(e), "error");
@@ -198,12 +197,10 @@ export default function WardrobePage() {
     pending.current = {};
     setBusy("save");
     try {
-      if (p.skin) {
-        const r = (await p.skin()) as ApplyResult | undefined;
-        if (r && r.error)
-          toast(t("На лицензию не применилось: {msg}", { msg: licenseError(r.error) }), "warning");
-      }
-      if (p.cape) await p.cape();
+      const rs = p.skin ? ((await p.skin()) as ApplyResult | undefined) : undefined;
+      const rc = p.cape ? ((await p.cape()) as ApplyResult | undefined) : undefined;
+      const warn = syncWarning(rs, rc);
+      if (warn) toast(t("На лицензию не применилось: {msg}", { msg: warn }), "warning");
       await load();
       setBust(Date.now());
       setDirty(false);
@@ -277,9 +274,10 @@ export default function WardrobePage() {
     const item = data.skins.find((s) => s.id === id);
     if (!item) return;
     setInstant((s) => ({ ...s, model }));
+
     pending.current.skin = async () => {
       await wardrobeRename(item.id, item.name, model);
-      await wardrobeApply(item.id);
+      return wardrobeApply(item.id);
     };
     setDirty(true);
   };
@@ -384,14 +382,7 @@ export default function WardrobePage() {
     setDirty(true);
   };
 
-  const capeOff = () =>
-    wearCape("off", null, async () => {
-      await wardrobeCapeOff();
-      if (lic?.linked) {
-        await licenseCapeApply(null).catch(() => {});
-        setLic(await licenseCapes().catch(() => lic));
-      }
-    });
+  const capeOff = () => wearCape("off", null, () => wardrobeCapeOff());
 
   const serverSkinUrl =
     data?.active.hasSkin && nick
@@ -734,10 +725,16 @@ export default function WardrobePage() {
               outfits: d.outfits.filter((o) => o.id !== id),
             }));
             setConfirm(null);
-            (kind === "outfit" ? outfitDelete(id) : wardrobeDelete(id)).catch((e) => {
-              if (prev) setData(prev);
-              toast(human(e), "error");
-            });
+            (kind === "outfit" ? outfitDelete(id) : wardrobeDelete(id))
+              .then((r) => {
+
+                const warn = syncWarning(r as ApplyResult | undefined);
+                if (warn) toast(t("На лицензию не применилось: {msg}", { msg: warn }), "warning");
+              })
+              .catch((e) => {
+                if (prev) setData(prev);
+                toast(human(e), "error");
+              });
           }}
           onClose={() => setConfirm(null)}
         />

@@ -229,6 +229,9 @@ fn account_from(data: AuthResp) -> Account {
         aciron_name: name,
         licensed,
         token_expires: 0,
+        mojang_look: String::new(),
+        mojang_skin: String::new(),
+        mojang_cape: String::new(),
     };
     accounts::save_account(acc)
 }
@@ -288,9 +291,9 @@ pub async fn aciron_link_license(app: AppHandle, account_id: String) -> Result<A
 
     let ms = crate::microsoft::interactive_login(app).await?;
 
-    push_license(&acc.aciron_token, &ms).await;
+    crate::mojang::prove_license(&acc.aciron_token, &ms).await?;
 
-    accounts::with_account(&account_id, |a| {
+    let updated = accounts::with_account(&account_id, |a| {
         a.username = ms.username.clone();
         a.uuid = ms.uuid.clone();
         a.access_token = ms.access_token.clone();
@@ -298,21 +301,17 @@ pub async fn aciron_link_license(app: AppHandle, account_id: String) -> Result<A
         a.token_expires = ms.token_expires;
         a.skin_url = ms.skin_url.clone();
         a.licensed = true;
-    })
-    .ok_or_else(|| "Аккаунт не найден".into())
-}
 
-pub(crate) async fn push_license(aciron_token: &str, ms: &Account) {
-    let Ok(rb) = post("/api/license") else { return };
-    let _ = rb
-        .header("Authorization", format!("Bearer {aciron_token}"))
-        .json(&json!({
-            "name": ms.username,
-            "uuid": ms.uuid,
-            "refreshToken": ms.refresh_token,
-        }))
-        .send()
-        .await;
+        a.mojang_look.clear();
+        a.mojang_cape.clear();
+    })
+    .ok_or_else(|| "Аккаунт не найден".to_string())?;
+
+    let r = crate::mojang::sync_look().await;
+    if let Some(e) = r.error {
+        eprintln!("[mojang] облик после привязки лицензии не перенесён: {e}");
+    }
+    Ok(updated)
 }
 
 pub async fn add_playtime(token: String, secs: u64) {

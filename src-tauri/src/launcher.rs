@@ -1180,20 +1180,8 @@ async fn resolve_identity(app: &AppHandle, settings: &Settings) -> Result<Identi
     match crate::accounts::active_account() {
 
         Some(a) if a.kind == "microsoft" || (a.kind == "aciron" && a.licensed) => {
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
 
-            if !a.access_token.is_empty() && a.access_token != "0" && now + 300 < a.token_expires {
-                return Ok(Identity {
-                    name: a.username.clone(),
-                    uuid: a.uuid.clone(),
-                    token: a.access_token.clone(),
-                    user_type: "msa".into(),
-                });
-            }
-            let fresh = match crate::microsoft::refresh_account(&a.refresh_token).await {
+            let fresh = match crate::mojang::fresh_session(&a.id).await {
                 Ok(f) => f,
                 Err(e) => {
 
@@ -1205,10 +1193,15 @@ async fn resolve_identity(app: &AppHandle, settings: &Settings) -> Result<Identi
                         0,
                         1,
                     );
+
                     let f = crate::microsoft::interactive_login(app.clone()).await?;
 
-                    if a.kind == "aciron" && !a.aciron_token.is_empty() {
-                        crate::aciron::push_license(&a.aciron_token, &f).await;
+                    if !a.uuid.is_empty() && !f.uuid.is_empty() && f.uuid != a.uuid {
+                        return Err(format!(
+                            "Вошли в аккаунт Microsoft «{}», а к Aciron привязан «{}». \
+                             Войдите тем же аккаунтом или перепривяжите лицензию в настройках.",
+                            f.username, a.username
+                        ));
                     }
                     f
                 }
