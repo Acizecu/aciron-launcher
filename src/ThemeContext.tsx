@@ -173,6 +173,8 @@ type ThemeState = {
 
   overrides: Partial<Palette>;
   saved: SavedPreset[];
+
+  activeSavedId: string | null;
 };
 
 const STORAGE_KEY = "aciron:theme";
@@ -182,7 +184,18 @@ const DEFAULT_STATE: ThemeState = {
   seed: { accent: "#6366f1", base: "#131315" },
   overrides: {},
   saved: [],
+  activeSavedId: null,
 };
+
+export function splitPalette(p: Palette): { seed: ThemeSeed; overrides: Partial<Palette> } {
+  const seed: ThemeSeed = { accent: p.accent, base: p.bg, text: p.text, muted: p.muted };
+  const derived = buildPalette(seed);
+  const overrides: Partial<Palette> = {};
+  for (const k of Object.keys(p) as (keyof Palette)[]) {
+    if (p[k] !== derived[k]) overrides[k] = p[k];
+  }
+  return { seed, overrides };
+}
 
 export function customPalette(s: ThemeState): Palette {
   return { ...buildPalette(s.seed), ...s.overrides };
@@ -218,11 +231,26 @@ function load(): ThemeState {
 
     const id = ((old.id as string) === "dark" ? "amethyst" : old.id) as ThemeId | undefined;
 
+    const activeSavedId =
+      old.activeSavedId && saved.some((p) => p.id === old.activeSavedId)
+        ? old.activeSavedId
+        : null;
+
+    let overrides = old.overrides ?? {};
+    let seedFinal = seed;
+    const keys = Object.keys(buildPalette(seed)) as (keyof Palette)[];
+    if (keys.every((k) => overrides[k] !== undefined)) {
+      const split = splitPalette(overrides as Palette);
+      seedFinal = split.seed;
+      overrides = split.overrides;
+    }
+
     return {
       id: id && (id === "custom" || id in PRESETS) ? id : DEFAULT_STATE.id,
-      seed,
-      overrides: old.overrides ?? {},
+      seed: seedFinal,
+      overrides,
       saved,
+      activeSavedId,
     };
   } catch {
     return DEFAULT_STATE;
@@ -288,7 +316,8 @@ type Ctx = {
   setToken: (key: keyof Palette, value: string | null) => void;
 
   resetTokens: () => void;
-  savePreset: (name: string, palette?: Palette) => void;
+
+  savePreset: (name: string, palette?: Palette) => string;
   applySaved: (p: SavedPreset) => void;
   deleteSaved: (id: string) => void;
   renameSaved: (id: string, name: string) => void;
@@ -306,11 +335,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [palette, state]);
 
-  const setTheme = useCallback((id: ThemeId) => setState((s) => ({ ...s, id })), []);
+  const setTheme = useCallback(
+    (id: ThemeId) => setState((s) => ({ ...s, id, activeSavedId: null })),
+    []
+  );
 
   const setSeed = useCallback(
     (patch: Partial<ThemeSeed>) =>
-      setState((s) => ({ ...s, id: "custom", seed: { ...s.seed, ...patch } })),
+      setState((s) => ({
+        ...s,
+        id: "custom",
+        seed: { ...s.seed, ...patch },
+        activeSavedId: null,
+      })),
     []
   );
 
@@ -319,41 +356,50 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const overrides = { ...s.overrides };
       if (val === null) delete overrides[key];
       else overrides[key] = val;
-      return { ...s, id: "custom", overrides };
+      return { ...s, id: "custom", overrides, activeSavedId: null };
     });
   }, []);
 
-  const resetTokens = useCallback(() => setState((s) => ({ ...s, overrides: {} })), []);
-
-  const savePreset = useCallback(
-    (name: string, pal?: Palette) =>
-      setState((s) => ({
-        ...s,
-        saved: [
-          ...s.saved,
-          {
-            id: String(Date.now()),
-            name: name.trim().slice(0, 24) || tr("Без названия"),
-            palette: pal ?? paletteOf(s),
-          },
-        ],
-      })),
+  const resetTokens = useCallback(
+    () => setState((s) => ({ ...s, overrides: {}, activeSavedId: null })),
     []
   );
 
+  const savePreset = useCallback((name: string, pal?: Palette) => {
+    const id = String(Date.now());
+    setState((s) => ({
+      ...s,
+      saved: [
+        ...s.saved,
+        {
+          id,
+          name: name.trim().slice(0, 24) || tr("Без названия"),
+          palette: pal ?? paletteOf(s),
+        },
+      ],
+
+      activeSavedId: pal ? s.activeSavedId : id,
+    }));
+    return id;
+  }, []);
+
   const applySaved = useCallback(
     (p: SavedPreset) =>
-      setState((s) => ({
-        ...s,
-        id: "custom",
-        seed: { accent: p.palette.accent, base: p.palette.bg },
-        overrides: { ...p.palette },
-      })),
+      setState((s) => {
+        const { seed, overrides } = splitPalette(p.palette);
+        return { ...s, id: "custom", seed, overrides, activeSavedId: p.id };
+      }),
     []
   );
 
   const deleteSaved = useCallback(
-    (id: string) => setState((s) => ({ ...s, saved: s.saved.filter((p) => p.id !== id) })),
+    (id: string) =>
+      setState((s) => ({
+        ...s,
+        saved: s.saved.filter((p) => p.id !== id),
+
+        activeSavedId: s.activeSavedId === id ? null : s.activeSavedId,
+      })),
     []
   );
 

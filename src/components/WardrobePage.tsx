@@ -74,7 +74,6 @@ export default function WardrobePage() {
   const [signIn, setSignIn] = useState(false);
   const [busy, setBusy] = useState("");
 
-  const [bust, setBust] = useState(0);
   const [confirm, setConfirm] = useState<{ kind: "item" | "outfit"; id: string; name: string } | null>(null);
   const [newOutfit, setNewOutfit] = useState(false);
   const [outfitName, setOutfitName] = useState("");
@@ -202,12 +201,10 @@ export default function WardrobePage() {
       const warn = syncWarning(rs, rc);
       if (warn) toast(t("На лицензию не применилось: {msg}", { msg: warn }), "warning");
       await load();
-      setBust(Date.now());
       setDirty(false);
       toast(t("Сохранено"), "success");
     } catch (e) {
       setInstant(null);
-      setBust(Date.now());
       toast(human(e), "error");
       void load();
     } finally {
@@ -384,9 +381,12 @@ export default function WardrobePage() {
 
   const capeOff = () => wearCape("off", null, () => wardrobeCapeOff());
 
+  const skinVer = data?.active.skinHash ?? "";
+  const capeVer = data?.active.capeHash ?? "";
+
   const serverSkinUrl =
     data?.active.hasSkin && nick
-      ? activeSkinUrl(nick, bust)
+      ? activeSkinUrl(nick, skinVer)
       : nick
       ? `https://mc-heads.net/skin/${encodeURIComponent(nick)}`
       : "";
@@ -395,7 +395,7 @@ export default function WardrobePage() {
     instant?.capeKey !== undefined
       ? instant.capeUrl ?? null
       : data?.active.hasCape && nick
-      ? activeCapeUrl(nick, bust)
+      ? activeCapeUrl(nick, capeVer)
       : null;
   const shownModel = instant?.model ?? data?.active.model ?? "classic";
 

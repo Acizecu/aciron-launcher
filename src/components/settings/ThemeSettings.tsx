@@ -15,6 +15,9 @@ import { useToast } from "../../ToastContext";
 import { Card, Field, iconBtnCls, inputCls } from "./controls";
 import { t as tr } from "../../i18n";
 
+const cardActionCls =
+  "grid h-6 w-6 place-items-center rounded-md bg-black/45 text-white/75 backdrop-blur-sm transition-colors hover:text-white";
+
 export const THEME_GRID_CLS = "mx-auto grid w-full max-w-[624px] grid-cols-3 gap-3";
 
 export function ThemeCard({
@@ -143,6 +146,8 @@ export default function ThemeSettings() {
 
   const pal = useMemo(() => customPalette(theme), [theme]);
 
+  const activeSaved = theme.id === "custom" ? theme.activeSavedId : null;
+
   return (
     <>
         <h2 className="text-lg font-bold text-text">{tr("Тема оформления")}</h2>
@@ -159,9 +164,40 @@ export default function ThemeSettings() {
           <ThemeCard
             label={tr("Своя тема")}
             palette={pal}
-            active={theme.id === "custom"}
+            active={theme.id === "custom" && !activeSaved}
             onClick={() => setTheme("custom")}
           />
+          {}
+          {themePresets.map((p) => (
+            <div key={p.id} className="group relative">
+              <ThemeCard
+                label={p.name}
+                palette={p.palette}
+                active={activeSaved === p.id}
+                onClick={() => applySaved(p)}
+              />
+              {}
+              <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                <button
+                  onClick={() => {
+                    void navigator.clipboard.writeText(exportTheme(p.name, p.palette));
+                    toast(tr("Код темы скопирован"), "success");
+                  }}
+                  title={tr("Скопировать код темы")}
+                  className={cardActionCls}
+                >
+                  <i className="fa-solid fa-share-nodes text-[10px]" />
+                </button>
+                <button
+                  onClick={() => deleteSaved(p.id)}
+                  title={tr("Удалить тему")}
+                  className={`${cardActionCls} hover:text-[#fca5a5]`}
+                >
+                  <i className="fa-solid fa-xmark text-[11px]" />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
 
         {theme.id === "custom" && (
@@ -292,54 +328,6 @@ export default function ThemeSettings() {
         </Card>
 
         {}
-        {themePresets.length > 0 && (
-          <div>
-            <span className="mb-2 block text-xs text-muted">{tr("Мои темы")}</span>
-            <div className="flex flex-wrap gap-2">
-              {themePresets.map((p) => (
-                <div
-                  key={p.id}
-                  className="group flex items-center gap-2 rounded-xl border border-border bg-card py-1.5 pl-2 pr-1.5 transition-colors hover:border-accent/50"
-                >
-                  <button
-                    onClick={() => applySaved(p)}
-                    className="flex items-center gap-2"
-                    title={tr("Применить тему")}
-                  >
-                    {}
-                    <span
-                      className="flex h-6 w-6 shrink-0 overflow-hidden rounded-md border"
-                      style={{ borderColor: p.palette.border }}
-                    >
-                      <span className="w-1/2" style={{ background: p.palette.bg }} />
-                      <span className="w-1/2" style={{ background: p.palette.accent }} />
-                    </span>
-                    <span className="text-sm font-medium text-text">{p.name}</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      void navigator.clipboard.writeText(exportTheme(p.name, p.palette));
-                      toast(tr("Код темы скопирован"), "success");
-                    }}
-                    title={tr("Скопировать код темы")}
-                    className="grid h-6 w-6 place-items-center rounded-md text-muted transition-colors hover:text-accent"
-                  >
-                    <i className="fa-solid fa-share-nodes text-[11px]" />
-                  </button>
-                  <button
-                    onClick={() => deleteSaved(p.id)}
-                    title={tr("Удалить тему")}
-                    className="grid h-6 w-6 place-items-center rounded-md text-muted transition-colors hover:text-[#ef4444]"
-                  >
-                    <i className="fa-solid fa-xmark text-xs" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {}
         <Card>
           <Field
             label={tr("Поделиться темой")}
@@ -373,8 +361,9 @@ export default function ThemeSettings() {
                     toast(tr("Код темы не распознан"), "error");
                     return;
                   }
-                  savePreset(parsed.name, parsed.palette);
-                  applySaved({ id: "tmp", name: parsed.name, palette: parsed.palette });
+
+                  const id = savePreset(parsed.name, parsed.palette);
+                  applySaved({ id, name: parsed.name, palette: parsed.palette });
                   setShareCode("");
                   toast(tr("Тема «{name}» добавлена", { name: parsed.name }), "success");
                 }}

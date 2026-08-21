@@ -86,6 +86,11 @@ pub struct ActiveLook {
     pub has_skin: bool,
     #[serde(default)]
     pub has_cape: bool,
+
+    #[serde(default)]
+    pub skin_hash: Option<String>,
+    #[serde(default)]
+    pub cape_hash: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

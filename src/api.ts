@@ -688,6 +688,9 @@ export type WardrobeData = {
     model: SkinModelId;
     hasSkin: boolean;
     hasCape: boolean;
+
+    skinHash?: string | null;
+    capeHash?: string | null;
   };
   licensed: boolean;
 };
@@ -698,11 +701,15 @@ export function textureUrl(item: Pick<WardrobeItem, "url">): string {
   return `${ACIRON_ID_API}${item.url}`;
 }
 
-export function activeSkinUrl(nick: string, bust = 0): string {
-  return `${ACIRON_ID_API}/skins/${encodeURIComponent(nick.toLowerCase())}.png?v=${bust}`;
+export function activeSkinUrl(nick: string, ver: string | number = ""): string {
+  return `${ACIRON_ID_API}/skins/${encodeURIComponent(nick.toLowerCase())}.png${verQuery(ver)}`;
 }
-export function activeCapeUrl(nick: string, bust = 0): string {
-  return `${ACIRON_ID_API}/capes/${encodeURIComponent(nick.toLowerCase())}.png?v=${bust}`;
+export function activeCapeUrl(nick: string, ver: string | number = ""): string {
+  return `${ACIRON_ID_API}/capes/${encodeURIComponent(nick.toLowerCase())}.png${verQuery(ver)}`;
+}
+
+function verQuery(ver: string | number): string {
+  return ver ? `?v=${encodeURIComponent(String(ver))}` : "";
 }
 
 export async function wardrobeList(): Promise<WardrobeData> {

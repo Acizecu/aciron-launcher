@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "aciron-launcher"
-version = "0.9.4"
+version = "0.9.41"
 dependencies = [
  "base64 0.22.1",
  "bytes",
