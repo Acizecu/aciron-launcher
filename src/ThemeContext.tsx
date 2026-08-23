@@ -8,6 +8,11 @@ import {
   type ReactNode,
 } from "react";
 import { t as tr } from "./i18n";
+import {
+  DEFAULT_BACKGROUND,
+  isBackgroundId,
+  type BackgroundId,
+} from "./components/background/scenes";
 
 export type Palette = {
   bg: string;
@@ -145,17 +150,17 @@ export type PresetId =
 
 export type ThemeId = PresetId | "custom";
 
-export const PRESET_LIST: { id: PresetId; label: string; seed: ThemeSeed }[] = [
-  { id: "standard", label: "Aciron", seed: { accent: "#f5a96b", base: "#131315" } },
-  { id: "amethyst", label: "Amethyst", seed: { accent: "#a855f7", base: "#141019" } },
-  { id: "ocean", label: "Ocean", seed: { accent: "#38bdf8", base: "#0e161d" } },
-  { id: "dracula", label: "Dracula", seed: { accent: "#bd93f9", base: "#191a26" } },
-  { id: "forest", label: "Forest", seed: { accent: "#4ade80", base: "#101711" } },
-  { id: "rose", label: "Rosé", seed: { accent: "#fb7185", base: "#191114" } },
-  { id: "carbon", label: "Carbon", seed: { accent: "#9ca3af", base: "#0d0d0e" } },
-  { id: "nord", label: "Nord", seed: { accent: "#88c0d0", base: "#2e3440" } },
-  { id: "sand", label: "Sand", seed: { accent: "#b4762c", base: "#f2ede4" } },
-  { id: "daylight", label: "Daylight", seed: { accent: "#2563eb", base: "#f6f7f9" } },
+export const PRESET_LIST: { id: PresetId; label: string; seed: ThemeSeed; bg: BackgroundId }[] = [
+  { id: "standard", label: "Aciron", seed: { accent: "#f5a96b", base: "#131315" }, bg: "cubes" },
+  { id: "amethyst", label: "Amethyst", seed: { accent: "#a855f7", base: "#141019" }, bg: "aurora" },
+  { id: "ocean", label: "Ocean", seed: { accent: "#38bdf8", base: "#0e161d" }, bg: "waves" },
+  { id: "dracula", label: "Dracula", seed: { accent: "#bd93f9", base: "#191a26" }, bg: "constellation" },
+  { id: "forest", label: "Forest", seed: { accent: "#4ade80", base: "#101711" }, bg: "hex" },
+  { id: "rose", label: "Rosé", seed: { accent: "#fb7185", base: "#191114" }, bg: "embers" },
+  { id: "carbon", label: "Carbon", seed: { accent: "#9ca3af", base: "#0d0d0e" }, bg: "rain" },
+  { id: "nord", label: "Nord", seed: { accent: "#88c0d0", base: "#2e3440" }, bg: "warp" },
+  { id: "sand", label: "Sand", seed: { accent: "#b4762c", base: "#f2ede4" }, bg: "waves" },
+  { id: "daylight", label: "Daylight", seed: { accent: "#2563eb", base: "#f6f7f9" }, bg: "constellation" },
 ];
 
 export const PRESETS: Record<PresetId, Palette> = Object.fromEntries(
@@ -164,7 +169,13 @@ export const PRESETS: Record<PresetId, Palette> = Object.fromEntries(
 
 export const SURFACE = PRESETS.standard;
 
-export type SavedPreset = { id: string; name: string; palette: Palette };
+export type SavedPreset = {
+  id: string;
+  name: string;
+  palette: Palette;
+
+  background?: BackgroundId;
+};
 
 type ThemeState = {
   id: ThemeId;
@@ -175,6 +186,8 @@ type ThemeState = {
   saved: SavedPreset[];
 
   activeSavedId: string | null;
+
+  background: BackgroundId | "";
 };
 
 const STORAGE_KEY = "aciron:theme";
@@ -185,6 +198,7 @@ const DEFAULT_STATE: ThemeState = {
   overrides: {},
   saved: [],
   activeSavedId: null,
+  background: "",
 };
 
 export function splitPalette(p: Palette): { seed: ThemeSeed; overrides: Partial<Palette> } {
@@ -205,6 +219,11 @@ export function paletteOf(s: ThemeState): Palette {
   return s.id === "custom" ? customPalette(s) : PRESETS[s.id] ?? PRESETS.standard;
 }
 
+export function backgroundOf(s: ThemeState): BackgroundId {
+  if (s.background) return s.background;
+  return PRESET_LIST.find((p) => p.id === s.id)?.bg ?? DEFAULT_BACKGROUND;
+}
+
 function load(): ThemeState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -220,7 +239,11 @@ function load(): ThemeState {
     };
 
     const saved: SavedPreset[] = (old.saved ?? []).map((p) => {
-      if ("palette" in p && p.palette) return p as SavedPreset;
+      if ("palette" in p && p.palette) {
+        const t = p as SavedPreset;
+
+        return isBackgroundId(t.background) ? t : { ...t, background: undefined };
+      }
       const legacy = p as unknown as { id: string; name: string; accent: string };
       return {
         id: legacy.id,
@@ -251,6 +274,7 @@ function load(): ThemeState {
       overrides,
       saved,
       activeSavedId,
+      background: isBackgroundId(old.background) ? old.background : "",
     };
   } catch {
     return DEFAULT_STATE;
@@ -280,16 +304,19 @@ function applyPalette(p: Palette) {
 
 const SHARE_PREFIX = "aciron-theme-1:";
 
-export function exportTheme(name: string, palette: Palette): string {
-  const json = JSON.stringify({ n: name, p: palette });
+export function exportTheme(name: string, palette: Palette, background?: BackgroundId): string {
+
+  const json = JSON.stringify({ n: name, p: palette, b: background });
   return SHARE_PREFIX + btoa(unescape(encodeURIComponent(json)));
 }
 
-export function importTheme(code: string): { name: string; palette: Palette } | null {
+export function importTheme(
+  code: string
+): { name: string; palette: Palette; background?: BackgroundId } | null {
   try {
     const body = code.trim().replace(new RegExp("^" + SHARE_PREFIX, "i"), "");
     const json = decodeURIComponent(escape(atob(body)));
-    const data = JSON.parse(json) as { n?: string; p?: Partial<Palette> };
+    const data = JSON.parse(json) as { n?: string; p?: Partial<Palette>; b?: unknown };
     if (!data.p) return null;
 
     const out: Partial<Palette> = {};
@@ -299,7 +326,11 @@ export function importTheme(code: string): { name: string; palette: Palette } | 
       if (!hex) return null;
       out[key] = hex;
     }
-    return { name: (data.n || tr("Тема")).slice(0, 24), palette: out as Palette };
+    return {
+      name: (data.n || tr("Тема")).slice(0, 24),
+      palette: out as Palette,
+      background: isBackgroundId(data.b) ? data.b : undefined,
+    };
   } catch {
     return null;
   }
@@ -316,8 +347,9 @@ type Ctx = {
   setToken: (key: keyof Palette, value: string | null) => void;
 
   resetTokens: () => void;
+  setBackground: (bg: BackgroundId) => void;
 
-  savePreset: (name: string, palette?: Palette) => string;
+  savePreset: (name: string, palette?: Palette, background?: BackgroundId) => string;
   applySaved: (p: SavedPreset) => void;
   deleteSaved: (id: string) => void;
   renameSaved: (id: string, name: string) => void;
@@ -336,7 +368,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [palette, state]);
 
   const setTheme = useCallback(
-    (id: ThemeId) => setState((s) => ({ ...s, id, activeSavedId: null })),
+    (id: ThemeId) => setState((s) => ({ ...s, id, background: "", activeSavedId: null })),
+    []
+  );
+
+  const setBackground = useCallback(
+    (bg: BackgroundId) => setState((s) => ({ ...s, background: bg, activeSavedId: null })),
     []
   );
 
@@ -346,6 +383,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         ...s,
         id: "custom",
         seed: { ...s.seed, ...patch },
+
+        background: backgroundOf(s),
         activeSavedId: null,
       })),
     []
@@ -356,7 +395,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const overrides = { ...s.overrides };
       if (val === null) delete overrides[key];
       else overrides[key] = val;
-      return { ...s, id: "custom", overrides, activeSavedId: null };
+      return { ...s, id: "custom", overrides, background: backgroundOf(s), activeSavedId: null };
     });
   }, []);
 
@@ -365,7 +404,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const savePreset = useCallback((name: string, pal?: Palette) => {
+  const savePreset = useCallback((name: string, pal?: Palette, bg?: BackgroundId) => {
     const id = String(Date.now());
     setState((s) => ({
       ...s,
@@ -375,6 +414,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           id,
           name: name.trim().slice(0, 24) || tr("Без названия"),
           palette: pal ?? paletteOf(s),
+          background: bg ?? backgroundOf(s),
         },
       ],
 
@@ -387,7 +427,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     (p: SavedPreset) =>
       setState((s) => {
         const { seed, overrides } = splitPalette(p.palette);
-        return { ...s, id: "custom", seed, overrides, activeSavedId: p.id };
+
+        const background = p.background ?? backgroundOf(s);
+        return { ...s, id: "custom", seed, overrides, background, activeSavedId: p.id };
       }),
     []
   );
@@ -423,6 +465,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setSeed,
       setToken,
       resetTokens,
+      setBackground,
       savePreset,
       applySaved,
       deleteSaved,
@@ -435,6 +478,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setSeed,
       setToken,
       resetTokens,
+      setBackground,
       savePreset,
       applySaved,
       deleteSaved,

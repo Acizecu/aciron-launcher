@@ -433,6 +433,9 @@ const EN: Record<string, string> = {
   "Каталог Aciron": "Aciron catalogue",
   "С лицензии Minecraft": "From your Minecraft license",
   "На аккаунте Minecraft нет плащей.": "This Minecraft account has no capes.",
+  "на лицензии": "on license",
+  "Сейчас поверх надет кастомный плащ: его видят игроки с лаунчером Aciron, а все остальные — плащ с лицензии. С аккаунта Minecraft лаунчер плащ не снимает.":
+    "A custom cape is worn on top: players using the Aciron launcher see it, everyone else sees your license cape. The launcher never removes the cape from your Minecraft account.",
   "Скины видны только игрокам, зашедшим в игру через лаунчер Aciron.":
     "Skins are visible only to players who launched the game through Aciron.",
   "Кастомные плащи видят только игроки, зашедшие в игру через лаунчер Aciron.":
@@ -497,7 +500,28 @@ const EN: Record<string, string> = {
   "Плащ": "Cape",
   "Крылья": "Elytra",
   "Скин": "Skin",
-  "Плавающие кубики на фоне лаунчера": "Floating cubes behind the launcher",
+  "Живой фон": "Animated background",
+  "Живая картинка за интерфейсом. Какая именно — выбирается в разделе «Темы».":
+    "A living picture behind the interface. Which one is chosen under Themes.",
+  "Каждая тема приходит со своим. Выбранный здесь сохраняется вместе с темой и уезжает в её код.":
+    "Every theme brings its own. The one picked here is saved with the theme and travels in its code.",
+  "Искры": "Embers",
+  "Стиль фона": "Background style",
+  "Кубики": "Cubes",
+  "Сияние": "Aurora",
+  "Звёзды": "Stars",
+  "Дождь": "Rain",
+  "Соты": "Honeycomb",
+  "Гиперпрыжок": "Hyperjump",
+  "Куда установить": "Where to install",
+  "Показаны только сборки, куда это встанет": "Only builds this actually fits are listed",
+  "Подходящих сборок нет: ни у одной не совпали версия игры и загрузчик. Создайте сборку с нужной версией — и мод сюда вернётся.":
+    "No suitable builds: none matched the game version and loader. Create a build with the right version and the mod will fit.",
+  "Сборку спросим при установке": "We'll ask which build on install",
+  "Сборку выберете при установке — покажем только те, куда это встанет.":
+    "You'll pick the build on install — only the ones it fits will be listed.",
+  "Волны": "Waves",
+  "Созвездия": "Constellations",
 
   "Загрузка": "Downloading",
   "Ошибка": "Error",
@@ -769,6 +793,8 @@ const EN: Record<string, string> = {
   "Используется": "In use",
   "Используйте только свою лицензию. Взлом, кража или использование чужих аккаунтов — не ответственность Aciron.": "Use only your own license. Hacking, theft or use of someone else's account is not Aciron's responsibility.",
   "истёк вход в Microsoft — перепривяжите лицензию": "your Microsoft sign-in has expired — relink the license",
+  "плащ лицензии надет, но свой плащ снять не удалось — снимите его в гардеробе":
+    "the license cape is on, but your own cape could not be taken off — remove it in the wardrobe",
   "Карточки": "Cards",
   "карточки, поля ввода": "cards, input fields",
   "Классика": "Classic",
@@ -1367,6 +1393,9 @@ const TR: Record<string, string> = {
   "Каталог Aciron": "Aciron kataloğu",
   "С лицензии Minecraft": "Minecraft lisansından",
   "На аккаунте Minecraft нет плащей.": "Bu Minecraft hesabında pelerin yok.",
+  "на лицензии": "lisansta",
+  "Сейчас поверх надет кастомный плащ: его видят игроки с лаунчером Aciron, а все остальные — плащ с лицензии. С аккаунта Minecraft лаунчер плащ не снимает.":
+    "Şu anda üstte özel bir pelerin var: onu Aciron başlatıcısını kullanan oyuncular görür, diğer herkes lisans pelerinini görür. Başlatıcı, Minecraft hesabınızdaki pelerini kaldırmaz.",
   "Скины видны только игрокам, зашедшим в игру через лаунчер Aciron.":
     "Skinler yalnızca oyuna Aciron başlatıcısıyla giren oyunculara görünür.",
   "Кастомные плащи видят только игроки, зашедшие в игру через лаунчер Aciron.":
@@ -1431,7 +1460,28 @@ const TR: Record<string, string> = {
   "Плащ": "Pelerin",
   "Крылья": "Elytra",
   "Скин": "Skin",
-  "Плавающие кубики на фоне лаунчера": "Başlatıcının arka planında süzülen küpler",
+  "Живой фон": "Canlı arka plan",
+  "Живая картинка за интерфейсом. Какая именно — выбирается в разделе «Темы».":
+    "Arayüzün ardında canlı bir görüntü. Hangisi olduğu «Temalar» bölümünde seçilir.",
+  "Каждая тема приходит со своим. Выбранный здесь сохраняется вместе с темой и уезжает в её код.":
+    "Her tema kendi arka planıyla gelir. Burada seçilen tema ile birlikte kaydedilir ve kodunda taşınır.",
+  "Искры": "Kıvılcımlar",
+  "Стиль фона": "Arka plan stili",
+  "Кубики": "Küpler",
+  "Сияние": "Kutup ışığı",
+  "Звёзды": "Yıldızlar",
+  "Дождь": "Yağmur",
+  "Соты": "Petek",
+  "Гиперпрыжок": "Hiper sıçrayış",
+  "Куда установить": "Nereye kurulacak",
+  "Показаны только сборки, куда это встанет": "Yalnızca gerçekten uyan derlemeler listelenir",
+  "Подходящих сборок нет: ни у одной не совпали версия игры и загрузчик. Создайте сборку с нужной версией — и мод сюда вернётся.":
+    "Uygun derleme yok: hiçbirinde oyun sürümü ve yükleyici eşleşmedi. Doğru sürümle bir derleme oluşturun, mod buraya uyacak.",
+  "Сборку спросим при установке": "Derlemeyi kurulumda soracağız",
+  "Сборку выберете при установке — покажем только те, куда это встанет.":
+    "Derlemeyi kurulumda seçeceksiniz — yalnızca uyanları göstereceğiz.",
+  "Волны": "Dalgalar",
+  "Созвездия": "Takımyıldızlar",
 
   "Загрузка": "İndiriliyor",
   "Ошибка": "Hata",
@@ -1708,6 +1758,8 @@ const TR: Record<string, string> = {
     "Yalnızca kendi lisansınızı kullanın. Hesap ele geçirme, hırsızlık veya başkasının hesabını kullanma Aciron'un sorumluluğunda değildir.",
   "истёк вход в Microsoft — перепривяжите лицензию":
     "Microsoft girişinin süresi doldu — lisansı yeniden bağlayın",
+  "плащ лицензии надет, но свой плащ снять не удалось — снимите его в гардеробе":
+    "Lisans pelerini giyildi ama kendi pelerininiz çıkarılamadı — gardıroptan çıkarın",
   "Карточки": "Kartlar",
   "карточки, поля ввода": "kartlar, giriş alanları",
   "Классика": "Klasik",

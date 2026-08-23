@@ -33,17 +33,20 @@ export default function ModDetail({
   build,
   hit,
 
-  kind: _kind = "mod",
+  kind = "mod",
   source = "modrinth",
   onBack,
   onInstalled,
+  resolveBuild,
 }: {
-  build: Build;
+
+  build: Build | null;
   hit: ModHit;
   kind?: ContentKind;
   source?: SourceId;
   onBack: () => void;
   onInstalled: (b: Build) => void;
+  resolveBuild?: (projectId: string, source: SourceId, kind: ContentKind) => Promise<Build | null>;
 }) {
   const [project, setProject] = useState<ModProject | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,14 +59,16 @@ export default function ModDetail({
     contentProject(source, hit.project_id).then(setProject).catch(() => {});
   }, [source, hit.project_id]);
 
-  const installedMod = build.mods.find((m) => m.project_id === hit.project_id);
+  const installedMod = build?.mods.find((m) => m.project_id === hit.project_id);
   const installed = !!installedMod;
 
   const installVersion = async (v: ModVersion) => {
     if (verBusy) return;
+    const target = build ?? (await resolveBuild?.(hit.project_id, source, kind)) ?? null;
+    if (!target) return;
     setVerBusy(v.id);
     try {
-      const updated = await installContentVersion(source, build.id, hit.project_id, v.id);
+      const updated = await installContentVersion(source, target.id, hit.project_id, v.id);
       onInstalled(updated);
       toast(
         t("«{title}» {version} установлен", { title: hit.title, version: v.version_number }),
@@ -78,9 +83,11 @@ export default function ModDetail({
 
   const install = async () => {
     if (installed || busy) return;
+    const target = build ?? (await resolveBuild?.(hit.project_id, source, kind)) ?? null;
+    if (!target) return;
     setBusy(true);
     try {
-      const updated = await installContent(source, build.id, hit.project_id);
+      const updated = await installContent(source, target.id, hit.project_id);
       onInstalled(updated);
       toast(t("«{title}» установлен", { title: hit.title }), "success");
     } catch (e) {
@@ -192,10 +199,18 @@ export default function ModDetail({
               <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
                 {t("Установить в")}
               </div>
-              <div className="truncate text-sm text-text">{build.name}</div>
-              <div className="mt-0.5 truncate text-[11px] text-[#818181]">
-                {build.mc_version} · {loaderLabel[build.loader] ?? build.loader}
-              </div>
+              {build ? (
+                <>
+                  <div className="truncate text-sm text-text">{build.name}</div>
+                  <div className="mt-0.5 truncate text-[11px] text-[#818181]">
+                    {build.mc_version} · {loaderLabel[build.loader] ?? build.loader}
+                  </div>
+                </>
+              ) : (
+                <div className="text-[11px] leading-snug text-[#818181]">
+                  {t("Сборку выберете при установке — покажем только те, куда это встанет.")}
+                </div>
+              )}
             </div>
 
             {hit.categories.length > 0 && (

@@ -1,7 +1,7 @@
 {
   "name": "aciron-launcher",
   "private": true,
-  "version": "0.9.41",
+  "version": "0.9.5",
   "type": "module",
   "scripts": {
     "dev": "vite",

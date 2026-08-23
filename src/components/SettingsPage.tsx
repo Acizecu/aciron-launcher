@@ -97,6 +97,9 @@ export default function SettingsPage({
     setSaved(false);
   };
 
+  const showBackground = (anim: boolean) =>
+    window.dispatchEvent(new CustomEvent("aciron-background", { detail: anim }));
+
   const persist = async (move: boolean, moves: FolderMove[]) => {
     await saveSettings(s);
     origRef.current = {
@@ -375,11 +378,14 @@ export default function SettingsPage({
                   </Field>
                   <Field
                     label={t("Анимация фона")}
-                    hint={t("Плавающие кубики на фоне лаунчера")}
+                    hint={t("Живая картинка за интерфейсом. Какая именно — выбирается в разделе «Темы».")}
                   >
                     <Toggle
                       value={s.background_anim ?? hwCap}
-                      onChange={(v) => update({ background_anim: v })}
+                      onChange={(v) => {
+                        update({ background_anim: v });
+                        showBackground(v);
+                      }}
                     />
                   </Field>
                   <Field
@@ -507,6 +513,7 @@ export default function SettingsPage({
                     window.dispatchEvent(
                       new CustomEvent("aciron-ui-scale", { detail: fresh.ui_scale })
                     );
+                    showBackground(fresh.background_anim ?? hwCap);
                   });
                   setSaved(true);
                 }}

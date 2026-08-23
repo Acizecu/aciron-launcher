@@ -156,11 +156,14 @@ export const SkinCard = memo(SkinCardImpl);
 function CapeCardImpl({
   entry,
   active,
+  badge,
   index,
   onApply,
 }: {
   entry: CapeEntry;
   active: boolean;
+
+  badge?: string;
   index: number;
   onApply: () => void;
 }) {
@@ -182,7 +185,7 @@ function CapeCardImpl({
           </div>
         </div>
       </button>
-      {active && <ActiveBadge text={t("в игре")} />}
+      {active && <ActiveBadge text={badge ?? t("в игре")} />}
       <CardTools onDelete={entry.remove} />
     </div>
   );

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   useTheme,
+  backgroundOf,
   PRESET_LIST,
   PRESETS,
   TOKENS,
@@ -11,9 +12,33 @@ import {
   normalizeHex,
   type Palette,
 } from "../../ThemeContext";
+import { BACKGROUNDS, type BackgroundId } from "../background/scenes";
 import { useToast } from "../../ToastContext";
 import { Card, Field, iconBtnCls, inputCls } from "./controls";
 import { t as tr } from "../../i18n";
+
+function bgLabel(id: BackgroundId): string {
+  switch (id) {
+    case "aurora":
+      return tr("Сияние");
+    case "stars":
+      return tr("Звёзды");
+    case "waves":
+      return tr("Волны");
+    case "constellation":
+      return tr("Созвездия");
+    case "embers":
+      return tr("Искры");
+    case "rain":
+      return tr("Дождь");
+    case "hex":
+      return tr("Соты");
+    case "warp":
+      return tr("Гиперпрыжок");
+    default:
+      return tr("Кубики");
+  }
+}
 
 const cardActionCls =
   "grid h-6 w-6 place-items-center rounded-md bg-black/45 text-white/75 backdrop-blur-sm transition-colors hover:text-white";
@@ -132,6 +157,7 @@ export default function ThemeSettings() {
     setSeed,
     setToken,
     resetTokens,
+    setBackground,
     saved: themePresets,
     savePreset,
     applySaved,
@@ -147,6 +173,8 @@ export default function ThemeSettings() {
   const pal = useMemo(() => customPalette(theme), [theme]);
 
   const activeSaved = theme.id === "custom" ? theme.activeSavedId : null;
+
+  const bg = backgroundOf(theme);
 
   return (
     <>
@@ -180,7 +208,7 @@ export default function ThemeSettings() {
               <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                 <button
                   onClick={() => {
-                    void navigator.clipboard.writeText(exportTheme(p.name, p.palette));
+                    void navigator.clipboard.writeText(exportTheme(p.name, p.palette, p.background));
                     toast(tr("Код темы скопирован"), "success");
                   }}
                   title={tr("Скопировать код темы")}
@@ -199,6 +227,35 @@ export default function ThemeSettings() {
             </div>
           ))}
         </div>
+
+        {}
+        <Card>
+          <Field
+            label={tr("Живой фон")}
+            hint={tr("Каждая тема приходит со своим. Выбранный здесь сохраняется вместе с темой и уезжает в её код.")}
+            column
+          >
+            <div className="flex flex-wrap gap-2">
+              {BACKGROUNDS.map((b) => {
+                const on = bg === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => setBackground(b.id as BackgroundId)}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                      on
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border bg-card text-muted hover:border-accent/50 hover:text-text"
+                    }`}
+                  >
+                    <i className={`${b.icon} text-sm`} />
+                    {bgLabel(b.id as BackgroundId)}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+        </Card>
 
         {theme.id === "custom" && (
           <>
@@ -345,7 +402,7 @@ export default function ThemeSettings() {
               <button
                 onClick={() => {
                   void navigator.clipboard.writeText(
-                    exportTheme(presetName.trim() || tr("Тема"), palette)
+                    exportTheme(presetName.trim() || tr("Тема"), palette, bg)
                   );
                   toast(tr("Код текущей темы скопирован"), "success");
                 }}
@@ -362,8 +419,13 @@ export default function ThemeSettings() {
                     return;
                   }
 
-                  const id = savePreset(parsed.name, parsed.palette);
-                  applySaved({ id, name: parsed.name, palette: parsed.palette });
+                  const id = savePreset(parsed.name, parsed.palette, parsed.background);
+                  applySaved({
+                    id,
+                    name: parsed.name,
+                    palette: parsed.palette,
+                    background: parsed.background,
+                  });
                   setShareCode("");
                   toast(tr("Тема «{name}» добавлена", { name: parsed.name }), "success");
                 }}

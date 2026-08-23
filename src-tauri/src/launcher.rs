@@ -691,45 +691,58 @@ async fn prepare_and_launch(
         ensure_fullscreen(&game_dir);
     }
 
-    emit(app, "manifest", "Получение списка версий", 0, 1);
-    let manifest = get_json(&client, MANIFEST).await?;
-    let ver_url = manifest["versions"]
-        .as_array()
-        .and_then(|arr| {
-            arr.iter()
-                .find(|v| v["id"].as_str() == Some(version))
-                .and_then(|v| v["url"].as_str())
-        })
-        .ok_or_else(|| format!("Версия не найдена в манифесте: {version}"))?
-        .to_string();
-    emit(app, "manifest", "Список версий получен", 1, 1);
-
-    emit(app, "version", "Загрузка описания версии", 0, 1);
-    let version_json = get_json(&client, &ver_url).await?;
     let json_path = version_dir.join(format!("{version}.json"));
-    if let Some(p) = json_path.parent() {
-        tokio::fs::create_dir_all(p).await.ok();
-    }
-    tokio::fs::write(
-        &json_path,
-        serde_json::to_vec_pretty(&version_json).unwrap_or_default(),
-    )
-    .await
-    .ok();
-    emit(app, "version", "Описание версии загружено", 1, 1);
+    let local_version = version_dir.join(".aciron-local").exists() && json_path.exists();
 
-    let client_download = &version_json["downloads"]["client"];
-    let client_url = client_download["url"]
-        .as_str()
-        .ok_or("Нет ссылки на client.jar")?;
+    let version_json: Value = if local_version {
+        emit(app, "version", "Своя версия", 1, 1);
+        serde_json::from_slice(&tokio::fs::read(&json_path).await.map_err(|e| e.to_string())?)
+            .map_err(|e| format!("Своё описание версии не читается: {e}"))?
+    } else {
+        emit(app, "manifest", "Получение списка версий", 0, 1);
+        let manifest = get_json(&client, MANIFEST).await?;
+        let ver_url = manifest["versions"]
+            .as_array()
+            .and_then(|arr| {
+                arr.iter()
+                    .find(|v| v["id"].as_str() == Some(version))
+                    .and_then(|v| v["url"].as_str())
+            })
+            .ok_or_else(|| format!("Версия не найдена в манифесте: {version}"))?
+            .to_string();
+        emit(app, "manifest", "Список версий получен", 1, 1);
+
+        emit(app, "version", "Загрузка описания версии", 0, 1);
+        let vj = get_json(&client, &ver_url).await?;
+        if let Some(p) = json_path.parent() {
+            tokio::fs::create_dir_all(p).await.ok();
+        }
+        tokio::fs::write(&json_path, serde_json::to_vec_pretty(&vj).unwrap_or_default())
+            .await
+            .ok();
+        emit(app, "version", "Описание версии загружено", 1, 1);
+        vj
+    };
+
     let client_jar = version_dir.join(format!("{version}.jar"));
+    if local_version {
+        if !client_jar.exists() {
+            return Err(format!("Нет своего клиента: {}", client_jar.to_string_lossy()));
+        }
+        emit(app, "client", "Свой клиент", 1, 1);
+    } else {
+        let client_download = &version_json["downloads"]["client"];
+        let client_url = client_download["url"]
+            .as_str()
+            .ok_or("Нет ссылки на client.jar")?;
 
-    let client_sha1 = client_download["sha1"].as_str();
-    let client_size = client_download["size"].as_u64();
-    emit(app, "client", "Загрузка клиента", 0, 1);
+        let client_sha1 = client_download["sha1"].as_str();
+        let client_size = client_download["size"].as_u64();
+        emit(app, "client", "Загрузка клиента", 0, 1);
 
-    download_file_checked(&dl_client, client_url, &client_jar, client_sha1, client_size, false).await?;
-    emit(app, "client", "Клиент загружен", 1, 1);
+        download_file_checked(&dl_client, client_url, &client_jar, client_sha1, client_size, false).await?;
+        emit(app, "client", "Клиент загружен", 1, 1);
+    }
 
     let empty = vec![];
     let libs = version_json["libraries"].as_array().unwrap_or(&empty);

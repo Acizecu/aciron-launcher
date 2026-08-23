@@ -391,26 +391,36 @@ export default function WardrobePage() {
       ? `https://mc-heads.net/skin/${encodeURIComponent(nick)}`
       : "";
   const skinUrl = instant?.skinUrl ?? serverSkinUrl;
-  const capeUrl =
-    instant?.capeKey !== undefined
-      ? instant.capeUrl ?? null
-      : data?.active.hasCape && nick
-      ? activeCapeUrl(nick, capeVer)
-      : null;
-  const shownModel = instant?.model ?? data?.active.model ?? "classic";
-
-  const [back, setBack] = useState<BackItem>("cape");
 
   const skinActive = (key: string) =>
     instant?.skinKey !== undefined
       ? instant.skinKey === key
       : data?.active.skinId === key || data?.active.skinCatalogId === key;
-  const capeActive = (c: CapeEntry) =>
-    instant?.capeKey !== undefined ? instant.capeKey === c.key : c.active;
-  const noCape =
+
+  const licenseKey = (k?: string) => !!k && k.startsWith("lic:");
+  const capeActive = (c: CapeEntry) => {
+
+    if (c.origin === "license")
+      return licenseKey(instant?.capeKey) ? instant?.capeKey === c.key : c.active;
+    return instant?.capeKey !== undefined ? instant.capeKey === c.key : c.active;
+  };
+
+  const ownCapeOn =
     instant?.capeKey !== undefined
-      ? instant.capeKey === "off"
-      : !data?.active.hasCape && !capes.some((c) => c.origin === "license" && c.active);
+      ? instant.capeKey !== "off" && !licenseKey(instant.capeKey)
+      : !!data?.active.hasCape;
+  const licenseCape = capes.find((c) => c.origin === "license" && capeActive(c));
+  const noCape = !ownCapeOn && !licenseCape;
+
+  const capeUrl =
+    instant?.capeKey !== undefined
+      ? instant.capeUrl ?? licenseCape?.url ?? null
+      : data?.active.hasCape && nick
+      ? activeCapeUrl(nick, capeVer)
+      : licenseCape?.url ?? null;
+  const shownModel = instant?.model ?? data?.active.model ?? "classic";
+
+  const [back, setBack] = useState<BackItem>("cape");
 
   const skinCount = data?.skins.length ?? 0;
   const skinsFull = skinCount >= MAX_SKINS;
@@ -633,6 +643,13 @@ export default function WardrobePage() {
                         }
                       />
                     )}
+                    {ownCapeOn && licenseCape && (
+                      <Notice
+                        text={t(
+                          "Сейчас поверх надет кастомный плащ: его видят игроки с лаунчером Aciron, а все остальные — плащ с лицензии. С аккаунта Minecraft лаунчер плащ не снимает."
+                        )}
+                      />
+                    )}
                     {capes
                       .filter((c) => c.origin === "license")
                       .map((c, i) => (
@@ -640,6 +657,7 @@ export default function WardrobePage() {
                           key={c.key}
                           entry={c}
                           active={capeActive(c)}
+                          badge={ownCapeOn ? t("на лицензии") : undefined}
                           index={i}
                           onApply={() => wearCape(c.key, c.url, c.apply)}
                         />

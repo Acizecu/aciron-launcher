@@ -52,12 +52,16 @@ export default function ModsBrowser({
   initialKind = "mod",
   onBack,
   onInstalled,
+  resolveBuild,
 }: {
-  build: Build;
+
+  build: Build | null;
   initialQuery?: string;
   initialKind?: ContentKind;
-  onBack: () => void;
+  onBack?: () => void;
   onInstalled: (b: Build) => void;
+
+  resolveBuild?: (projectId: string, source: Source, kind: ContentKind) => Promise<Build | null>;
 }) {
   const view = useViewMode();
   const [source, setSource] = useState<Source>("modrinth");
@@ -78,12 +82,14 @@ export default function ModsBrowser({
   const toast = useToast();
 
   const installedIds = useMemo(
-    () => new Set(build.mods.map((m) => m.project_id)),
-    [build.mods]
+    () => new Set((build?.mods ?? []).map((m) => m.project_id)),
+    [build]
   );
 
   const ptype = CTYPES.find((c) => c.id === ctype)!.ptype;
-  const loaderFilter = ctype === "mod" ? build.loader : "";
+
+  const loaderFilter = ctype === "mod" ? build?.loader ?? "" : "";
+  const mcFilter = build?.mc_version ?? "";
 
   useEffect(() => {
     if (source === "ftb") return;
@@ -95,7 +101,7 @@ export default function ModsBrowser({
     const my = ++seq.current;
     setLoading(true);
     setError("");
-    searchContent(source, applied, loaderFilter, build.mc_version, cats, index, page * PER_PAGE, PER_PAGE, ptype)
+    searchContent(source, applied, loaderFilter, mcFilter, cats, index, page * PER_PAGE, PER_PAGE, ptype)
       .then((r) => {
         if (my !== seq.current) return;
         setHits(r.hits);
@@ -103,7 +109,7 @@ export default function ModsBrowser({
       })
       .catch((e) => my === seq.current && setError(ts(String(e))))
       .finally(() => my === seq.current && setLoading(false));
-  }, [source, applied, cats, index, page, loaderFilter, build.mc_version, ptype]);
+  }, [source, applied, cats, index, page, loaderFilter, mcFilter, ptype]);
 
   const doSearch = () => {
     setPage(0);
@@ -124,10 +130,13 @@ export default function ModsBrowser({
 
   const install = async (h: ModHit) => {
     if (installedIds.has(h.project_id) || installing.has(h.project_id)) return;
+
+    const target = build ?? (await resolveBuild?.(h.project_id, source, ctype)) ?? null;
+    if (!target) return;
     setInstalling((prev) => new Set(prev).add(h.project_id));
     startTask(`mod:${h.project_id}`, h.title);
     try {
-      const updated = await installContent(source, build.id, h.project_id);
+      const updated = await installContent(source, target.id, h.project_id);
 
       if (wasCancelled(`mod:${h.project_id}`)) return;
       onInstalled(updated);
@@ -161,6 +170,7 @@ export default function ModsBrowser({
         source={source}
         onBack={() => setDetailMod(null)}
         onInstalled={onInstalled}
+        resolveBuild={resolveBuild}
       />
     );
   }
@@ -174,7 +184,9 @@ export default function ModsBrowser({
             {t("Каталог")}
           </h1>
           <div className="mt-2 truncate text-[12px] text-[#818181]">
-            {build.name} · {build.mc_version} · {loaderLabel[build.loader] ?? build.loader}
+            {build
+              ? `${build.name} · ${build.mc_version} · ${loaderLabel[build.loader] ?? build.loader}`
+              : t("Сборку спросим при установке")}
             {total ? t(" · найдено {total}", { total }) : ""}
           </div>
         </div>
@@ -210,13 +222,15 @@ export default function ModsBrowser({
                 "У Feed The Beast нет отдельных модов — только целые модпаки. Найти их можно во вкладке «Сборки» → «Популярные»."
               )}
             </p>
-            <button
-              onClick={onBack}
-              className="mx-auto mt-4 flex h-10 items-center gap-2 rounded-[8px] bg-card px-3 text-sm text-muted transition-colors hover:text-text"
-            >
-              <i className="fa-solid fa-arrow-left text-xs" />
-              {t("Назад")}
-            </button>
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="mx-auto mt-4 flex h-10 items-center gap-2 rounded-[8px] bg-card px-3 text-sm text-muted transition-colors hover:text-text"
+              >
+                <i className="fa-solid fa-arrow-left text-xs" />
+                {t("Назад")}
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -280,13 +294,15 @@ export default function ModsBrowser({
             )}
             </div>
 
-            <button
-              onClick={onBack}
-              className="mt-3 flex h-10 items-center gap-2 rounded-[8px] bg-card px-3 text-sm text-muted transition-colors hover:text-text"
-            >
-              <i className="fa-solid fa-arrow-left text-xs" />
-              {t("Назад")}
-            </button>
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="mt-3 flex h-10 items-center gap-2 rounded-[8px] bg-card px-3 text-sm text-muted transition-colors hover:text-text"
+              >
+                <i className="fa-solid fa-arrow-left text-xs" />
+                {t("Назад")}
+              </button>
+            )}
           </aside>
 
           {}

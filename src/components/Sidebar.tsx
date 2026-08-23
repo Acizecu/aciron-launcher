@@ -4,12 +4,13 @@ import { useMemo } from "react";
 import { useChat } from "../chat";
 import { t as tr, useLang } from "../i18n";
 
-export type NavId = "home" | "builds" | "wardrobe" | "friends" | "settings" | "servers";
+export type NavId = "home" | "builds" | "mods" | "wardrobe" | "friends" | "settings" | "servers";
 
 const topItems: { id: NavId; label: string; icon: string }[] = [
   { id: "home", label: "Главная", icon: "fa-house" },
-  { id: "wardrobe", label: "Гардероб", icon: "fa-shirt" },
   { id: "builds", label: "Сборки", icon: "fa-cubes" },
+  { id: "mods", label: "Моды", icon: "fa-puzzle-piece" },
+  { id: "wardrobe", label: "Гардероб", icon: "fa-shirt" },
   { id: "servers", label: "Сервера", icon: "fa-server" },
   { id: "friends", label: "Друзья", icon: "fa-comments" },
 ];
@@ -70,7 +71,8 @@ export default function Sidebar({
   );
 
   return (
-    <aside className="flex w-14 shrink-0 flex-col bg-bg">
+
+    <aside className="relative flex w-14 shrink-0 flex-col border-r border-border/50 bg-panel/45 backdrop-blur-2xl">
       <nav className="flex flex-col pt-2">
         {topItems.map((i) => (
           <Item

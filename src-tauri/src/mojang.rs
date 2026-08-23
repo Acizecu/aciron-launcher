@@ -38,7 +38,7 @@ async fn mc_token(a: &Account) -> Result<String, String> {
     fresh_session(&a.id)
         .await
         .map(|x| x.access_token)
-        .map_err(|_| "истёк вход Microsoft — перепривяжите лицензию".to_string())
+        .map_err(|_| "истёк вход в Microsoft — перепривяжите лицензию".to_string())
 }
 
 pub(crate) async fn fresh_session(id: &str) -> Result<Account, String> {
@@ -68,7 +68,7 @@ async fn ok(r: reqwest::Response) -> Result<(), String> {
     let code = r.status().as_u16();
     let body = r.text().await.unwrap_or_default();
     Err(match code {
-        401 | 403 => "истёк вход Microsoft — перепривяжите лицензию".into(),
+        401 | 403 => "истёк вход в Microsoft — перепривяжите лицензию".into(),
         429 => "Mojang просит подождать — слишком часто меняли облик".into(),
         _ => {
             let snippet: String = body.chars().take(160).collect();
@@ -173,7 +173,6 @@ async fn try_sync() -> Result<bool, String> {
     }
 
     let has_skin = user["hasSkin"].as_bool().unwrap_or(false);
-    let has_cape = user["hasCape"].as_bool().unwrap_or(false);
     let skin_hash = user["skinHash"].as_str().unwrap_or("").to_string();
     let slim = user["skinModel"].as_str() == Some("slim");
 
@@ -186,11 +185,7 @@ async fn try_sync() -> Result<bool, String> {
 
     let need_skin = a.mojang_look != skin_key;
 
-    let need_cape = if has_cape {
-        a.mojang_cape.is_empty()
-    } else {
-        !a.mojang_cape.is_empty()
-    };
+    let need_cape = !a.mojang_cape.is_empty();
     if !need_skin && !need_cape {
         return Ok(true);
     }
@@ -212,7 +207,7 @@ async fn try_sync() -> Result<bool, String> {
     }
 
     if need_cape {
-        match sync_cape(&token, &a, has_cape).await {
+        match restore_cape(&token, &a).await {
             Ok(memo) => {
                 accounts::with_account(&a.id, |x| x.mojang_cape = memo.clone());
             }
@@ -292,23 +287,7 @@ async fn sync_skin(
     Ok(String::new())
 }
 
-async fn sync_cape(token: &str, a: &Account, has_cape: bool) -> Result<String, String> {
-    if has_cape {
-
-        let memo = active_cape_id(&profile(token).await?)
-            .unwrap_or_else(|| NOTHING_TO_RESTORE.to_string());
-        let r = http()?
-            .delete(format!("{PROFILE}/capes/active"))
-            .bearer_auth(token)
-            .send()
-            .await
-            .map_err(|_| MOJANG_OFFLINE.to_string())?;
-        if r.status().as_u16() != 404 {
-            ok(r).await?;
-        }
-        return Ok(memo);
-    }
-
+async fn restore_cape(token: &str, a: &Account) -> Result<String, String> {
     if a.mojang_cape == NOTHING_TO_RESTORE {
 
         return Ok(String::new());
@@ -389,14 +368,19 @@ pub async fn set_cape(cape_id: Option<String>) -> Result<(), String> {
     .map_err(|_| MOJANG_OFFLINE.to_string())?;
     ok(r).await?;
 
+    accounts::with_account(&a.id, |x| x.mojang_cape.clear());
+
     if cape_id.is_some() && !a.aciron_token.is_empty() {
-        let _ = crate::aciron::post("/api/wardrobe/cape/license")?
+
+        let r = crate::aciron::post("/api/wardrobe/cape/license")?
             .header("Authorization", format!("Bearer {}", a.aciron_token))
             .send()
-            .await;
+            .await
+            .map_err(|_| OFFLINE.to_string())?;
+        if !r.status().is_success() {
+            return Err("плащ лицензии надет, но свой плащ снять не удалось — снимите его в гардеробе".into());
+        }
     }
-
-    accounts::with_account(&a.id, |x| x.mojang_cape.clear());
     Ok(())
 }
 

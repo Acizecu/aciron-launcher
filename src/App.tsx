@@ -11,8 +11,9 @@ import FriendsPage from "./components/FriendsPage";
 
 const WardrobePage = lazy(() => import("./components/WardrobePage"));
 import ServersPage from "./components/ServersPage";
+const ModsPage = lazy(() => import("./components/ModsPage"));
 import SettingsModal from "./components/SettingsModal";
-import BackgroundCubes from "./components/BackgroundCubes";
+import Background from "./components/background";
 import FirstRunImport from "./components/FirstRunImport";
 import DataMigrationModal from "./components/DataMigrationModal";
 import Onboarding from "./components/Onboarding";
@@ -70,7 +71,11 @@ function AppInner() {
   const [onboarding, setOnboarding] = useState(false);
 
   const showBottomBar =
-    active !== "builds" && active !== "servers" && active !== "wardrobe" && active !== "friends";
+    active !== "builds" &&
+    active !== "mods" &&
+    active !== "servers" &&
+    active !== "wardrobe" &&
+    active !== "friends";
 
   const requestNav = (id: NavId) => {
     if (id === "settings") {
@@ -166,6 +171,12 @@ function AppInner() {
   }, []);
 
   useEffect(() => {
+    const onBg = (e: Event) => setAnim(Boolean((e as CustomEvent).detail));
+    window.addEventListener("aciron-background", onBg);
+    return () => window.removeEventListener("aciron-background", onBg);
+  }, []);
+
+  useEffect(() => {
     if (!DEV && !DEBUG_TOOLS) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "F6") {
@@ -226,7 +237,7 @@ function AppInner() {
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg text-text">
-      {anim && <BackgroundCubes />}
+      {anim && <Background />}
       <ResizeHandles />
       {}
       <Tooltip />
@@ -281,6 +292,17 @@ function AppInner() {
               <main className="min-h-0 flex-1 overflow-hidden">
                 {active === "home" && <Home />}
                 {active === "builds" && <BuildsPage />}
+                {active === "mods" && (
+                  <Suspense
+                    fallback={
+                      <div className="grid h-full place-items-center text-muted">
+                        <i className="fa-solid fa-spinner fa-spin text-xl" />
+                      </div>
+                    }
+                  >
+                    <ModsPage />
+                  </Suspense>
+                )}
                 {active === "wardrobe" && (
                   <Suspense
                     fallback={
