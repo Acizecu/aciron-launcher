@@ -642,13 +642,13 @@ async fn best_version(
         loaders = json!([l]).to_string();
         req = req.query(&[("loaders", loaders.as_str())]);
     }
-    let versions: Value = req
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json()
-        .await
-        .map_err(|e| e.to_string())?;
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    let resp = resp.error_for_status().map_err(|e| e.to_string())?;
+    let versions: Value = resp.json().await.map_err(|e| e.to_string())?;
 
     Ok(versions.as_array().and_then(|a| a.first().cloned()))
 }
@@ -682,7 +682,12 @@ pub async fn check_build_updates(build_id: String) -> Result<Vec<String>, String
                     let latest = v["id"].as_str().unwrap_or_default();
                     (!latest.is_empty() && latest != installed).then_some(pid)
                 }
-                _ => None,
+                Ok(None) => None,
+
+                Err(e) => {
+                    eprintln!("[updates] {pid}: {e}");
+                    None
+                }
             }
         }
     });
@@ -742,7 +747,10 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
     let dir = builds::content_dir(&build_id, &kind);
     let loader_filter: Option<&str> = if is_mod { Some(loader.as_str()) } else { None };
 
+    let existing = build.mods.iter().find(|m| m.project_id == project_id).cloned();
     let mut seen: HashSet<String> = build.mods.iter().map(|m| m.project_id.clone()).collect();
+    seen.remove(&project_id);
+    build.mods.retain(|m| m.project_id != project_id);
     let mut queue: Vec<(String, bool)> = vec![(project_id.clone(), true)];
 
     while let Some((pid, is_root)) = queue.pop() {
@@ -797,6 +805,24 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
         }
         download_cancelable(&cl, &url, &dest_dir.join(&filename), &ckey).await?;
 
+        let prev = if is_root { existing.as_ref() } else { None };
+
+        if let Some(old) = prev {
+            let old_path = builds::content_dir(&build_id, &old.kind).join(&old.filename);
+            if old_path != dest_dir.join(&filename) {
+                let _ = std::fs::remove_file(old_path);
+            }
+        }
+
+        let enabled = prev.map(|o| o.enabled).unwrap_or(true);
+        let filename = if enabled {
+            filename
+        } else {
+            let off = format!("{filename}.disabled");
+            let _ = std::fs::rename(dest_dir.join(&filename), dest_dir.join(&off));
+            off
+        };
+
         let version_id = ver["id"].as_str().unwrap_or("").to_string();
         let (title, icon) = project_title(&cl, &pid).await;
         build.mods.push(InstalledMod {
@@ -805,7 +831,7 @@ pub async fn modrinth_install(build_id: String, project_id: String) -> Result<Bu
             name: title,
             filename,
             icon_url: icon,
-            enabled: true,
+            enabled,
             kind: if is_root { kind.clone() } else { "mod".into() },
         });
 

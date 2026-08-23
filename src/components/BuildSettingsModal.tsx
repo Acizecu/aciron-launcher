@@ -132,7 +132,8 @@ export default function BuildSettingsModal({
         const off = upd.mods.filter((m) => !m.enabled).length;
         toast(
           t("Версия изменена на {v}", { v: version }) +
-            (off ? t(" · {n} мод(ов) выключено (нет под эту версию)", { n: off }) : ""),
+
+            (off ? t(" · выключено: {n} (нет под эту версию)", { n: off }) : ""),
           "success"
         );
       }

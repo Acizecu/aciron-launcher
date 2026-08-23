@@ -177,6 +177,7 @@ pub fn run() {
             curseforge::curseforge_install,
             curseforge::curseforge_install_version,
             curseforge::curseforge_install_modpack,
+            curseforge::cf_check_build_updates,
             ftb::ftb_search,
             ftb::ftb_project,
             ftb::ftb_project_versions,

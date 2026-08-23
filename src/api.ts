@@ -1245,7 +1245,12 @@ export async function modrinthInstall(build_id: string, project_id: string): Pro
 
 export async function checkBuildUpdates(build_id: string): Promise<string[]> {
   if (!isTauri) return [];
-  return invoke<string[]>("check_build_updates", { buildId: build_id });
+  const [mr, cf] = await Promise.allSettled([
+    invoke<string[]>("check_build_updates", { buildId: build_id }),
+    invoke<string[]>("cf_check_build_updates", { buildId: build_id }),
+  ]);
+  const ok = (r: PromiseSettledResult<string[]>) => (r.status === "fulfilled" ? r.value : []);
+  return [...ok(mr), ...ok(cf)];
 }
 
 export type GalleryImage = { url: string; title?: string; description?: string; featured?: boolean };

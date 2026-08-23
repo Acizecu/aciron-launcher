@@ -698,7 +698,7 @@ const EN: Record<string, string> = {
   "Установщик Forge завершился с ошибкой": "The Forge installer failed",
   "Игра закрылась с ошибкой": "The game exited with an error",
 
-  " · {n} мод(ов) выключено (нет под эту версию)": " · {n} mod(s) disabled (unavailable for this version)",
+  " · выключено: {n} (нет под эту версию)": " · {n} disabled (unavailable for this version)",
   " · найдено {total}": " · {total} found",
   "«{name}» закреплена": "\"{name}\" pinned",
   "«{name}» обновлён": "\"{name}\" updated",
@@ -813,6 +813,8 @@ const EN: Record<string, string> = {
   "Локальная сборка: автообновление недоступно": "Local build: auto-update unavailable",
   "меньше минуты": "less than a minute",
   "Мод «{name}» {state}": "Mod \"{name}\" {state}",
+  "Ресурспак «{name}» {state}": "Resource pack \"{name}\" {state}",
+  "Шейдер «{name}» {state}": "Shader \"{name}\" {state}",
   "Моды будут пере-подобраны под {v}; те, которых под неё нет, — выключены.": "Mods will be re-matched for {v}; those unavailable for it will be disabled.",
   "На аккаунте": "On your account",
   "На лицензию не применилось: {msg}": "Could not apply to the licensed account: {msg}",
@@ -1656,7 +1658,7 @@ const TR: Record<string, string> = {
   "Установщик Forge завершился с ошибкой": "Forge kurulumu hatayla sonlandı",
   "Игра закрылась с ошибкой": "Oyun hatayla kapandı",
 
-  " · {n} мод(ов) выключено (нет под эту версию)": " · {n} mod devre dışı (bu sürüm için yok)",
+  " · выключено: {n} (нет под эту версию)": " · {n} öğe devre dışı (bu sürüm için yok)",
   " · найдено {total}": " · {total} bulundu",
   "«{name}» закреплена": "“{name}” sabitlendi",
   "«{name}» обновлён": "“{name}” güncellendi",
@@ -1779,6 +1781,8 @@ const TR: Record<string, string> = {
     "Yerel derleme: otomatik güncelleme kullanılamıyor",
   "меньше минуты": "bir dakikadan az",
   "Мод «{name}» {state}": "“{name}” modu {state}",
+  "Ресурспак «{name}» {state}": "“{name}” kaynak paketi {state}",
+  "Шейдер «{name}» {state}": "“{name}” shader'ı {state}",
   "Моды будут пере-подобраны под {v}; те, которых под неё нет, — выключены.":
     "Modlar {v} için yeniden eşleştirilecek; bu sürüm için olmayanlar devre dışı bırakılacak.",
   "На аккаунте": "Hesabınızda",

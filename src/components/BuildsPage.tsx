@@ -12,7 +12,7 @@ import {
   matchLocalMods,
   importMrpack,
   importAcpack,
-  modrinthInstall,
+  installContent,
   checkBuildUpdates,
   pickFile,
   type Build,
@@ -97,6 +97,12 @@ const CONTENT_TABS: { id: ContentKind; label: string; icon: string; empty: strin
   { id: "resourcepack", label: "Ресурспаки", icon: "fa-palette", empty: "Список пока пуст.." },
   { id: "shader", label: "Шейдеры", icon: "fa-wand-sparkles", empty: "Список пока пуст.." },
 ];
+
+const TOGGLE_TOAST: Record<ContentKind, string> = {
+  mod: "Мод «{name}» {state}",
+  resourcepack: "Ресурспак «{name}» {state}",
+  shader: "Шейдер «{name}» {state}",
+};
 
 function Check({ on }: { on: boolean }) {
   return (
@@ -679,7 +685,12 @@ export default function BuildsPage() {
       setUpdatingMod((prev) => new Set(prev).add(projectId));
       startTask(`mod:${projectId}`, t("Обновление · {name}", { name }));
       try {
-        const updated = await modrinthInstall(selectedId, projectId);
+
+        const updated = await installContent(
+          projectId.startsWith("cf:") ? "curseforge" : "modrinth",
+          selectedId,
+          projectId
+        );
         if (wasCancelled(`mod:${projectId}`)) return;
         setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
         setUpdates((u) => u.filter((id) => id !== projectId));
@@ -706,7 +717,8 @@ export default function BuildsPage() {
       const m = updated.mods.find((x) => x.project_id === projectId);
       if (m)
         toast(
-          t("Мод «{name}» {state}", {
+
+          t(TOGGLE_TOAST[m.kind] ?? TOGGLE_TOAST.mod, {
             name: m.name,
             state: t(m.enabled ? "включён" : "выключен"),
           }),

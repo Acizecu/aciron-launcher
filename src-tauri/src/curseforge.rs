@@ -529,6 +529,63 @@ async fn best_file(
     Ok(json["data"].as_array().and_then(|a| a.first().cloned()))
 }
 
+/// Какие моды CurseForge в сборке можно обновить.
+///
+/// Отдельная команда, а не ветка в modrinth::check_build_updates: там проверка
+/// идёт по id версии Modrinth, а здесь по числовому id файла CurseForge, и API
+/// у площадок разные. Раньше моды с CurseForge не проверялись ВООБЩЕ — их
+/// префикс `cf:` стоял в списке пропускаемых, а своей проверки не было.
+///
+/// Пустой `version_id` (записи старых сборок, ручные jar) пропускаем: сравнивать
+/// не с чем, а показать бейдж «есть обновление», который ничем не гасится, хуже,
+/// чем не показать ничего.
+#[tauri::command]
+pub async fn cf_check_build_updates(build_id: String) -> Result<Vec<String>, String> {
+    use futures::StreamExt;
+
+    let build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
+    let cl = http()?;
+    let loader = build.loader.clone();
+    let mc = build.mc_version.clone();
+
+    let targets: Vec<(String, i64, String, bool)> = build
+        .mods
+        .iter()
+        .filter(|m| m.project_id.starts_with("cf:") && !m.version_id.is_empty())
+        .filter_map(|m| {
+            strip_id(&m.project_id)
+                .parse::<i64>()
+                .ok()
+                .map(|id| (m.project_id.clone(), id, m.version_id.clone(), m.kind == "mod"))
+        })
+        .collect();
+
+    let tasks = targets.into_iter().map(|(pid, mid, installed, is_mod)| {
+        let cl = cl.clone();
+        let loader = loader.clone();
+        let mc = mc.clone();
+        async move {
+            let filter = if is_mod { Some(loader.as_str()) } else { None };
+            match best_file(&cl, mid, filter, &mc).await {
+                Ok(Some(f)) => {
+                    let latest = f["id"].as_i64().unwrap_or_default().to_string();
+                    (latest != "0" && latest != installed).then_some(pid)
+                }
+                Ok(None) => None,
+                Err(e) => {
+                    eprintln!("[updates] {pid}: {e}");
+                    None
+                }
+            }
+        }
+    });
+
+    // Восемь запросов за раз — тот же потолок, что у Modrinth: CurseForge
+    // отвечает 403/429, если ломиться всей сборкой сразу.
+    let found: Vec<Option<String>> = futures::stream::iter(tasks).buffer_unordered(8).collect().await;
+    Ok(found.into_iter().flatten().collect())
+}
+
 /// Обязательные зависимости (relationType == 3) файла.
 fn required_deps(f: &Value) -> Vec<i64> {
     f["dependencies"]
@@ -555,11 +612,24 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
     let kind = kind_of_class(root_class).to_string();
     let is_mod = kind == "mod";
 
+    // Корень снимаем с дедупа — иначе переустановка уже стоящего проекта (а
+    // «обновить» это именно она) молча ничего не делала бы: он отсекается
+    // первым же `seen.contains`. Прежнюю запись помним ради старого файла и
+    // состояния включённости. Подробнее — тот же приём в modrinth.rs.
+    let existing = build
+        .mods
+        .iter()
+        .find(|m| strip_id(&m.project_id).parse::<i64>().ok() == Some(root_id))
+        .cloned();
     let mut seen: HashSet<i64> = build
         .mods
         .iter()
         .filter_map(|m| strip_id(&m.project_id).parse::<i64>().ok())
         .collect();
+    seen.remove(&root_id);
+    build
+        .mods
+        .retain(|m| strip_id(&m.project_id).parse::<i64>().ok() != Some(root_id));
     // (modId, is_root)
     let mut queue: Vec<(i64, bool)> = vec![(root_id, true)];
 
@@ -600,6 +670,28 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
         };
         download_to(&url, &dest_dir.join(&filename)).await?;
 
+        let prev = if is_root { existing.as_ref() } else { None };
+
+        // Старый файл — только после успешной загрузки нового, иначе обрыв
+        // сети оставит сборку без мода. Совпало имя — уже перезаписан.
+        if let Some(old) = prev {
+            let old_path = builds::content_dir(&build_id, &old.kind).join(&old.filename);
+            if old_path != dest_dir.join(&filename) {
+                let _ = std::fs::remove_file(old_path);
+            }
+        }
+
+        // Выключенное остаётся выключенным: у таких файл лежит с суффиксом
+        // .disabled (builds::toggle_mod).
+        let enabled = prev.map(|o| o.enabled).unwrap_or(true);
+        let filename = if enabled {
+            filename
+        } else {
+            let off = format!("{filename}.disabled");
+            let _ = std::fs::rename(dest_dir.join(&filename), dest_dir.join(&off));
+            off
+        };
+
         let (title, icon, _c) = mod_info(&cl, mid).await;
         build.mods.push(InstalledMod {
             project_id: format!("cf:{mid}"),
@@ -607,7 +699,7 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
             name: title,
             filename,
             icon_url: icon,
-            enabled: true,
+            enabled,
             kind: if is_root { kind.clone() } else { "mod".into() },
         });
 
