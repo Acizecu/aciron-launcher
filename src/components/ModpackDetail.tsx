@@ -11,6 +11,7 @@ import {
 import { useToast } from "../ToastContext";
 import VersionList from "./VersionList";
 import Lightbox from "./Lightbox";
+import RichText from "./RichText";
 import { t, ts } from "../i18n";
 
 function fmt(n: number): string {
@@ -74,7 +75,7 @@ export default function ModpackDetail({
   const downloads = project?.downloads ?? pack.downloads;
   const gallery = project?.gallery ?? [];
 
-  const links: { label: string; url?: string; icon: string }[] = [
+  const links: { label: string; url?: string | null; icon: string }[] = [
     {
       label: source === "curseforge" ? "CurseForge" : source === "ftb" ? "FTB" : "Modrinth",
       url: project?.website_url || packUrl(source, slug),
@@ -183,7 +184,14 @@ export default function ModpackDetail({
             )}
 
             <div className="p-5">
-              <p className="text-sm leading-relaxed text-text">{pack.description}</p>
+              {}
+              {project?.body && project.body_format ? (
+                <RichText source={project.body} format={project.body_format} />
+              ) : (
+                <p className="text-sm leading-relaxed text-text">
+                  {project?.description || pack.description}
+                </p>
+              )}
 
               {pack.categories.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-1.5">

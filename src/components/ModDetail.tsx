@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   contentProject,
   installContent,
@@ -14,7 +14,8 @@ import {
 import { useToast } from "../ToastContext";
 import VersionList from "./VersionList";
 import Lightbox from "./Lightbox";
-import { t, ts } from "../i18n";
+import RichText from "./RichText";
+import { dtf, t, ts } from "../i18n";
 
 const loaderLabel: Record<string, string> = {
   fabric: "Fabric",
@@ -23,10 +24,40 @@ const loaderLabel: Record<string, string> = {
   quilt: "Quilt",
 };
 
+function sideLabel(side: string): string {
+  switch (side) {
+    case "required":
+      return t("обязателен");
+    case "optional":
+      return t("по желанию");
+    case "unsupported":
+      return t("не нужен");
+    case "unknown":
+      return t("неизвестно");
+    default:
+      return side;
+  }
+}
+
 function fmt(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
   if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
   return String(n);
+}
+
+function date(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : dtf().format(d);
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-[12px]">
+      <span className="shrink-0 text-muted">{label}</span>
+      <span className="min-w-0 truncate text-right text-text">{children}</span>
+    </div>
+  );
 }
 
 export default function ModDetail({
@@ -49,6 +80,8 @@ export default function ModDetail({
   resolveBuild?: (projectId: string, source: SourceId, kind: ContentKind) => Promise<Build | null>;
 }) {
   const [project, setProject] = useState<ModProject | null>(null);
+
+  const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<"about" | "versions">("about");
   const [verBusy, setVerBusy] = useState<string | null>(null);
@@ -56,7 +89,16 @@ export default function ModDetail({
   const toast = useToast();
 
   useEffect(() => {
-    contentProject(source, hit.project_id).then(setProject).catch(() => {});
+
+    let dead = false;
+    setProject(null);
+    setFailed(false);
+    contentProject(source, hit.project_id)
+      .then((p) => !dead && setProject(p))
+      .catch(() => !dead && setFailed(true));
+    return () => {
+      dead = true;
+    };
   }, [source, hit.project_id]);
 
   const installedMod = build?.mods.find((m) => m.project_id === hit.project_id);
@@ -96,22 +138,53 @@ export default function ModDetail({
       setBusy(false);
     }
   };
+
   const icon = project?.icon_url || hit.icon_url;
   const slug = project?.slug || hit.slug;
+  const title = project?.title || hit.title;
   const downloads = project?.downloads ?? hit.downloads;
   const gallery = project?.gallery ?? [];
 
+  const summary = project?.description || hit.description;
+
+  const authors = project?.authors?.length
+    ? project.authors.map((a) => a.name).join(", ")
+    : hit.author;
+
   const siteLink =
     source === "curseforge"
-      ? { label: "CurseForge", url: project?.website_url || `https://www.curseforge.com/minecraft/search?search=${encodeURIComponent(slug)}` }
-      : { label: "Modrinth", url: `https://modrinth.com/mod/${slug}` };
+      ? {
+          label: "CurseForge",
+          url:
+            project?.website_url ||
+            `https://www.curseforge.com/minecraft/search?search=${encodeURIComponent(slug)}`,
+        }
+      : source === "ftb"
+      ? {
+          label: "FTB",
+          url: project?.website_url || `https://www.feed-the-beast.com/modpacks/${slug}`,
+        }
+      : { label: "Modrinth", url: project?.website_url || `https://modrinth.com/mod/${slug}` };
 
-  const links: { label: string; url?: string; icon: string }[] = [
+  const links: { label: string; url?: string | null; icon: string }[] = [
     { label: siteLink.label, url: siteLink.url, icon: "fa-arrow-up-right-from-square" },
     { label: t("Исходники"), url: project?.source_url, icon: "fa-code" },
     { label: t("Проблемы"), url: project?.issues_url, icon: "fa-bug" },
     { label: "Wiki", url: project?.wiki_url, icon: "fa-book" },
     { label: "Discord", url: project?.discord_url, icon: "fa-discord" },
+    ...(project?.donation_urls ?? []).map((d) => ({
+      label: d.platform || t("Поддержать автора"),
+      url: d.url,
+      icon: "fa-heart",
+    })),
+  ];
+
+  const updated = date(project?.updated);
+  const published = date(project?.published);
+  const ram = project?.ram_rec_mb ?? project?.ram_min_mb;
+  const categories = [
+    ...(project?.categories ?? hit.categories),
+    ...(project?.additional_categories ?? []),
   ];
 
   return (
@@ -120,30 +193,39 @@ export default function ModDetail({
       <div className="mb-5 flex items-start gap-4">
         <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-[16px] bg-card">
           {icon ? (
-            <img src={icon} alt="" className="h-full w-full object-cover" />
+            <img src={icon} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" />
           ) : (
             <i className="fa-solid fa-cube text-2xl text-muted" />
           )}
         </div>
 
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[30px] font-light leading-none text-text">{hit.title}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[#818181]">
-            {hit.author && <span>{t("от {author}", { author: hit.author })}</span>}
-            <span>
+          <h1 className="truncate text-[30px] font-light leading-none text-text">{title}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted">
+            {authors && <span className="truncate">{t("от {author}", { author: authors })}</span>}
+            <span title={t("Загрузок")}>
               <i className="fa-solid fa-download mr-1 text-[10px]" />
               {fmt(downloads)}
             </span>
-            {project && (
-              <span>
-                <i className="fa-solid fa-heart mr-1 text-[10px]" />
+            {}
+            {project?.followers != null && (
+              <span title={source === "curseforge" ? t("Лайков") : t("Подписчиков")}>
+                <i
+                  className={`fa-solid mr-1 text-[10px] ${
+                    source === "curseforge" ? "fa-thumbs-up" : "fa-heart"
+                  }`}
+                />
                 {fmt(project.followers)}
               </span>
             )}
+            {updated && (
+              <span title={t("Обновлён")}>
+                <i className="fa-solid fa-clock-rotate-left mr-1 text-[10px]" />
+                {updated}
+              </span>
+            )}
           </div>
-          <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-muted">
-            {hit.description}
-          </p>
+          <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-muted">{summary}</p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -170,6 +252,24 @@ export default function ModDetail({
           </button>
         </div>
       </div>
+
+      {}
+      {project?.allow_distribution === false && (
+        <div className="mb-4 flex items-start gap-2 rounded-[12px] bg-[#fbbf24]/10 px-3 py-2 text-[12px] text-[#fbbf24]">
+          <i className="fa-solid fa-triangle-exclamation mt-0.5" />
+          <span>
+            {t(
+              "Автор запретил сторонним лаунчерам скачивать файлы этого проекта. Установить получится только вручную, со страницы проекта."
+            )}
+          </span>
+        </div>
+      )}
+      {project && !project.is_available && (
+        <div className="mb-4 flex items-start gap-2 rounded-[12px] bg-[#fbbf24]/10 px-3 py-2 text-[12px] text-[#fbbf24]">
+          <i className="fa-solid fa-box-archive mt-0.5" />
+          <span>{t("Проект скрыт или заархивирован — новых версий у него не будет.")}</span>
+        </div>
+      )}
 
       {}
       <div className="mb-4 flex items-baseline gap-4">
@@ -202,24 +302,104 @@ export default function ModDetail({
               {build ? (
                 <>
                   <div className="truncate text-sm text-text">{build.name}</div>
-                  <div className="mt-0.5 truncate text-[11px] text-[#818181]">
+                  <div className="mt-0.5 truncate text-[11px] text-muted">
                     {build.mc_version} · {loaderLabel[build.loader] ?? build.loader}
                   </div>
                 </>
               ) : (
-                <div className="text-[11px] leading-snug text-[#818181]">
+                <div className="text-[11px] leading-snug text-muted">
                   {t("Сборку выберете при установке — покажем только те, куда это встанет.")}
                 </div>
               )}
             </div>
 
-            {hit.categories.length > 0 && (
+            {}
+            {project && (
+              <div className="space-y-1.5">
+                <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  {t("О проекте")}
+                </div>
+                {project.license_name && (
+                  <Row label={t("Лицензия")}>
+                    {project.license_url ? (
+                      <button
+                        onClick={() => openUrl(project.license_url!)}
+                        className="truncate text-accent transition-colors hover:text-accent-hover"
+                      >
+                        {project.license_name}
+                      </button>
+                    ) : (
+                      project.license_name
+                    )}
+                  </Row>
+                )}
+                {project.client_side && (
+                  <Row label={t("На клиенте")}>
+                    {sideLabel(project.client_side)}
+                  </Row>
+                )}
+                {project.server_side && (
+                  <Row label={t("На сервере")}>
+                    {sideLabel(project.server_side)}
+                  </Row>
+                )}
+                {published && <Row label={t("Создан")}>{published}</Row>}
+                {updated && <Row label={t("Обновлён")}>{updated}</Row>}
+                {project.versions_count != null && (
+                  <Row label={t("Версий")}>{project.versions_count}</Row>
+                )}
+                {project.plays != null && <Row label={t("Запусков")}>{fmt(project.plays)}</Row>}
+                {ram != null && (
+                  <Row label={t("Памяти")}>
+                    {(ram / 1024).toFixed(1)} {t("ГБ")}
+                  </Row>
+                )}
+              </div>
+            )}
+
+            {project && project.loaders.length > 0 && (
+              <div>
+                <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  {t("Загрузчики")}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {project.loaders.map((l) => (
+                    <span key={l} className="rounded-md bg-card px-2 py-1 text-[11px] text-muted">
+                      {loaderLabel[l] ?? l}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {project && project.game_versions.length > 0 && (
+              <div>
+                <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  {t("Версии игры")}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {}
+                  {project.game_versions.slice(0, 12).map((v) => (
+                    <span key={v} className="rounded-md bg-card px-2 py-1 text-[11px] text-muted">
+                      {v}
+                    </span>
+                  ))}
+                  {project.game_versions.length > 12 && (
+                    <span className="px-1 py-1 text-[11px] text-muted">
+                      {t("и ещё {n}", { n: project.game_versions.length - 12 })}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {categories.length > 0 && (
               <div>
                 <div className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
                   {t("Категории")}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {hit.categories.map((c) => (
+                  {categories.map((c) => (
                     <span
                       key={c}
                       className="rounded-md bg-card px-2 py-1 text-[11px] capitalize text-muted"
@@ -241,7 +421,7 @@ export default function ModDetail({
                     .filter((l) => l.url)
                     .map((l) => (
                       <button
-                        key={l.label}
+                        key={l.label + l.url}
                         onClick={() => openUrl(l.url!)}
                         className="flex w-full items-center gap-2.5 rounded-[8px] px-3 py-2 text-left text-sm text-muted transition-colors hover:text-accent"
                       >
@@ -286,12 +466,14 @@ export default function ModDetail({
                     <button
                       key={i}
                       onClick={() => setLightbox(i)}
-                      title={t("Открыть")}
+                      title={g.title || t("Открыть")}
                       className="group relative h-40 shrink-0 overflow-hidden rounded-[16px] border-1 border-[#232427]/65"
                     >
                       <img
                         src={g.url}
                         alt={g.title ?? ""}
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
                         className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />
                       <span className="absolute inset-0 grid place-items-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
@@ -303,12 +485,42 @@ export default function ModDetail({
               )}
 
               <div className="rounded-[16px] border-1 border-[#232427]/65 bg-card p-5">
-                <p className="text-sm leading-relaxed text-text">{hit.description}</p>
-                <p className="mt-5 text-xs text-muted">
-                  {t(
-                    "Полное описание и список изменений — на странице проекта (кнопка со стрелкой вверху). Версии — во вкладке «Версии»."
-                  )}
-                </p>
+                {!project && !failed ? (
+                  <div className="grid h-24 place-items-center text-muted">
+                    <i className="fa-solid fa-spinner fa-spin" />
+                  </div>
+                ) : project?.body && project.body_format ? (
+                  <>
+                    {}
+                    <RichText source={project.body} format={project.body_format} />
+                    {project.body_truncated && (
+                      <p className="mt-5 text-xs text-muted">
+                        {t("Описание длинное и показано не целиком.")}{" "}
+                        <button
+                          onClick={() => openUrl(siteLink.url)}
+                          className="text-accent transition-colors hover:text-accent-hover"
+                        >
+                          {t("Открыть на {site}", { site: siteLink.label })}
+                        </button>
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm leading-relaxed text-text">{summary}</p>
+                    <p className="mt-5 text-xs text-muted">
+                      {failed
+                        ? t("Не удалось получить описание с площадки.")
+                        : t("Полного описания у этого проекта нет.")}{" "}
+                      <button
+                        onClick={() => openUrl(siteLink.url)}
+                        className="text-accent transition-colors hover:text-accent-hover"
+                      >
+                        {t("Открыть на {site}", { site: siteLink.label })}
+                      </button>
+                    </p>
+                  </>
+                )}
               </div>
             </>
           )}

@@ -26,6 +26,10 @@ export type Settings = {
 
   onboarded: boolean;
 
+  crash_reports: boolean;
+
+  seen_version: string;
+
   dev_mode_disable_updates: boolean;
   skipped_update_version: string;
   defer_update_until: number | null;
@@ -187,6 +191,8 @@ const mockSettings: Settings = {
   defer_update_until: null,
   language: "",
   onboarded: true,
+  crash_reports: true,
+  seen_version: "",
 };
 
 export async function getSettings(): Promise<Settings> {
@@ -280,6 +286,90 @@ export async function openUrl(url: string): Promise<void> {
   }
   const { openUrl } = await import("@tauri-apps/plugin-opener");
   await openUrl(url);
+}
+
+export async function crashReportsAvailable(): Promise<boolean> {
+  if (!isTauri) return false;
+  return invoke<boolean>("crash_reports_available");
+}
+
+export async function crashReportsPending(): Promise<number> {
+  if (!isTauri) return 0;
+  return invoke<number>("crash_reports_pending");
+}
+
+export async function crashReportPreview(): Promise<string> {
+  if (!isTauri) return "";
+  return invoke<string>("crash_report_preview");
+}
+
+export type FlushResult = { sent: number; skipped: number };
+
+export async function crashReportsSend(): Promise<FlushResult> {
+  if (!isTauri) return { sent: 0, skipped: 0 };
+  return invoke<FlushResult>("crash_reports_send");
+}
+
+export async function crashReportsClear(): Promise<void> {
+  if (!isTauri) return;
+  await invoke("crash_reports_clear");
+}
+
+export async function crashReportsDir(): Promise<string> {
+  if (!isTauri) return "";
+  return invoke<string>("crash_reports_dir");
+}
+
+export function reportUiCrash(message: string, stack: string, source: string): void {
+  if (!isTauri) return;
+  try {
+    void invoke("crash_report_js", { message, stack, source }).catch(() => {});
+  } catch {
+
+  }
+}
+
+export type SharedLog = { id: string; url: string; expires_at: number };
+
+export async function logShareAvailable(): Promise<boolean> {
+  if (!isTauri) return false;
+  return invoke<boolean>("log_share_available");
+}
+
+export async function logShareSize(game_id: string): Promise<[number, number]> {
+  if (!isTauri) return [0, 0];
+  return invoke<[number, number]>("log_share_size", { gameId: game_id });
+}
+
+export async function logShare(game_id: string): Promise<SharedLog> {
+  if (!isTauri) throw new Error("нет бэкенда");
+  return invoke<SharedLog>("log_share", { gameId: game_id });
+}
+
+export async function autostartEnabled(): Promise<boolean> {
+  if (!isTauri) return false;
+  try {
+    const { isEnabled } = await import("@tauri-apps/plugin-autostart");
+    return await isEnabled();
+  } catch {
+    return false;
+  }
+}
+
+export async function setAutostart(on: boolean): Promise<void> {
+  if (!isTauri) return;
+  const { enable, disable } = await import("@tauri-apps/plugin-autostart");
+  if (on) await enable();
+  else await disable();
+}
+
+export async function startedMinimized(): Promise<boolean> {
+  if (!isTauri) return false;
+  try {
+    return await invoke<boolean>("start_minimized");
+  } catch {
+    return false;
+  }
 }
 
 export async function buildInfo(): Promise<BuildInfo> {
@@ -1255,21 +1345,53 @@ export async function checkBuildUpdates(build_id: string): Promise<string[]> {
 
 export type GalleryImage = { url: string; title?: string; description?: string; featured?: boolean };
 
+export type ProjectAuthor = { name: string; url?: string | null };
+export type DonationLink = { platform: string; url: string };
+
 export type ModProject = {
   title: string;
   slug: string;
   description: string;
+
   body: string;
+
+  body_format: "markdown" | "html" | "";
+
+  body_truncated: boolean;
   categories: string[];
+  additional_categories: string[];
   downloads: number;
-  followers: number;
+
+  followers: number | null;
   icon_url: string;
   gallery: GalleryImage[];
-  source_url?: string;
-  issues_url?: string;
-  wiki_url?: string;
-  discord_url?: string;
-  website_url?: string;
+  authors: ProjectAuthor[];
+  game_versions: string[];
+  loaders: string[];
+  donation_urls: DonationLink[];
+  license_name?: string | null;
+  license_url?: string | null;
+
+  client_side?: string | null;
+  server_side?: string | null;
+  published?: string | null;
+  updated?: string | null;
+  project_type?: string | null;
+  status?: string | null;
+  versions_count?: number | null;
+  is_available: boolean;
+
+  allow_distribution?: boolean | null;
+
+  plays?: number | null;
+
+  ram_min_mb?: number | null;
+  ram_rec_mb?: number | null;
+  source_url?: string | null;
+  issues_url?: string | null;
+  wiki_url?: string | null;
+  discord_url?: string | null;
+  website_url?: string | null;
 };
 
 export async function modrinthProject(project_id: string): Promise<ModProject> {

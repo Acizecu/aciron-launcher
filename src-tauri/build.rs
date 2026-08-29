@@ -1,11 +1,15 @@
 
 
-const BUILD_ENV: [&str; 6] = [
+const BUILD_ENV: [&str; 8] = [
     "ACIRON_ID_URL",
     "ACIRON_CF_PROXY_URL",
     "ACIRON_CLIENT_KEY",
     "ACIRON_PROXY_TOKEN",
     "ACIRON_MS_CLIENT_ID",
+
+    "ACIRON_REPORT_URL",
+
+    "ACIRON_LOG_URL",
     "ACIRON_BUILD_CHANNEL",
 ];
 

@@ -972,6 +972,92 @@ const EN: Record<string, string> = {
   "Недопустимая версия загрузчика": "Invalid loader version",
   "manifest.json не найден в модпаке": "manifest.json is missing from the modpack",
   "Xbox Live недоступен в вашем регионе": "Xbox Live is not available in your region",
+
+  "О проекте": "About",
+  "Лицензия": "License",
+  "На клиенте": "Client side",
+  "На сервере": "Server side",
+  "обязателен": "required",
+  "по желанию": "optional",
+  "не нужен": "unsupported",
+  "Создан": "Created",
+  "Обновлён": "Updated",
+  "Версий": "Versions",
+  "Запусков": "Plays",
+  "Памяти": "Memory",
+  "Загрузок": "Downloads",
+  "Подписчиков": "Followers",
+  "Лайков": "Likes",
+  "Загрузчики": "Loaders",
+  "Версии игры": "Game versions",
+  "и ещё {n}": "and {n} more",
+  "Поддержать автора": "Donate",
+  "Открыть на {site}": "Open on {site}",
+  "Описание длинное и показано не целиком.": "The description is long and is not shown in full.",
+  "Полного описания у этого проекта нет.": "This project has no full description.",
+  "Не удалось получить описание с площадки.": "Could not fetch the description from the platform.",
+  "Автор запретил сторонним лаунчерам скачивать файлы этого проекта. Установить получится только вручную, со страницы проекта.":
+    "The author has disallowed third-party launchers from downloading this project's files. It can only be installed manually, from the project page.",
+  "Проект скрыт или заархивирован — новых версий у него не будет.":
+    "The project is hidden or archived - there will be no new versions.",
+
+  "Отчёты о сбоях": "Crash reports",
+  "Анонимно сообщать о падениях лаунчера. Ник, почта, токены и пути к вашим папкам не отправляются — можно посмотреть, что именно уходит.":
+    "Anonymously report launcher crashes. Your username, email, tokens and folder paths are never sent - you can review exactly what is.",
+  "Что отправляется": "What gets sent",
+  "Ближайший неотправленный отчёт": "The oldest report still waiting to be sent",
+  "Отчётов нет — так выглядел бы отчёт о сбое прямо сейчас":
+    "No reports - this is what a crash report would look like right now",
+  "Отправить ({n})": "Send ({n})",
+  "Отправлено отчётов: {n}": "Reports sent: {n}",
+  "Отправить не удалось — попробуем позже": "Sending failed - we will try again later",
+  "Сохранённые отчёты удалены": "Saved reports deleted",
+  "Открыть папку отчётов": "Open reports folder",
+  "Лаунчер сломался": "The launcher broke",
+  "Что-то пошло не так на этом экране. Отчёт об ошибке сохранён — если отправка отчётов включена, он уйдёт разработчику.":
+    "Something went wrong on this screen. An error report has been saved - if crash reporting is on, it will be sent to the developer.",
+  "Попробовать снова": "Try again",
+
+  "Создать лог": "Share log",
+  "Создать ссылку на этот лог": "Create a link to this log",
+  "Ссылка на лог": "Log link",
+  "Ссылка готова": "Link is ready",
+  "Лог уедет на сервер Aciron и будет доступен по ссылке":
+    "The log will be uploaded to Aciron and available by link",
+  "Откроется у любого, кому вы её дадите": "Anyone you give it to can open it",
+  "Отправим {lines} строк ({size}) — весь лог этого запуска.":
+    "We will send {lines} lines ({size}) - the whole log of this launch.",
+  "Отправим весь лог этого запуска.": "We will send the whole log of this launch.",
+  "Лог увидит каждый, у кого есть ссылка.": "Anyone with the link can read the log.",
+  "Токен входа и путь к вашим папкам из лога вырезаны. Ник останется.":
+    "The session token and your folder paths are stripped from the log. Your username stays.",
+  "Через 12 часов ссылка перестанет работать.": "The link stops working after 12 hours.",
+  "Создать ссылку": "Create link",
+  "Отправляем…": "Sending...",
+  "Скопировать": "Copy",
+  "Ссылка перестанет работать через {left} — лог удалится сам.":
+    "The link stops working in {left} - the log deletes itself.",
+  "уже истекла": "already expired",
+
+  "Что нового": "What's new",
+  "Все версии": "All releases",
+  "Понятно": "Got it",
+  "Исправлено": "Fixed",
+
+  "Запускать вместе с Windows": "Start with Windows",
+  "Лаунчер стартует значком в трее, без окна. Открыть — клик по значку.":
+    "The launcher starts as a tray icon, with no window. Click the icon to open it.",
+  "Пока игра открыта, лаунчер ждёт значком в трее":
+    "While the game is open, the launcher waits as a tray icon",
+  "Обновляться при запуске": "Update on startup",
+  "Лаунчер сам поставит обновление в окне запуска. Пропущенные и отложенные версии не трогает.":
+    "The launcher installs updates in the startup window. Skipped and deferred versions are left alone.",
+  "Загрузка v{version}": "Downloading v{version}",
+  "Установка": "Installing",
+  "Не удалось обновиться": "Update failed",
+  "Обновление пропущено": "Update skipped",
+  "Обновление отложено": "Update deferred",
+  "Эти сбои уже отправляли раньше": "These crashes were already sent",
 };
 
 const TR: Record<string, string> = {
@@ -1981,6 +2067,92 @@ const TR: Record<string, string> = {
   "Недопустимая версия загрузчика": "Geçersiz yükleyici sürümü",
   "manifest.json не найден в модпаке": "Mod paketinde manifest.json bulunamadı",
   "Xbox Live недоступен в вашем регионе": "Xbox Live bölgenizde kullanılamıyor",
+
+  "О проекте": "Proje hakkında",
+  "Лицензия": "Lisans",
+  "На клиенте": "İstemcide",
+  "На сервере": "Sunucuda",
+  "обязателен": "zorunlu",
+  "по желанию": "isteğe bağlı",
+  "не нужен": "gerekmiyor",
+  "Создан": "Oluşturuldu",
+  "Обновлён": "Güncellendi",
+  "Версий": "Sürüm",
+  "Запусков": "Oynanma",
+  "Памяти": "Bellek",
+  "Загрузок": "İndirme",
+  "Подписчиков": "Takipçi",
+  "Лайков": "Beğeni",
+  "Загрузчики": "Yükleyiciler",
+  "Версии игры": "Oyun sürümleri",
+  "и ещё {n}": "ve {n} tane daha",
+  "Поддержать автора": "Destek ol",
+  "Открыть на {site}": "{site} üzerinde aç",
+  "Описание длинное и показано не целиком.": "Açıklama uzun, tamamı gösterilmiyor.",
+  "Полного описания у этого проекта нет.": "Bu projenin tam açıklaması yok.",
+  "Не удалось получить описание с площадки.": "Açıklama platformdan alınamadı.",
+  "Автор запретил сторонним лаунчерам скачивать файлы этого проекта. Установить получится только вручную, со страницы проекта.":
+    "Yazar, üçüncü taraf başlatıcıların bu projenin dosyalarını indirmesini engelledi. Yalnızca proje sayfasından elle kurulabilir.",
+  "Проект скрыт или заархивирован — новых версий у него не будет.":
+    "Proje gizli veya arşivlenmiş - yeni sürüm gelmeyecek.",
+
+  "Отчёты о сбоях": "Çökme raporları",
+  "Анонимно сообщать о падениях лаунчера. Ник, почта, токены и пути к вашим папкам не отправляются — можно посмотреть, что именно уходит.":
+    "Başlatıcının çökmelerini anonim olarak bildir. Kullanıcı adı, e-posta, tokenlar ve klasör yollarınız gönderilmez - tam olarak neyin gittiğini görebilirsiniz.",
+  "Что отправляется": "Ne gönderiliyor",
+  "Ближайший неотправленный отчёт": "Gönderilmeyi bekleyen en eski rapor",
+  "Отчётов нет — так выглядел бы отчёт о сбое прямо сейчас":
+    "Rapor yok - bir çökme raporu şu anda böyle görünürdü",
+  "Отправить ({n})": "Gönder ({n})",
+  "Отправлено отчётов: {n}": "Gönderilen rapor: {n}",
+  "Отправить не удалось — попробуем позже": "Gönderilemedi - daha sonra tekrar denenecek",
+  "Сохранённые отчёты удалены": "Kayıtlı raporlar silindi",
+  "Открыть папку отчётов": "Rapor klasörünü aç",
+  "Лаунчер сломался": "Başlatıcı bozuldu",
+  "Что-то пошло не так на этом экране. Отчёт об ошибке сохранён — если отправка отчётов включена, он уйдёт разработчику.":
+    "Bu ekranda bir sorun oluştu. Hata raporu kaydedildi - rapor gönderimi açıksa geliştiriciye iletilecek.",
+  "Попробовать снова": "Tekrar dene",
+
+  "Создать лог": "Logu paylaş",
+  "Создать ссылку на этот лог": "Bu log için bağlantı oluştur",
+  "Ссылка на лог": "Log bağlantısı",
+  "Ссылка готова": "Bağlantı hazır",
+  "Лог уедет на сервер Aciron и будет доступен по ссылке":
+    "Log Aciron sunucusuna yüklenecek ve bağlantı ile açılacak",
+  "Откроется у любого, кому вы её дадите": "Bağlantıyı verdiğiniz herkes açabilir",
+  "Отправим {lines} строк ({size}) — весь лог этого запуска.":
+    "{lines} satır ({size}) gönderilecek - bu çalıştırmanın tüm logu.",
+  "Отправим весь лог этого запуска.": "Bu çalıştırmanın tüm logu gönderilecek.",
+  "Лог увидит каждый, у кого есть ссылка.": "Bağlantısı olan herkes logu görebilir.",
+  "Токен входа и путь к вашим папкам из лога вырезаны. Ник останется.":
+    "Oturum tokeni ve klasör yollarınız logdan çıkarıldı. Kullanıcı adınız kalır.",
+  "Через 12 часов ссылка перестанет работать.": "Bağlantı 12 saat sonra çalışmayı bırakır.",
+  "Создать ссылку": "Bağlantı oluştur",
+  "Отправляем…": "Gönderiliyor…",
+  "Скопировать": "Kopyala",
+  "Ссылка перестанет работать через {left} — лог удалится сам.":
+    "Bağlantı {left} içinde çalışmayı bırakır - log kendini siler.",
+  "уже истекла": "süresi doldu",
+
+  "Что нового": "Ne yenilendi",
+  "Все версии": "Tüm sürümler",
+  "Понятно": "Anladım",
+  "Исправлено": "Düzeltildi",
+
+  "Запускать вместе с Windows": "Windows ile başlat",
+  "Лаунчер стартует значком в трее, без окна. Открыть — клик по значку.":
+    "Başlatıcı pencere açmadan tepsi simgesi olarak başlar. Açmak için simgeye tıklayın.",
+  "Пока игра открыта, лаунчер ждёт значком в трее":
+    "Oyun açıkken başlatıcı tepsi simgesi olarak bekler",
+  "Обновляться при запуске": "Açılışta güncelle",
+  "Лаунчер сам поставит обновление в окне запуска. Пропущенные и отложенные версии не трогает.":
+    "Başlatıcı güncellemeyi açılış penceresinde kurar. Atlanan ve ertelenen sürümlere dokunmaz.",
+  "Загрузка v{version}": "v{version} indiriliyor",
+  "Установка": "Kuruluyor",
+  "Не удалось обновиться": "Güncellenemedi",
+  "Обновление пропущено": "Güncelleme atlandı",
+  "Обновление отложено": "Güncelleme ertelendi",
+  "Эти сбои уже отправляли раньше": "Bu çökmeler daha önce gönderilmişti",
 };;
 
 const DICTS: Record<Lang, Record<string, string>> = { ru: {}, en: EN, tr: TR };

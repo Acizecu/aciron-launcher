@@ -1,4 +1,5 @@
 use crate::builds::{self, Build, InstalledMod};
+use crate::content::{body_overflows, clamp_body};
 use crate::launcher::emit_op;
 use serde_json::{json, Value};
 
@@ -265,46 +266,173 @@ fn normalize_hit(m: &Value) -> Value {
     })
 }
 
-/// Полная инфо-страница проекта CurseForge в форме ModProject.
+/// Числовой код загрузчика в ответах CurseForge → имя, которым пользуется лаунчер.
+fn loader_name(id: i64) -> Option<&'static str> {
+    match id {
+        1 => Some("forge"),
+        4 => Some("fabric"),
+        5 => Some("quilt"),
+        6 => Some("neoforge"),
+        _ => None,
+    }
+}
+
+async fn description(cl: &reqwest::Client, id: &str) -> String {
+    match get_json(cl, &format!("{}/v1/mods/{id}/description", base())).await {
+        Ok(v) => v["data"].as_str().unwrap_or("").to_string(),
+        Err(_) => String::new(),
+    }
+}
+
+fn unwrap_linkouts(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(at) = rest.find("/linkout?remoteUrl=") {
+        out.push_str(&rest[..at]);
+        let tail = &rest[at + "/linkout?remoteUrl=".len()..];
+
+        let end = tail
+            .find(|c: char| c == '"' || c == '\'' || c == '<' || c == '>' || c.is_whitespace())
+            .unwrap_or(tail.len());
+        let encoded = &tail[..end];
+        match decoded_http(encoded) {
+            Some(url) => out.push_str(&url),
+
+            None => {
+                out.push_str("/linkout?remoteUrl=");
+                out.push_str(encoded);
+            }
+        }
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn decoded_http(encoded: &str) -> Option<String> {
+    let once = percent_decode(encoded);
+    [percent_decode(&once), once]
+        .into_iter()
+        .find(|c| c.starts_with("http://") || c.starts_with("https://"))
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
+            if let Ok(b) = u8::from_str_radix(hex, 16) {
+                out.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| s.to_string())
+}
+
 #[tauri::command]
 pub async fn curseforge_project(project_id: String) -> Result<Value, String> {
     let cl = http()?;
-    let id = strip_id(&project_id);
-    let json = get_json(&cl, &format!("{}/v1/mods/{id}", base())).await?;
+    let id = strip_id(&project_id).to_string();
+
+    let url = format!("{}/v1/mods/{id}", base());
+    let (json, body) = futures::join!(get_json(&cl, &url), description(&cl, &id));
+    let json = json?;
     let m = &json["data"];
     let links = &m["links"];
+
     let gallery: Vec<Value> = m["screenshots"]
         .as_array()
         .map(|a| {
             a.iter()
-                .filter_map(|s| s["url"].as_str())
-                .map(|u| json!({ "url": u }))
+                .filter_map(|s| s["url"].as_str().map(|u| (s, u)))
+                .map(|(s, u)| {
+                    json!({
+                        "url": u,
+                        "title": s["title"].as_str().filter(|x| !x.is_empty()),
+                        "description": s["description"].as_str().filter(|x| !x.is_empty()),
+                    })
+                })
                 .collect()
         })
         .unwrap_or_default();
+
+    let authors: Vec<Value> = m["authors"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x["name"].as_str())
+                .map(|n| json!({ "name": n }))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let idx = m["latestFilesIndexes"].as_array().cloned().unwrap_or_default();
+    let mut game_versions: Vec<String> = Vec::new();
+    let mut loaders: Vec<String> = Vec::new();
+    for f in &idx {
+        if let Some(v) = f["gameVersion"].as_str() {
+            if !v.is_empty() && !game_versions.iter().any(|x| x == v) {
+                game_versions.push(v.to_string());
+            }
+        }
+        if let Some(l) = f["modLoader"].as_i64().and_then(loader_name) {
+            if !loaders.iter().any(|x| x == l) {
+                loaders.push(l.to_string());
+            }
+        }
+    }
+    crate::content::sort_versions_desc(&mut game_versions);
+
+    let website = links["websiteUrl"].as_str().unwrap_or("");
 
     Ok(json!({
         "title": m["name"].as_str().unwrap_or(""),
         "slug": m["slug"].as_str().unwrap_or(""),
         "description": m["summary"].as_str().unwrap_or(""),
-        "body": "",
+        "body": clamp_body(&unwrap_linkouts(&body)),
+        "body_format": if body.is_empty() { "" } else { "html" },
+        "body_truncated": body_overflows(&body),
         "categories": m["categories"].as_array().map(|a| {
             a.iter().filter_map(|c| c["name"].as_str().map(|s| s.to_string())).collect::<Vec<_>>()
         }).unwrap_or_default(),
+        "additional_categories": Vec::<String>::new(),
         "downloads": m["downloadCount"].as_u64().unwrap_or(0),
-        "followers": m["thumbsUpCount"].as_u64().unwrap_or(0),
+
+        "followers": m["thumbsUpCount"].as_u64(),
         "icon_url": m["logo"]["url"].as_str().unwrap_or(""),
         "gallery": gallery,
+        "authors": authors,
+        "game_versions": game_versions,
+        "loaders": loaders,
+        "donation_urls": Vec::<Value>::new(),
+
+        "license_name": Value::Null,
+        "license_url": Value::Null,
+        "client_side": Value::Null,
+        "server_side": Value::Null,
+        "published": m["dateCreated"].as_str(),
+        "updated": m["dateModified"].as_str().or_else(|| m["dateReleased"].as_str()),
+        "project_type": kind_of_class(m["classId"].as_i64().unwrap_or(6)),
+        "status": Value::Null,
+        "versions_count": Value::Null,
+        "is_available": m["isAvailable"].as_bool().unwrap_or(true),
+
+        "allow_distribution": m["allowModDistribution"].as_bool(),
         "source_url": links["sourceUrl"].as_str().filter(|s| !s.is_empty()),
         "issues_url": links["issuesUrl"].as_str().filter(|s| !s.is_empty()),
         "wiki_url": links["wikiUrl"].as_str().filter(|s| !s.is_empty()),
         "discord_url": Value::Null,
-        // websiteUrl нужен фронту для внешней ссылки на страницу CurseForge.
-        "website_url": links["websiteUrl"].as_str().unwrap_or(""),
+
+        "website_url": website,
     }))
 }
 
-/// Актуальные версии-лоадеры Minecraft (для отделения версий игры от ядер в файлах).
 fn is_loader_tag(s: &str) -> bool {
     matches!(
         s.to_ascii_lowercase().as_str(),
@@ -313,7 +441,6 @@ fn is_loader_tag(s: &str) -> bool {
     )
 }
 
-/// Приводит файл CurseForge к форме ModVersion.
 fn normalize_file(f: &Value) -> Value {
     let id = f["id"].as_i64().unwrap_or_default();
     let gvs = f["gameVersions"].as_array().cloned().unwrap_or_default();
@@ -347,7 +474,6 @@ fn normalize_file(f: &Value) -> Value {
     })
 }
 
-/// Все версии (файлы) проекта CurseForge в форме ModVersion[].
 #[tauri::command]
 pub async fn curseforge_project_versions(project_id: String) -> Result<Value, String> {
     let cl = http()?;
@@ -364,25 +490,16 @@ pub async fn curseforge_project_versions(project_id: String) -> Result<Value, St
     Ok(Value::Array(versions))
 }
 
-// B4: потоковая загрузка вместо буферизации всего файла в памяти.
-// Пишем чанки по мере прихода (образец — modrinth.rs download_cancelable),
-// что убирает пик ~1× размера файла в RAM на каждую параллельную загрузку.
-// Поведение то же: тот же путь назначения, та же семантика ошибок (любая
-// сетевая/IO-ошибка → Err), файл создаётся целиком при успехе.
 async fn download_to(url: &str, path: &Path) -> Result<(), String> {
     use futures::StreamExt;
     use tokio::io::AsyncWriteExt;
 
-    // Качаем клиентом без ключа прокси: url сюда приходит из ответа API и
-    // указывает на чужой CDN (см. dl_client).
     let cl = dl_client()?;
 
     if let Some(p) = path.parent() {
         tokio::fs::create_dir_all(p).await.map_err(|e| e.to_string())?;
     }
-    // Пишем во временный .part и атомарно переименовываем в итоговый файл. Стриминг
-    // напрямую в path оставлял бы усечённый файл при обрыве/ошибке — на следующем
-    // запуске он выглядел бы как корректно установленный. .part + rename исключает это.
+
     let tmp = {
         let mut s = path.as_os_str().to_os_string();
         s.push(".part");
@@ -409,7 +526,6 @@ async fn download_to(url: &str, path: &Path) -> Result<(), String> {
     }
 }
 
-/// Ссылка на скачивание файла: сначала downloadUrl, иначе отдельный download-url эндпоинт.
 async fn file_download_url(cl: &reqwest::Client, mod_id: i64, f: &Value) -> Result<String, String> {
     if let Some(u) = f["downloadUrl"].as_str().filter(|s| !s.is_empty()) {
         return Ok(u.to_string());
@@ -424,33 +540,25 @@ async fn file_download_url(cl: &reqwest::Client, mod_id: i64, f: &Value) -> Resu
         .as_str()
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
-        // Автор мода запретил скачивание через API — честно об этом говорим.
+
         .ok_or_else(|| "Автор запретил загрузку этого файла через сторонние лаунчеры".to_string())
 }
 
-/* ================================================ для формата сборок .acpack */
-
-/// Файл CurseForge в терминах манифеста сборки.
 pub(crate) struct CfFile {
-    /// Прямая ссылка. Пустая, если автор запретил стороннюю загрузку — тогда
-    /// файл придётся положить в архив как есть.
+
     pub url: String,
     pub file_name: String,
     pub size: u64,
-    /// sha1 из ответа CurseForge (algo = 1). Может отсутствовать.
+
     pub sha1: String,
-    /// Отображаемое имя версии, например «sodium-fabric-0.5.8».
+
     pub display: String,
 }
 
-/// Общий HTTP-клиент модуля — чтобы pack.rs ходил на прокси с теми же
-/// заголовками и таймаутами, а не заводил собственный.
 pub(crate) fn client() -> Result<reqwest::Client, String> {
     http()
 }
 
-/// Имя проекта CurseForge. При любой ошибке — пустая строка: имя нужно только
-/// для показа человеку, из-за него экспорт падать не должен.
 pub(crate) async fn project_name(cl: &reqwest::Client, mod_id: i64) -> String {
     match get_json(cl, &format!("{}/v1/mods/{mod_id}", base())).await {
         Ok(j) => j["data"]["name"].as_str().unwrap_or_default().to_string(),
@@ -458,11 +566,6 @@ pub(crate) async fn project_name(cl: &reqwest::Client, mod_id: i64) -> String {
     }
 }
 
-/// Описание конкретного файла проекта: ссылка, имя, размер, хеш.
-///
-/// Отсутствие ссылки здесь — не ошибка, а нормальный исход: часть авторов на
-/// CurseForge запрещает загрузку через сторонние лаунчеры. Поэтому `url` в
-/// таком случае пустой, а решение (положить файл в архив) принимает вызывающий.
 pub(crate) async fn file_info(
     cl: &reqwest::Client,
     mod_id: i64,
@@ -488,11 +591,6 @@ pub(crate) async fn file_info(
     })
 }
 
-// Скачиванием файлов по ссылкам из чужих манифестов занимается pack.rs своим
-// клиентом. Через здешний download_to это делать нельзя: его клиент носит ключ
-// к нашему прокси, а адрес в .acpack приходит снаружи.
-
-/// Инфо о моде: имя, иконка, classId (для определения типа контента).
 async fn mod_info(cl: &reqwest::Client, mod_id: i64) -> (String, String, i64) {
     match get_json(cl, &format!("{}/v1/mods/{mod_id}", base())).await {
         Ok(j) => {
@@ -507,7 +605,6 @@ async fn mod_info(cl: &reqwest::Client, mod_id: i64) -> (String, String, i64) {
     }
 }
 
-/// Лучший файл мода под версию игры (и ядро — для модов). Первый в отсортированном по дате списке.
 async fn best_file(
     cl: &reqwest::Client,
     mod_id: i64,
@@ -529,16 +626,6 @@ async fn best_file(
     Ok(json["data"].as_array().and_then(|a| a.first().cloned()))
 }
 
-/// Какие моды CurseForge в сборке можно обновить.
-///
-/// Отдельная команда, а не ветка в modrinth::check_build_updates: там проверка
-/// идёт по id версии Modrinth, а здесь по числовому id файла CurseForge, и API
-/// у площадок разные. Раньше моды с CurseForge не проверялись ВООБЩЕ — их
-/// префикс `cf:` стоял в списке пропускаемых, а своей проверки не было.
-///
-/// Пустой `version_id` (записи старых сборок, ручные jar) пропускаем: сравнивать
-/// не с чем, а показать бейдж «есть обновление», который ничем не гасится, хуже,
-/// чем не показать ничего.
 #[tauri::command]
 pub async fn cf_check_build_updates(build_id: String) -> Result<Vec<String>, String> {
     use futures::StreamExt;
@@ -580,13 +667,10 @@ pub async fn cf_check_build_updates(build_id: String) -> Result<Vec<String>, Str
         }
     });
 
-    // Восемь запросов за раз — тот же потолок, что у Modrinth: CurseForge
-    // отвечает 403/429, если ломиться всей сборкой сразу.
     let found: Vec<Option<String>> = futures::stream::iter(tasks).buffer_unordered(8).collect().await;
     Ok(found.into_iter().flatten().collect())
 }
 
-/// Обязательные зависимости (relationType == 3) файла.
 fn required_deps(f: &Value) -> Vec<i64> {
     f["dependencies"]
         .as_array()
@@ -599,7 +683,6 @@ fn required_deps(f: &Value) -> Vec<i64> {
         .unwrap_or_default()
 }
 
-/// Устанавливает проект CurseForge в сборку (последняя совместимая версия + зависимости).
 #[tauri::command]
 pub async fn curseforge_install(build_id: String, project_id: String) -> Result<Build, String> {
     let mut build = builds::get_build(&build_id).ok_or("Сборка не найдена")?;
@@ -612,10 +695,6 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
     let kind = kind_of_class(root_class).to_string();
     let is_mod = kind == "mod";
 
-    // Корень снимаем с дедупа — иначе переустановка уже стоящего проекта (а
-    // «обновить» это именно она) молча ничего не делала бы: он отсекается
-    // первым же `seen.contains`. Прежнюю запись помним ради старого файла и
-    // состояния включённости. Подробнее — тот же приём в modrinth.rs.
     let existing = build
         .mods
         .iter()
@@ -630,7 +709,7 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
     build
         .mods
         .retain(|m| strip_id(&m.project_id).parse::<i64>().ok() != Some(root_id));
-    // (modId, is_root)
+
     let mut queue: Vec<(i64, bool)> = vec![(root_id, true)];
 
     while let Some((mid, is_root)) = queue.pop() {
@@ -639,7 +718,6 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
         }
         seen.insert(mid);
 
-        // Корень ставим по своему типу, зависимости — всегда моды под ядро сборки.
         let file_loader = if is_root && !is_mod { None } else { Some(loader.as_str()) };
         let file = match best_file(&cl, mid, file_loader, &mc).await? {
             Some(f) => f,
@@ -657,7 +735,7 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
                         ),
                     });
                 }
-                continue; // несовместимую зависимость пропускаем
+                continue;
             }
         };
 
@@ -672,8 +750,6 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
 
         let prev = if is_root { existing.as_ref() } else { None };
 
-        // Старый файл — только после успешной загрузки нового, иначе обрыв
-        // сети оставит сборку без мода. Совпало имя — уже перезаписан.
         if let Some(old) = prev {
             let old_path = builds::content_dir(&build_id, &old.kind).join(&old.filename);
             if old_path != dest_dir.join(&filename) {
@@ -681,8 +757,6 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
             }
         }
 
-        // Выключенное остаётся выключенным: у таких файл лежит с суффиксом
-        // .disabled (builds::toggle_mod).
         let enabled = prev.map(|o| o.enabled).unwrap_or(true);
         let filename = if enabled {
             filename
@@ -703,7 +777,6 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
             kind: if is_root { kind.clone() } else { "mod".into() },
         });
 
-        // Зависимости тянем только для модов.
         if is_mod || !is_root {
             for dep in required_deps(&file) {
                 if !seen.contains(&dep) {
@@ -717,7 +790,6 @@ pub async fn curseforge_install(build_id: String, project_id: String) -> Result<
     Ok(build)
 }
 
-/// Устанавливает КОНКРЕТНУЮ версию (файл) проекта CurseForge (вкладка «Версии»).
 #[tauri::command]
 pub async fn curseforge_install_version(
     build_id: String,
@@ -743,7 +815,6 @@ pub async fn curseforge_install_version(
     let filename = sane_filename(file["fileName"].as_str().unwrap_or("file.jar"), "file.jar");
     let url = file_download_url(&cl, mid, &file).await?;
 
-    // Убираем прежнюю версию этого проекта (файл + запись).
     let pid = format!("cf:{mid}");
     if let Some(old) = build.mods.iter().find(|m| m.project_id == pid) {
         let _ = std::fs::remove_file(builds::content_dir(&build_id, &old.kind).join(&old.filename));
@@ -761,7 +832,6 @@ pub async fn curseforge_install_version(
         kind: kind.clone(),
     });
 
-    // Обязательные зависимости (только для модов) — лучшая версия под сборку.
     if is_mod {
         let mut seen: HashSet<i64> = build
             .mods
@@ -804,16 +874,13 @@ pub async fn curseforge_install_version(
     Ok(build)
 }
 
-/// Устанавливает модпак CurseForge в новую сборку: качает .zip, разбирает manifest.json,
-/// создаёт сборку, распаковывает overrides и качает все моды по projectID/fileID.
 #[tauri::command]
 pub async fn curseforge_install_modpack(
     app: AppHandle,
     project_id: String,
     version_id: Option<String>,
 ) -> Result<Build, String> {
-    // Обёртка: любая ошибка (кроме отмены) шлёт "error", иначе орб установки завис
-    // бы на «Подготовка…» без сигнала о сбое. Отмену ошибкой не считаем.
+
     let res = cf_install_inner(app.clone(), project_id, version_id).await;
     if let Err(e) = &res {
         if e != crate::cancel::CANCELLED {
@@ -829,11 +896,10 @@ async fn cf_install_inner(
     version_id: Option<String>,
 ) -> Result<Build, String> {
     let cl = http()?;
-    // Снимаем прошлую пометку отмены под общим ключом орба ("legacy").
+
     crate::cancel::reset("legacy");
     let mid: i64 = strip_id(&project_id).parse().map_err(|_| "Неверный id CurseForge")?;
 
-    // Файл модпака: выбранная версия или последняя.
     let file = match version_id.as_deref().filter(|s| !s.is_empty()) {
         Some(vid) => {
             get_json(&cl, &format!("{}/v1/mods/{mid}/files/{vid}", base())).await?["data"].clone()
@@ -855,10 +921,6 @@ async fn cf_install_inner(
     emit(&app, "modpack", "Скачивание модпака", 0, 1);
     let url = file_download_url(&cl, mid, &file).await?;
 
-    // B4: .zip модпака стримим во временный файл, а не держим в памяти + ещё раз
-    // в bytes.to_vec() (это был пик ~2× размера модпака). Читаем чанки и пишем на
-    // диск по мере прихода; ZipArchive затем работает поверх файла, а не буфера.
-    // Уникальное имя — по mid+file-id, чтобы параллельные установки не пересекались.
     let file_id = file["id"].as_i64().unwrap_or_default();
     let tmp_zip = std::env::temp_dir().join(format!("aciron-cf-modpack-{mid}-{file_id}.zip"));
     {
@@ -870,9 +932,7 @@ async fn cf_install_inner(
             .await
             .map_err(|e| e.to_string())?;
         while let Some(chunk) = stream.next().await {
-            // Отмена во время самой большой загрузки (.zip модпака) — сворачиваемся
-            // сразу, удаляя недокачанный временный файл. Сборки ещё нет — чистить
-            // нечего кроме tmp_zip.
+
             if crate::cancel::is_cancelled("legacy") {
                 drop(out);
                 let _ = tokio::fs::remove_file(&tmp_zip).await;
@@ -883,10 +943,6 @@ async fn cf_install_inner(
         }
         out.flush().await.map_err(|e| e.to_string())?;
     }
-
-    // --- синхронно: разбор zip, создание сборки, распаковка overrides ---
-    // Выносим блокирующий zip-I/O в spawn_blocking, чтобы не держать поток
-    // tokio-executor'а на чтении/распаковке (образец: launcher.rs spawn_blocking).
 
     let tmp_zip_for_task = tmp_zip.clone();
     let parse_result = tokio::task::spawn_blocking(move || -> Result<(String, PathBuf, Vec<Value>), String> {
@@ -1061,4 +1117,41 @@ async fn cf_install_inner(
     }
     emit(&app, "done", "Модпак установлен", 1, 1);
     Ok(build)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn разворачиваем_счётчик_переходов() {
+
+        let html = r#"<a href="/linkout?remoteUrl=http%253a%252f%252fwiki.aidancbrady.com%252fwiki%252fMain_Page">Wiki</a>"#;
+        let got = unwrap_linkouts(html);
+        assert!(got.contains(r#"href="http:
+        assert!(!got.contains("linkout"), "{got}");
+    }
+
+    #[test]
+    fn несколько_ссылок_подряд() {
+        let html = concat!(
+            r#"<a href="/linkout?remoteUrl=https%253a%252f%252fa.test%252f">A</a> и "#,
+            r#"<a href="/linkout?remoteUrl=https%253a%252f%252fb.test%252f">B</a>"#
+        );
+        let got = unwrap_linkouts(html);
+        assert!(got.contains("https://a.test/") && got.contains("https://b.test/"), "{got}");
+    }
+
+    #[test]
+    fn обычный_html_не_трогаем() {
+        let html = r#"<p>текст <a href="https:
+        assert_eq!(unwrap_linkouts(html), html);
+    }
+
+    #[test]
+    fn мусор_оставляем_как_есть() {
+        let html = r#"<a href="/linkout?remoteUrl=%%%">x</a>"#;
+        let got = unwrap_linkouts(html);
+        assert!(got.contains("/linkout?remoteUrl=%%%"), "{got}");
+    }
 }

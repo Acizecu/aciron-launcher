@@ -17,8 +17,9 @@ import Background from "./components/background";
 import FirstRunImport from "./components/FirstRunImport";
 import DataMigrationModal from "./components/DataMigrationModal";
 import Onboarding from "./components/Onboarding";
+import WhatsNew from "./components/WhatsNew";
 import Tooltip from "./components/Tooltip";
-import { DEBUG_TOOLS, DEV } from "./config";
+import { APP_VERSION, DEBUG_TOOLS, DEV } from "./config";
 import { LauncherProvider } from "./LauncherContext";
 import { ToastProvider } from "./ToastContext";
 import FriendRequestToasts from "./components/FriendRequestToasts";
@@ -27,6 +28,7 @@ import { ThemeProvider } from "./ThemeContext";
 import { t, useLang } from "./i18n";
 import {
   getSettings,
+  saveSettings,
   hardwareCapable,
   firstRunPending,
   isTauri,
@@ -70,6 +72,8 @@ function AppInner() {
   const [notifySound, setNotifySound] = useState(true);
   const [onboarding, setOnboarding] = useState(false);
 
+  const [whatsNew, setWhatsNew] = useState(false);
+
   const showBottomBar =
     active !== "builds" &&
     active !== "mods" &&
@@ -111,11 +115,28 @@ function AppInner() {
           return;
         }
         await offerImport();
+
+        if (s.seen_version !== APP_VERSION && !(await firstRunPending())) {
+          setWhatsNew(true);
+        } else if (s.seen_version !== APP_VERSION) {
+
+          void markVersionSeen();
+        }
       } catch {
 
       }
     })();
   }, []);
+
+  const markVersionSeen = async () => {
+    try {
+
+      const fresh = await getSettings();
+      await saveSettings({ ...fresh, seen_version: APP_VERSION });
+    } catch {
+
+    }
+  };
 
   useEffect(() => {
     const open = (e: Event) => {
@@ -190,6 +211,10 @@ function AppInner() {
       if (e.key === "F8") {
         e.preventDefault();
         setImportList((l) => (l ? null : DEBUG_INSTANCES));
+      }
+      if (e.key === "F9") {
+        e.preventDefault();
+        setWhatsNew((v) => !v);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -273,6 +298,15 @@ function AppInner() {
           <FirstRunImport instances={importList} onClose={() => setImportList(null)} />
         )}
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+        {whatsNew && (
+          <WhatsNew
+            version={APP_VERSION}
+            onClose={() => {
+              setWhatsNew(false);
+              void markVersionSeen();
+            }}
+          />
+        )}
         {}
         {DEBUG_TOOLS && !onboarding && (
           <button

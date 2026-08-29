@@ -245,6 +245,25 @@ pub struct Settings {
     /// после того, как человек отказался от импорта.
     #[serde(default)]
     pub onboarded: bool,
+
+    /// Анонимно отправлять отчёты о сбоях лаунчера.
+    ///
+    /// Дефолт — включено. Отчёт собирается из белого списка полей и проходит
+    /// вычистку личного (crash.rs); ни ника, ни почты, ни токенов, ни путей с
+    /// именем пользователя в нём нет. Тумблер лежит в настройках, рядом с
+    /// проверкой обновлений, и выключается одним нажатием — при выключении
+    /// накопленные отчёты удаляются с диска.
+    #[serde(default = "default_true")]
+    pub crash_reports: bool,
+
+    /// Версия, окно «Что нового» для которой человек уже видел.
+    ///
+    /// Пусто — ещё ни одного не показывали. У тех, кто обновляется с прежней
+    /// версии, поле тоже пусто (его там не было), и это правильно: им окно
+    /// показать как раз надо. Отличить их от чистой установки помогает
+    /// `first_run_pending` — см. App.tsx.
+    #[serde(default)]
+    pub seen_version: String,
 }
 
 fn default_ui_scale() -> u32 {
@@ -281,6 +300,8 @@ impl Default for Settings {
             notify_sound: true,
             language: String::new(),
             onboarded: false,
+            crash_reports: true,
+            seen_version: String::new(),
         }
     }
 }
@@ -396,6 +417,22 @@ pub fn get_settings() -> Settings {
     load_settings()
 }
 
+pub fn cached_language() -> String {
+    settings_cache()
+        .read()
+        .ok()
+        .and_then(|g| g.as_ref().map(|s| s.language.clone()))
+        .unwrap_or_default()
+}
+
+pub fn java_present() -> bool {
+    settings_cache()
+        .read()
+        .ok()
+        .and_then(|g| g.as_ref().map(|s| !s.java_path.is_empty()))
+        .unwrap_or(false)
+}
+
 #[tauri::command]
 pub fn save_settings(settings: Settings) -> Result<(), String> {
     ensure_dirs(&settings);
@@ -405,6 +442,12 @@ pub fn save_settings(settings: Settings) -> Result<(), String> {
     invalidate_settings_cache();
 
     crate::discord::set_enabled(settings.discord_rpc);
+
+    crate::crash::set_enabled(settings.crash_reports);
+
+    if !settings.crash_reports {
+        crate::crash::purge(&crate::crash::queue_path());
+    }
     Ok(())
 }
 

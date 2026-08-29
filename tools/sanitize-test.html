@@ -1,0 +1,223 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Проверка очистки чужой разметки</title>
+  </head>
+  <!--
+    Регрессионный тест очистки чужого HTML (src/sanitize.ts) и разбора markdown
+    (src/markdown.ts). Описание мода приходит от постороннего человека, а
+    показывается в окне Tauri, где доступны команды — в том числе выдающая
+    токен живого аккаунта. Поэтому граница проверяется не на глаз.
+
+    Как запускать: при поднятом дев-сервере открыть
+        http://localhost:1420/tools/sanitize-test.html
+    либо без окна:
+        chrome --headless=new --virtual-time-budget=8000                --dump-dom http://localhost:1420/tools/sanitize-test.html
+    Ждём в первой строке «ИТОГ: ВСЁ ЧИСТО».
+
+    Страница НЕ попадает в сборку: у Vite вход один — index.html в корне.
+  -->
+  <body style="font: 13px monospace; background: #131315; color: #d9d9d9">
+    <pre id="out">…</pre>
+    <script type="module">
+      import { sanitizeToFragment, safeUrl } from "/src/sanitize.ts";
+      import { markdownToHtml } from "/src/markdown.ts";
+
+      // Ловушка: если санитайзер что-то пропустит, эти функции вызовутся.
+      const fired = [];
+      window.__pwn = (what) => fired.push(what);
+      window.alert = (x) => fired.push("alert:" + x);
+
+      const CASES = [
+        ["script", `<script>__pwn('script')<\/script>`],
+        ["img onerror", `<img src=x onerror="__pwn('onerror')">`],
+        ["img ONERROR upper", `<IMG SRC=x ONERROR="__pwn('upper')">`],
+        ["svg onload", `<svg onload="__pwn('svg')"></svg>`],
+        ["details ontoggle", `<details open ontoggle="__pwn('toggle')"><summary>a</summary>b</details>`],
+        ["body onload", `<body onload="__pwn('body')">x</body>`],
+        ["iframe", `<iframe src="https://evil.test/"></iframe>`],
+        ["object", `<object data="https://evil.test/x.swf"></object>`],
+        ["embed", `<embed src="https://evil.test/x">`],
+        ["form+input", `<form action="https://evil.test/"><input name=a><button>go</button></form>`],
+        ["base", `<base href="https://evil.test/">`],
+        ["style tag", `<style>body{background:url(https://evil.test/p)}</style>`],
+        ["style attr", `<div style="position:fixed;inset:0;z-index:99999">overlay</div>`],
+        ["js href", `<a href="javascript:__pwn('href')">click</a>`],
+        ["js href tabs", `<a href="java\tscript:__pwn('tab')">click</a>`],
+        ["js href newline", `<a href="java\nscript:__pwn('nl')">click</a>`],
+        ["js href entity", `<a href="java&#115;cript:__pwn('ent')">click</a>`],
+        ["js href spaces", `<a href="  javascript:__pwn('sp')">click</a>`],
+        ["vbscript", `<a href="vbscript:msgbox(1)">click</a>`],
+        ["data html", `<a href="data:text/html,<script>__pwn('data')<\/script>">click</a>`],
+        ["data svg img", `<img src="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=">`],
+        ["blob", `<a href="blob:https://x/y">click</a>`],
+        ["file", `<a href="file:///C:/Windows/System32">click</a>`],
+        ["tauri scheme", `<a href="tauri://localhost/x">click</a>`],
+        ["ipc localhost", `<a href="http://ipc.localhost/x">click</a>`],
+        ["srcset", `<img src="https://ok.test/a.png" srcset="https://evil.test/b.png 2x">`],
+        ["id clobber", `<img name="body" id="body" src="https://ok.test/a.png">`],
+        ["custom element", `<my-widget onclick="__pwn('ce')">text</my-widget>`],
+        ["is= attr", `<div is="evil-el">text</div>`],
+        ["mxss svg style", `<svg><style><!--</style><img src=x onerror="__pwn('mxss')"></svg>`],
+        ["mxss math", `<math><mtext><table><mglyph><style><img src=x onerror="__pwn('mxss2')">`],
+        ["comment", `<!--<script>__pwn('comment')<\/script>-->text`],
+        ["noscript", `<noscript><img src=x onerror="__pwn('ns')"></noscript>`],
+        ["template", `<template><img src=x onerror="__pwn('tpl')"></template>`],
+        ["nested a js", `<div><p><a href="JaVaScRiPt:__pwn('case')">x</a></p></div>`],
+        ["md link js", null, `[клик](javascript:__pwn('mdlink'))`],
+        ["md image js", null, `![alt](javascript:__pwn('mdimg'))`],
+        ["md raw script", null, `текст\n\n<script>__pwn('mdraw')<\/script>\n\nещё`],
+        ["md raw onerror", null, `<img src=x onerror="__pwn('mdimgerr')">`],
+        ["md autolink js", null, `<javascript:__pwn('mdauto')>`],
+      ];
+
+      // Всё, что должно ВЫЖИТЬ: санитайзер обязан не только резать, но и
+      // сохранять нормальное описание.
+      const KEEP = [
+        ["текст", `<p>привет</p>`, "привет"],
+        ["жирный", `<p><strong>жир</strong></p>`, "жир"],
+        ["картинка", `<img src="https://ok.test/a.png" alt="кот">`, null],
+        ["ссылка", `<a href="https://ok.test/page">тут</a>`, "тут"],
+        ["таблица", `<table><tr><th>a</th><td>b</td></tr></table>`, "b"],
+        ["код", `<pre><code>let x = 1;</code></pre>`, "let x = 1;"],
+        ["details", `<details><summary>s</summary><p>d</p></details>`, "d"],
+      ];
+
+      const host = document.createElement("div");
+      document.body.appendChild(host);
+      const lines = [];
+      let bad = 0;
+
+      for (const [name, html, md] of CASES) {
+        const src = md != null ? markdownToHtml(md) : html;
+        host.replaceChildren(sanitizeToFragment(src));
+        // Даём событиям (onerror у картинки) шанс выстрелить.
+        await new Promise((r) => setTimeout(r, 0));
+        const out = host.innerHTML;
+        const leaks = [];
+        if (/on[a-z]+=/i.test(out)) leaks.push("остался on*-атрибут");
+        if (/<script|<iframe|<object|<embed|<form|<style|<base|<svg|<math/i.test(out))
+          leaks.push("остался опасный тег");
+        if (/style=/i.test(out)) leaks.push("остался style");
+        if (/href=/i.test(out)) leaks.push("остался живой href");
+        if (/srcset/i.test(out)) leaks.push("остался srcset");
+        if (/\bid=|\bname=/i.test(out)) leaks.push("остался id/name");
+        if (/javascript:|vbscript:|data:|blob:|file:|tauri:/i.test(out))
+          leaks.push("осталась опасная схема");
+        if (leaks.length) {
+          bad++;
+          lines.push(`ПЛОХО  ${name}: ${leaks.join(", ")}\n       -> ${out.slice(0, 200)}`);
+        } else {
+          lines.push(`ок     ${name}`);
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 60));
+      if (fired.length) {
+        bad += fired.length;
+        lines.push(`ПЛОХО  ВЫПОЛНИЛСЯ КОД: ${fired.join(", ")}`);
+      } else {
+        lines.push(`ок     ни один скрипт не выполнился`);
+      }
+
+      lines.push("");
+      lines.push("— что должно уцелеть —");
+      for (const [name, html, must] of KEEP) {
+        host.replaceChildren(sanitizeToFragment(html));
+        const out = host.innerHTML;
+        const ok = must == null ? out.includes("src=") : out.includes(must);
+        if (!ok) {
+          bad++;
+          lines.push(`ПЛОХО  ${name} потерялся -> ${out.slice(0, 160)}`);
+        } else {
+          lines.push(`ок     ${name}`);
+        }
+      }
+
+      lines.push("");
+      lines.push("— safeUrl —");
+      for (const [u, want] of [
+        ["https://ok.test/a", true],
+        ["http://ok.test/a", true],
+        ["javascript:alert(1)", false],
+        ["JAVASCRIPT:alert(1)", false],
+        ["data:text/html,x", false],
+        ["//evil.test/x", true],
+        ["/relative", false],
+        ["http://ipc.localhost/x", false],
+        ["https://asset.localhost/x", false],
+        ["http://localhost:1420/x", false],
+        ["http://127.0.0.1/x", false],
+        ["http://192.168.0.1/x", false],
+        ["", false],
+        ["   ", false],
+      ]) {
+        const got = safeUrl(u) != null;
+        if (got !== want) {
+          bad++;
+          lines.push(`ПЛОХО  safeUrl(${JSON.stringify(u)}) = ${got}, ждали ${want}`);
+        } else {
+          lines.push(`ок     safeUrl(${JSON.stringify(u)}) = ${got}`);
+        }
+      }
+
+      lines.push("");
+      lines.push("— найденное проверкой —");
+      // 1. Вложенная цитата: раньше это переполняло стек и роняло весь лаунчер.
+      try {
+        const bomb = ">".repeat(20000) + " текст";
+        const t0 = performance.now();
+        const html = markdownToHtml(bomb);
+        host.replaceChildren(sanitizeToFragment(html));
+        const ms = Math.round(performance.now() - t0);
+        const ok = host.textContent.includes("текст");
+        if (!ok) { bad++; lines.push("ПЛОХО  цитатная бомба: текст потерялся"); }
+        else lines.push(`ок     цитатная бомба 20000 «>» разобрана за ${ms} мс, стек цел`);
+      } catch (e) {
+        bad++;
+        lines.push("ПЛОХО  цитатная бомба уронила разбор: " + e.message);
+      }
+      // 2. Автолинк отдельной строкой раньше исчезал целиком.
+      host.replaceChildren(sanitizeToFragment(markdownToHtml("<https://github.com/a/b>")));
+      if (!host.querySelector("[data-href]")) {
+        bad++;
+        lines.push("ПЛОХО  автолинк отдельной строкой пропал -> " + host.innerHTML.slice(0, 80));
+      } else {
+        lines.push("ок     автолинк отдельной строкой стал ссылкой");
+      }
+      // 3. Настоящий html-блок отдельной строкой по-прежнему проходит.
+      host.replaceChildren(sanitizeToFragment(markdownToHtml("<div>внутри</div>")));
+      if (!host.textContent.includes("внутри")) {
+        bad++; lines.push("ПЛОХО  html-блок потерялся");
+      } else lines.push("ок     html-блок отдельной строкой цел");
+
+      lines.push("");
+      lines.push("— markdown —");
+      const md = markdownToHtml(
+        "# Заголовок\n\nтекст **жирный** и `код` и [ссылка](https://ok.test)\n\n- раз\n- два\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n```\nlet x = 1;\n```\n\n> цитата"
+      );
+      for (const [what, re] of [
+        ["заголовок", /<h1>Заголовок<\/h1>/],
+        ["жирный", /<strong>жирный<\/strong>/],
+        ["инлайн-код", /<code>код<\/code>/],
+        ["ссылка", /<a href="https:\/\/ok\.test">ссылка<\/a>/],
+        ["список", /<ul>\s*<li>раз<\/li>/],
+        ["таблица", /<table>.*<th>a<\/th>/s],
+        ["блок кода", /<pre><code>let x = 1;<\/code><\/pre>/],
+        ["цитата", /<blockquote>/],
+      ]) {
+        if (!re.test(md)) {
+          bad++;
+          lines.push(`ПЛОХО  markdown: ${what} не собрался`);
+        } else {
+          lines.push(`ок     markdown: ${what}`);
+        }
+      }
+
+      lines.unshift(bad === 0 ? "ИТОГ: ВСЁ ЧИСТО" : `ИТОГ: ПРОБЛЕМ ${bad}`, "");
+      document.getElementById("out").textContent = lines.join("\n");
+      console.log("[santest] " + (bad === 0 ? "CLEAN" : "FAIL " + bad));
+    </script>
+  </body>
+</html>

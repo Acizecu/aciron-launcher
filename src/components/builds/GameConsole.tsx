@@ -1,7 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { gameLogTail, isTauri } from "../../api";
+import {
+  gameLogTail,
+  isTauri,
+  logShare,
+  logShareAvailable,
+  logShareSize,
+  openUrl,
+  type SharedLog,
+} from "../../api";
 import LoadingDots from "../LoadingDots";
-import { useLang } from "../../i18n";
+import Modal from "../Modal";
+import { ts, useLang } from "../../i18n";
 
 export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
 
@@ -55,6 +64,14 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
   const [query, setQuery] = useState("");
   const [follow, setFollow] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareReady, setShareReady] = useState(false);
+  const [shareSize, setShareSize] = useState<[number, number]>([0, 0]);
+  const [sharing, setSharing] = useState(false);
+  const [shared, setShared] = useState<SharedLog | null>(null);
+  const [shareError, setShareError] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const scroller = useRef<HTMLDivElement | null>(null);
   const counter = useRef(0);
@@ -127,6 +144,46 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
     void navigator.clipboard.writeText(shown.map((r) => r.text).join("\n"));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
+  };
+
+  useEffect(() => {
+    logShareAvailable().then(setShareReady).catch(() => {});
+  }, []);
+
+  const openShare = () => {
+    setShared(null);
+    setShareError("");
+    setShareOpen(true);
+
+    logShareSize(gameId)
+      .then(setShareSize)
+      .catch(() => setShareSize([0, 0]));
+  };
+
+  const doShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    setShareError("");
+    try {
+      const res = await logShare(gameId);
+      setShared(res);
+
+      void navigator.clipboard.writeText(res.url).catch(() => {});
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1600);
+    } catch (e) {
+      setShareError(ts(String(e)));
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const expiresIn = (epoch: number): string => {
+    const left = epoch * 1000 - Date.now();
+    if (left <= 0) return t("уже истекла");
+    const h = Math.floor(left / 3_600_000);
+    const m = Math.floor((left % 3_600_000) / 60_000);
+    return h > 0 ? t("{h} ч {m} мин", { h, m }) : t("{m} мин", { m });
   };
 
   return (
@@ -207,6 +264,21 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
           >
             <i className={`fa-solid ${copied ? "fa-check text-accent" : "fa-copy"} text-[11px]`} />
           </button>
+          {}
+          {shareReady && rows.length > 0 && (
+            <button
+              onClick={openShare}
+              title={t("Создать ссылку на этот лог")}
+              className={`flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] transition-colors ${
+                !running && counts.errors > 0
+                  ? "bg-accent/15 text-accent hover:bg-accent/25"
+                  : "text-muted hover:text-text"
+              }`}
+            >
+              <i className="fa-solid fa-link text-[10px]" />
+              {t("Создать лог")}
+            </button>
+          )}
         </div>
       </div>
 
@@ -255,6 +327,115 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
           ))
         )}
       </div>
+
+      {shareOpen && (
+        <Modal
+          title={shared ? t("Ссылка готова") : t("Ссылка на лог")}
+          subtitle={
+            shared
+              ? t("Откроется у любого, кому вы её дадите")
+              : t("Лог уедет на сервер Aciron и будет доступен по ссылке")
+          }
+          icon={shared ? "fa-link" : "fa-share-nodes"}
+          onClose={() => setShareOpen(false)}
+        >
+          <div className="p-1">
+            {shared ? (
+              <>
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2.5">
+                  <i className="fa-solid fa-link text-xs text-accent" />
+                  <span className="selectable min-w-0 flex-1 truncate font-mono text-[13px] text-text">
+                    {shared.url}
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      void navigator.clipboard.writeText(shared.url);
+                      setLinkCopied(true);
+                      window.setTimeout(() => setLinkCopied(false), 1600);
+                    }}
+                    className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+                  >
+                    <i className={`fa-solid ${linkCopied ? "fa-check" : "fa-copy"}`} />
+                    {linkCopied ? t("Скопировано") : t("Скопировать")}
+                  </button>
+                  <button
+                    onClick={() => openUrl(shared.url)}
+                    className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                  >
+                    <i className="fa-solid fa-arrow-up-right-from-square text-xs" />
+                    {t("Открыть")}
+                  </button>
+                </div>
+                {shared.expires_at > 0 && (
+                  <p className="mt-4 text-[12px] leading-relaxed text-muted">
+                    <i className="fa-solid fa-clock mr-1.5 text-[11px]" />
+                    {t("Ссылка перестанет работать через {left} — лог удалится сам.", {
+                      left: expiresIn(shared.expires_at),
+                    })}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-sm leading-relaxed text-text">
+                  {shareSize[0] > 0
+                    ? t("Отправим {lines} строк ({size}) — весь лог этого запуска.", {
+                        lines: shareSize[0].toLocaleString("ru-RU"),
+                        size:
+                          shareSize[1] > 1024 * 1024
+                            ? `${(shareSize[1] / 1024 / 1024).toFixed(1)} МБ`
+                            : `${Math.max(1, Math.round(shareSize[1] / 1024))} КБ`,
+                      })
+                    : t("Отправим весь лог этого запуска.")}
+                </p>
+                {}
+                <ul className="mt-3 space-y-1.5 text-[12px] leading-relaxed text-muted">
+                  <li className="flex gap-2">
+                    <i className="fa-solid fa-eye mt-0.5 shrink-0 text-[11px]" />
+                    <span>{t("Лог увидит каждый, у кого есть ссылка.")}</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <i className="fa-solid fa-shield-halved mt-0.5 shrink-0 text-[11px]" />
+                    <span>
+                      {t("Токен входа и путь к вашим папкам из лога вырезаны. Ник останется.")}
+                    </span>
+                  </li>
+                  <li className="flex gap-2">
+                    <i className="fa-solid fa-clock mt-0.5 shrink-0 text-[11px]" />
+                    <span>{t("Через 12 часов ссылка перестанет работать.")}</span>
+                  </li>
+                </ul>
+
+                {shareError && (
+                  <div className="mt-3 flex items-start gap-2 rounded-[12px] bg-[#ef4444]/10 px-3 py-2 text-[12px] text-[#ef4444]">
+                    <i className="fa-solid fa-circle-exclamation mt-0.5" />
+                    <span className="min-w-0 break-words">{shareError}</span>
+                  </div>
+                )}
+
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    onClick={() => setShareOpen(false)}
+                    className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
+                  >
+                    {t("Отмена")}
+                  </button>
+                  <button
+                    onClick={doShare}
+                    disabled={sharing}
+                    className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-60"
+                  >
+                    <i className={`fa-solid ${sharing ? "fa-spinner fa-spin" : "fa-link"}`} />
+                    {sharing ? t("Отправляем…") : t("Создать ссылку")}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

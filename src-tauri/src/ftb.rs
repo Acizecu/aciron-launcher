@@ -1,4 +1,5 @@
 use crate::builds::{self, Build, InstalledMod};
+use crate::content::{body_overflows, clamp_body};
 use crate::launcher::emit_op;
 use serde_json::{json, Value};
 use std::path::{Component, Path, PathBuf};
@@ -141,36 +142,144 @@ pub async fn ftb_project(project_id: String) -> Result<Value, String> {
     let cl = http()?;
     let id = strip_id(&project_id);
     let pack = get_json(&cl, &format!("{API}/modpack/{id}")).await?;
-    let splash = art_url(&pack, "splash");
-    let gallery: Vec<Value> = if splash.is_empty() {
-        vec![]
-    } else {
-        vec![json!({ "url": splash })]
-    };
-    let description = pack["description"]
-        .as_str()
-        .filter(|s| !s.is_empty())
-        .or_else(|| pack["synopsis"].as_str())
-        .unwrap_or("");
+
+    let gallery: Vec<Value> = pack["art"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter(|x| x["type"].as_str() != Some("square"))
+                .filter_map(|x| x["url"].as_str())
+                .filter(|u| !u.is_empty())
+                .map(|u| json!({ "url": u }))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let synopsis = pack["synopsis"].as_str().unwrap_or("");
+    let full = pack["description"].as_str().unwrap_or("");
+
+    let short = if synopsis.is_empty() { first_line(full) } else { synopsis.to_string() };
+
+    let authors: Vec<Value> = pack["authors"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x["name"].as_str().map(|n| (x, n)))
+                .map(|(x, n)| {
+                    json!({
+                        "name": n,
+                        "url": x["website"].as_str().filter(|s| s.starts_with("http")),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let versions = pack["versions"].as_array().cloned().unwrap_or_default();
+
+    let specs = versions
+        .iter()
+        .max_by_key(|v| v["updated"].as_i64().unwrap_or(0))
+        .map(|v| v["specs"].clone())
+        .unwrap_or(Value::Null);
 
     Ok(json!({
         "title": pack["name"].as_str().unwrap_or(""),
         "slug": id,
-        "description": description,
-        "body": "",
+        "description": short,
+        "body": clamp_body(full),
+        "body_format": if full.is_empty() { "" } else { "markdown" },
+        "body_truncated": body_overflows(full),
         "categories": pack["tags"].as_array().map(|a| {
             a.iter().filter_map(|t| t["name"].as_str().map(|s| s.to_string())).collect::<Vec<_>>()
         }).unwrap_or_default(),
+        "additional_categories": Vec::<String>::new(),
         "downloads": pack["installs"].as_u64().unwrap_or(0),
-        "followers": 0,
+
+        "followers": Value::Null,
         "icon_url": art_url(&pack, "square"),
         "gallery": gallery,
+        "authors": authors,
+        "game_versions": Vec::<String>::new(),
+        "loaders": Vec::<String>::new(),
+        "donation_urls": Vec::<Value>::new(),
+        "license_name": Value::Null,
+        "license_url": Value::Null,
+        "client_side": Value::Null,
+        "server_side": Value::Null,
+        "published": Value::Null,
+        "updated": pack["updated"].as_i64().map(epoch_to_iso),
+        "project_type": "modpack",
+        "status": pack["status"].as_str(),
+        "versions_count": versions.len(),
+        "is_available": !pack["private"].as_bool().unwrap_or(false),
+        "allow_distribution": Value::Null,
+        "plays": pack["plays"].as_u64(),
+        "ram_min_mb": specs["minimum"].as_u64(),
+        "ram_rec_mb": specs["recommended"].as_u64(),
         "source_url": Value::Null,
         "issues_url": Value::Null,
         "wiki_url": Value::Null,
         "discord_url": Value::Null,
         "website_url": format!("https://www.feed-the-beast.com/modpacks/{id}"),
     }))
+}
+
+fn first_line(text: &str) -> String {
+    text.lines()
+        .map(|l| l.trim_start_matches(['#', '*', '>', ' ']).trim())
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .chars()
+        .take(300)
+        .collect()
+}
+
+fn epoch_to_iso(secs: i64) -> String {
+    let days_total = secs.div_euclid(86_400);
+    let mut rem = secs.rem_euclid(86_400);
+    let (h, m, sec) = (rem / 3600, (rem % 3600) / 60, rem % 60);
+    rem = days_total;
+
+    let mut year = 1970i64;
+    loop {
+        let len = if is_leap(year) { 366 } else { 365 };
+        if rem < len {
+            break;
+        }
+        rem -= len;
+        year += 1;
+    }
+    let ml = [
+        31,
+        if is_leap(year) { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
+    let mut month = 1;
+    for len in ml {
+        if rem < len {
+            break;
+        }
+        rem -= len;
+        month += 1;
+    }
+    format!(
+        "{year:04}-{month:02}-{:02}T{h:02}:{m:02}:{sec:02}Z",
+        rem + 1
+    )
+}
+
+fn is_leap(y: i64) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
 }
 
 fn normalize_version(v: &Value) -> Value {

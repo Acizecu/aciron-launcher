@@ -1,4 +1,5 @@
 use crate::builds::{self, Build, InstalledMod};
+use crate::content::{body_overflows, clamp_body, str_list};
 use crate::launcher::emit_op;
 
 fn emit(app: &tauri::AppHandle, stage: &str, message: &str, current: u64, total: u64) {
@@ -528,7 +529,88 @@ pub async fn modrinth_project(project_id: String) -> Result<Value, String> {
     if !resp.status().is_success() {
         return Err(format!("Modrinth: {}", resp.status()));
     }
-    resp.json::<Value>().await.map_err(|e| e.to_string())
+    let m: Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(normalize_project(&m))
+}
+
+fn sorted_versions(v: &Value) -> Vec<String> {
+    let mut list = str_list(v);
+    crate::content::sort_versions_desc(&mut list);
+    list
+}
+
+fn normalize_project(m: &Value) -> Value {
+    let gallery: Vec<Value> = m["gallery"]
+        .as_array()
+        .map(|a| {
+            let mut v: Vec<&Value> = a.iter().collect();
+
+            v.sort_by_key(|g| g["ordering"].as_i64().unwrap_or(0));
+            v.iter()
+                .filter_map(|g| g["url"].as_str().map(|u| (g, u)))
+                .map(|(g, u)| {
+                    json!({
+                        "url": u,
+                        "title": g["title"].as_str(),
+                        "description": g["description"].as_str(),
+                        "featured": g["featured"].as_bool().unwrap_or(false),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let donations: Vec<Value> = m["donation_urls"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|d| d["url"].as_str().map(|u| (d, u)))
+                .map(|(d, u)| {
+                    json!({
+                        "platform": d["platform"].as_str().unwrap_or(d["id"].as_str().unwrap_or("")),
+                        "url": u,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let status = m["status"].as_str().unwrap_or("");
+    json!({
+        "title": m["title"].as_str().unwrap_or(""),
+        "slug": m["slug"].as_str().unwrap_or(""),
+        "description": m["description"].as_str().unwrap_or(""),
+        "body": clamp_body(m["body"].as_str().unwrap_or("")),
+        "body_format": "markdown",
+        "body_truncated": body_overflows(m["body"].as_str().unwrap_or("")),
+        "categories": str_list(&m["categories"]),
+        "additional_categories": str_list(&m["additional_categories"]),
+        "downloads": m["downloads"].as_u64().unwrap_or(0),
+        "followers": m["followers"].as_u64(),
+        "icon_url": m["icon_url"].as_str().unwrap_or(""),
+        "gallery": gallery,
+        "authors": Vec::<Value>::new(),
+        "game_versions": sorted_versions(&m["game_versions"]),
+        "loaders": str_list(&m["loaders"]),
+        "donation_urls": donations,
+        "license_name": m["license"]["name"].as_str().filter(|s| !s.is_empty()),
+        "license_url": m["license"]["url"].as_str().filter(|s| !s.is_empty()),
+        "client_side": m["client_side"].as_str(),
+        "server_side": m["server_side"].as_str(),
+        "published": m["published"].as_str(),
+        "updated": m["updated"].as_str(),
+        "project_type": m["project_type"].as_str(),
+        "status": m["status"].as_str(),
+        "versions_count": m["versions"].as_array().map(|a| a.len()),
+        "is_available": status.is_empty() || status == "approved",
+        "allow_distribution": Value::Null,
+        "source_url": m["source_url"].as_str().filter(|s| !s.is_empty()),
+        "issues_url": m["issues_url"].as_str().filter(|s| !s.is_empty()),
+        "wiki_url": m["wiki_url"].as_str().filter(|s| !s.is_empty()),
+        "discord_url": m["discord_url"].as_str().filter(|s| !s.is_empty()),
+
+        "website_url": Value::Null,
+    })
 }
 
 async fn enrich_local_mods(

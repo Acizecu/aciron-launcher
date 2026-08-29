@@ -2,6 +2,14 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   type Settings,
   type BuildInfo,
+  crashReportPreview,
+  crashReportsAvailable,
+  crashReportsClear,
+  crashReportsDir,
+  crashReportsPending,
+  crashReportsSend,
+  autostartEnabled,
+  setAutostart,
   getSettings,
   saveSettings,
   defaultSettings,
@@ -64,6 +72,13 @@ export default function SettingsPage({
   const [bi, setBi] = useState<BuildInfo | null>(null);
 
   const [sfx, setSfx] = useState(getSfxPrefs);
+
+  const [crashReady, setCrashReady] = useState(false);
+  const [crashPending, setCrashPending] = useState(0);
+  const [crashPreview, setCrashPreview] = useState<string | null>(null);
+  const [crashBusy, setCrashBusy] = useState(false);
+
+  const [autostart, setAutostartState] = useState(false);
   const [cat, setCat] = useState<CatId>("theme");
   const [folderPrompt, setFolderPrompt] = useState<FolderMove[] | null>(null);
   const toast = useToast();
@@ -82,6 +97,9 @@ export default function SettingsPage({
     hardwareCapable().then(setHwCap);
     totalRamMb().then(setRamMax);
     buildInfo().then(setBi).catch(() => {});
+    crashReportsAvailable().then(setCrashReady).catch(() => {});
+    crashReportsPending().then(setCrashPending).catch(() => {});
+    autostartEnabled().then(setAutostartState).catch(() => {});
   }, []);
 
   if (!s) {
@@ -102,6 +120,8 @@ export default function SettingsPage({
 
   const persist = async (move: boolean, moves: FolderMove[]) => {
     await saveSettings(s);
+
+    crashReportsPending().then(setCrashPending).catch(() => {});
     origRef.current = {
       game_dir: s.game_dir,
       versions_dir: s.versions_dir,
@@ -371,8 +391,24 @@ export default function SettingsPage({
                     </div>
                   </div>
                   <Field
+                    label={t("Запускать вместе с Windows")}
+                    hint={t("Лаунчер стартует значком в трее, без окна. Открыть — клик по значку.")}
+                  >
+                    <Toggle
+                      value={autostart}
+                      onChange={(v) => {
+
+                        setAutostartState(v);
+                        setAutostart(v).catch((e) => {
+                          setAutostartState(!v);
+                          toast(ts(String(e)), "error");
+                        });
+                      }}
+                    />
+                  </Field>
+                  <Field
                     label={t("Скрывать лаунчер при запуске игры")}
-                    hint={t("Спрячется, пока игра открыта, и вернётся после её закрытия")}
+                    hint={t("Пока игра открыта, лаунчер ждёт значком в трее")}
                   >
                     <Toggle value={s.hide_on_launch} onChange={(v) => update({ hide_on_launch: v })} />
                   </Field>
@@ -407,8 +443,8 @@ export default function SettingsPage({
                     <Toggle value={s.notify_sound} onChange={(v) => update({ notify_sound: v })} />
                   </Field>
                   <Field
-                    label={t("Проверять обновления при запуске")}
-                    hint={t("Только уведомляет о доступном обновлении. Установка — всегда вручную.")}
+                    label={t("Обновляться при запуске")}
+                    hint={t("Лаунчер сам поставит обновление в окне запуска. Пропущенные и отложенные версии не трогает.")}
                   >
                     <Toggle
                       value={s.auto_update_check}
@@ -416,6 +452,94 @@ export default function SettingsPage({
                     />
                   </Field>
                 </Card>
+
+                {}
+                {crashReady && (
+                  <Card>
+                    <Field
+                      label={t("Отчёты о сбоях")}
+                      hint={t(
+                        "Анонимно сообщать о падениях лаунчера. Ник, почта, токены и пути к вашим папкам не отправляются — можно посмотреть, что именно уходит."
+                      )}
+                    >
+                      <Toggle
+                        value={s.crash_reports}
+                        onChange={(v) => update({ crash_reports: v })}
+                      />
+                    </Field>
+                    <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+                      <button
+                        onClick={() =>
+                          crashReportPreview()
+                            .then(setCrashPreview)
+                            .catch((e) => toast(ts(String(e)), "error"))
+                        }
+                        className="rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                      >
+                        <i className="fa-solid fa-eye mr-2 text-[11px]" />
+                        {t("Что отправляется")}
+                      </button>
+                      {}
+                      {crashPending > 0 && s.crash_reports && (
+                        <>
+                          <button
+                            disabled={crashBusy}
+                            onClick={async () => {
+                              setCrashBusy(true);
+                              try {
+                                const r = await crashReportsSend();
+                                setCrashPending(await crashReportsPending());
+
+                                toast(
+                                  r.sent > 0
+                                    ? t("Отправлено отчётов: {n}", { n: r.sent })
+                                    : r.skipped > 0
+                                    ? t("Эти сбои уже отправляли раньше")
+                                    : t("Отправить не удалось — попробуем позже"),
+                                  r.sent > 0 || r.skipped > 0 ? "success" : "error"
+                                );
+                              } catch (e) {
+                                toast(ts(String(e)), "error");
+                              } finally {
+                                setCrashBusy(false);
+                              }
+                            }}
+                            className="rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent disabled:opacity-50"
+                          >
+                            <i
+                              className={`fa-solid mr-2 text-[11px] ${
+                                crashBusy ? "fa-spinner fa-spin" : "fa-paper-plane"
+                              }`}
+                            />
+                            {t("Отправить ({n})", { n: crashPending })}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              await crashReportsClear();
+                              setCrashPending(await crashReportsPending());
+                              toast(t("Сохранённые отчёты удалены"), "success");
+                            }}
+                            className="rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                          >
+                            <i className="fa-solid fa-trash-can mr-2 text-[11px]" />
+                            {t("Удалить")}
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() =>
+                          crashReportsDir().then((d) => {
+                            if (d) void openFolder(d);
+                          })
+                        }
+                        title={t("Открыть папку отчётов")}
+                        className={iconBtnCls}
+                      >
+                        <i className="fa-solid fa-folder-open text-sm" />
+                      </button>
+                    </div>
+                  </Card>
+                )}
 
                 {}
                 {DEBUG_TOOLS && (
@@ -531,6 +655,25 @@ export default function SettingsPage({
             </div>
         </div>
       </div>
+
+      {}
+      {crashPreview !== null && (
+        <Modal
+          title={t("Что отправляется")}
+          subtitle={
+            crashPending > 0
+              ? t("Ближайший неотправленный отчёт")
+              : t("Отчётов нет — так выглядел бы отчёт о сбое прямо сейчас")
+          }
+          icon="fa-shield-halved"
+          width="max-w-xl"
+          onClose={() => setCrashPreview(null)}
+        >
+          <pre className="selectable max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-lg bg-card px-3 py-2 font-mono text-[11px] leading-relaxed text-muted">
+            {crashPreview}
+          </pre>
+        </Modal>
+      )}
 
       {folderPrompt && (
         <Modal title={t("Папки изменены")} icon="fa-folder-tree" onClose={() => setFolderPrompt(null)}>

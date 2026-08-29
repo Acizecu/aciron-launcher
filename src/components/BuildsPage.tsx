@@ -76,9 +76,9 @@ function modPageTarget(
   const pid = m.project_id;
   if (pid.startsWith("local:") || pid.startsWith("mrpack:")) return null;
   const source: SourceId = pid.startsWith("cf:") ? "curseforge" : "modrinth";
-  const realId = pid.startsWith("cf:") ? pid.slice(3) : pid;
+
   const hit: ModHit = {
-    project_id: realId,
+    project_id: pid,
     slug: "",
     title: m.name,
     description: "",
@@ -442,7 +442,7 @@ export default function BuildsPage() {
   useEffect(() => {
     const reset = (e: Event) => {
       if ((e as CustomEvent<string>).detail !== "builds") return;
-      setView("list");
+      goList();
       setSelectedId(null);
       void refresh();
     };
@@ -571,7 +571,7 @@ export default function BuildsPage() {
     [selectedId, view, dropKind, importFromPath, toast]
   );
 
-  const dropping = useFileDrop(view !== "browse", onFilesDropped);
+  const dropping = useFileDrop(view !== "browse" && !modPage, onFilesDropped);
 
   const contentMods = contentTab === "console" ? null : contentTab;
   const all = useMemo(
@@ -601,6 +601,8 @@ export default function BuildsPage() {
   const openBuild = async (id: string) => {
     setSelectedId(id);
     setView("detail");
+
+    setModPage(null);
     setContentTab("mod");
     setModSearch("");
     setModFilter("all");
@@ -759,7 +761,13 @@ export default function BuildsPage() {
   const goBrowse = (query = "", kind: ContentKind = "mod") => {
     setBrowseQuery(query);
     setBrowseKind(kind);
+    setModPage(null);
     setView("browse");
+  };
+
+  const goList = () => {
+    setModPage(null);
+    setView("list");
   };
 
   if (view === "detail" && selected && modPage) {
@@ -1048,7 +1056,7 @@ export default function BuildsPage() {
                 </div>
 
                 <button
-                  onClick={() => setView("list")}
+                  onClick={goList}
                   className="mt-auto flex h-10 items-center gap-2 rounded-[8px] px-3 text-sm text-muted transition-colors hover:text-text"
                 >
                   <i className="fa-solid fa-arrow-left text-xs" />

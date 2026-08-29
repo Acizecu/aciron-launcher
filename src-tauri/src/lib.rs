@@ -4,6 +4,8 @@ mod atomic;
 mod builds;
 mod cancel;
 mod chat;
+mod content;
+mod crash;
 mod curseforge;
 mod discord;
 mod forge;
@@ -13,6 +15,7 @@ mod i18n;
 mod importer;
 mod instance;
 mod launcher;
+mod logshare;
 mod microsoft;
 mod modrinth;
 mod mojang;
@@ -24,11 +27,14 @@ mod secret;
 mod servers;
 mod settings;
 mod social;
+mod tray;
 mod update;
 mod wardrobe;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+
+    crash::install_panic_hook();
 
     let arg_pack = pack::scan_argv();
 
@@ -53,7 +59,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .setup(|app| {
+
+            tray::init(app.handle());
 
             update::remember_install_dir(app.handle());
 
@@ -68,6 +81,12 @@ pub fn run() {
                 if let Some(e) = r.error {
                     eprintln!("[mojang] облик не синхронизирован при старте: {e}");
                 }
+            });
+
+            crash::set_enabled(settings::load_settings().crash_reports);
+
+            tauri::async_runtime::spawn(async {
+                crash::flush(false).await;
             });
 
             pack::watch_inbox(app.handle().clone());
@@ -184,6 +203,17 @@ pub fn run() {
             ftb::ftb_install_modpack,
             servers::server_status,
             update::build_info,
+            crash::crash_report_js,
+            crash::crash_reports_pending,
+            crash::crash_report_preview,
+            crash::crash_reports_send,
+            crash::crash_reports_clear,
+            crash::crash_reports_dir,
+            crash::crash_reports_available,
+            tray::start_minimized,
+            logshare::log_share,
+            logshare::log_share_size,
+            logshare::log_share_available,
             importer::scan_external_instances,
             importer::import_external_instance,
             importer::first_run_pending,

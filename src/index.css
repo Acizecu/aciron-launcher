@@ -638,3 +638,178 @@ body {
     animation-duration: 0.01ms;
   }
 }
+
+/* ---- описание из чужого каталога ----
+   Разметку пишет автор мода, а не мы: там встречается и таблица на 20 колонок,
+   и картинка в 4000px, и вложенные <div> с чужими классами. Поэтому здесь не
+   «оформление», а рамки дозволенного — чтобы чужая вёрстка осталась внутри
+   своей колонки и не растянула страницу.
+
+   contain: content отрезает влияние на раскладку снаружи; overflow-wrap ловит
+   длинные адреса без пробелов, которые иначе распирают колонку. Цвета — только
+   токенами: у лаунчера есть светлые темы и свои темы пользователя, и любой
+   хардкод в них замерзает. */
+.rich {
+  contain: content;
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.65;
+}
+.rich > *:first-child {
+  margin-top: 0;
+}
+.rich > *:last-child {
+  margin-bottom: 0;
+}
+.rich p,
+.rich ul,
+.rich ol,
+.rich blockquote,
+.rich pre,
+.rich table,
+.rich dl {
+  margin: 0 0 0.85em;
+}
+.rich h1,
+.rich h2,
+.rich h3,
+.rich h4,
+.rich h5,
+.rich h6 {
+  margin: 1.4em 0 0.5em;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--color-text);
+}
+.rich h1 {
+  font-size: 20px;
+}
+.rich h2 {
+  font-size: 18px;
+}
+.rich h3 {
+  font-size: 16px;
+}
+.rich h4,
+.rich h5,
+.rich h6 {
+  font-size: 14px;
+}
+/* Заголовки верхнего уровня отбиваем чертой: в описаниях модов это чаще всего
+   разделы («Установка», «Совместимость»), и без отбивки они теряются. */
+.rich h1,
+.rich h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--color-border);
+}
+.rich ul,
+.rich ol {
+  padding-left: 1.4em;
+}
+.rich ul {
+  list-style: disc;
+}
+.rich ol {
+  list-style: decimal;
+}
+.rich li {
+  margin: 0.2em 0;
+}
+.rich a {
+  color: var(--color-accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+.rich a:hover {
+  text-decoration: underline;
+}
+.rich img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  vertical-align: middle;
+}
+.rich code {
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  background: var(--color-card);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.9em;
+}
+.rich pre {
+  overflow-x: auto;
+  padding: 0.75em 0.9em;
+  border-radius: 12px;
+  background: var(--color-card);
+}
+.rich pre code {
+  padding: 0;
+  background: transparent;
+}
+.rich blockquote {
+  padding: 0.1em 0 0.1em 0.9em;
+  border-left: 3px solid var(--color-border);
+  color: var(--color-muted);
+}
+.rich hr {
+  margin: 1.2em 0;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+}
+/* Широкая таблица прокручивается внутри себя, а не распирает страницу. */
+.rich table {
+  display: block;
+  overflow-x: auto;
+  width: max-content;
+  max-width: 100%;
+  border-collapse: collapse;
+}
+.rich th,
+.rich td {
+  padding: 0.4em 0.7em;
+  border: 1px solid var(--color-border);
+  text-align: left;
+  /* Отменяем перенос «где угодно», заданный выше для всего блока.
+     Внутри таблицы он превращал минимальную ширину ячейки в одну букву:
+     раскладка ужимала таблицу под колонку вместо переполнения, прокрутка выше
+     не срабатывала никогда, и таблица совместимости версий — самое частое, что
+     бывает в описании мода — превращалась в частокол из вертикально разорванных
+     слов. */
+  overflow-wrap: normal;
+}
+.rich th {
+  background: var(--color-card);
+  font-weight: 500;
+}
+.rich details {
+  margin: 0 0 0.85em;
+  padding: 0.6em 0.9em;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+.rich summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.rich center {
+  display: block;
+  text-align: center;
+}
+
+/* ---- полоса установки в окне запуска ----
+   У распаковки обновления нет прогресса: апдейтер о ней не сообщает. Полоса
+   поэтому не показывает долю, а показывает, что работа идёт, — иначе пришлось
+   бы либо застыть на 100%, либо выдумывать проценты. */
+@keyframes splash-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.splash-pulse {
+  animation: splash-pulse 1.1s ease-in-out infinite;
+}
