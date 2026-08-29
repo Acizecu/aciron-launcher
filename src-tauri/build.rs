@@ -48,7 +48,25 @@ fn main() {
         if dirty { "1" } else { "0" }
     );
 
-    println!("cargo:rerun-if-changed=../.git/HEAD");
+    let git_out = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    if let Some(git_dir) = git_out(&["rev-parse", "--git-dir"]) {
+        println!("cargo:rerun-if-changed={git_dir}/HEAD");
+        println!("cargo:rerun-if-changed={git_dir}/index");
+        println!("cargo:rerun-if-changed={git_dir}/packed-refs");
+        if let Some(head_ref) = git_out(&["symbolic-ref", "--quiet", "HEAD"]) {
+            println!("cargo:rerun-if-changed={git_dir}/{head_ref}");
+        }
+    }
+    println!("cargo:rerun-if-changed=src");
+    println!("cargo:rerun-if-changed=../src");
 
     tauri_build::build()
 }
