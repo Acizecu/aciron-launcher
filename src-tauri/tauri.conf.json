@@ -77,7 +77,8 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY2MDVGRjJFOEFGMjNGNgpSV1QySTYvbzhsOWdEM0o2VlpWZHFwNjlwZG1FRnk0d0crdzFnM0tiTGpYT1hyazA3V0l0OW1idQo=",
       "endpoints": [
-        "https://github.com/Acizecu/aciron-launcher/releases/latest/download/latest.json"
+        "https://github.com/Acizecu/aciron-launcher/releases/latest/download/latest.json",
+        "https://dl.aciron.pro/latest.json"
       ]
     }
   }

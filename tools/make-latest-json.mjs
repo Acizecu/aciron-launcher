@@ -51,12 +51,28 @@ const manifest = {
 
 const out = path.join(ROOT, "latest.json");
 fs.writeFileSync(out, JSON.stringify(manifest, null, 2) + "\n");
+
+const MIRROR_BASE = (process.env.ACIRON_MIRROR_BASE || "https://dl.aciron.pro").replace(/\/+$/, "");
+let mirrorOut = null;
+if (!PRIVATE) {
+  const mirrorManifest = {
+    ...manifest,
+    platforms: {
+      "windows-x86_64": { signature, url: `${MIRROR_BASE}/${assetName}` },
+    },
+  };
+  mirrorOut = path.join(ROOT, "latest.mirror.json");
+  fs.writeFileSync(mirrorOut, JSON.stringify(mirrorManifest, null, 2) + "\n");
+}
+
 console.log("Готово →", out);
 console.log(`Репо:    ${REPO}${PRIVATE ? " (private)" : ""}`);
 console.log(`Тег:     ${TAG || "(latest)"}`);
 console.log(`Версия:  ${version}`);
 console.log(`URL:     ${url}`);
+if (mirrorOut) console.log(`Зеркало: ${MIRROR_BASE}/${assetName}`);
 console.log("\nВ GitHub Release залей:");
 console.log(`  • ${exe}`);
 console.log(`  • ${exe}.sig`);
 console.log("  • latest.json");
+if (mirrorOut) console.log("\nНа зеркало — npm run deploy-mirror");

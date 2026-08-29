@@ -11,7 +11,8 @@
     "github-export": "node tools/make-github-export.mjs",
     "sync-version": "node tools/sync-version.mjs",
     "make-latest-json": "node tools/make-latest-json.mjs",
-    "tauri:build": "cross-env ACIRON_CHANNEL=stable ACIRON_BUILD_CHANNEL=stable tauri build"
+    "tauri:build": "cross-env ACIRON_CHANNEL=stable ACIRON_BUILD_CHANNEL=stable tauri build",
+    "deploy-mirror": "node tools/deploy-mirror.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geologica": "^5.3.0",
