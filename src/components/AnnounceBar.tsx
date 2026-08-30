@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import RichText from "./RichText";
-import { announceCurrent, getSettings, openUrl, saveSettings, type Announce } from "../api";
+import {
+  announceCurrent,
+  getSettings,
+  isTauri,
+  openUrl,
+  saveSettings,
+  type Announce,
+} from "../api";
 import { t, useLang } from "../i18n";
 
 const TONES = new Map<string, { icon: string; cls: string }>([
@@ -42,10 +49,26 @@ export default function AnnounceBar() {
     };
     void pull();
 
-    const timer = setInterval(() => void pull(), 10 * 60 * 1000);
+    let unlisten: (() => void) | undefined;
+    if (isTauri) {
+      void (async () => {
+        const { listen } = await import("@tauri-apps/api/event");
+        const fn = await listen("announce-changed", () => void pull());
+        if (dead) fn();
+        else unlisten = fn;
+      })();
+    }
+
+    const timer = setInterval(() => void pull(), 3 * 60 * 1000);
+
+    const onFocus = () => void pull();
+    window.addEventListener("focus", onFocus);
+
     return () => {
       dead = true;
       clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      unlisten?.();
     };
   }, [lang]);
 

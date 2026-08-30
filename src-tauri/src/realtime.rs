@@ -65,6 +65,10 @@ fn apply_message(app: &AppHandle, text: &str) {
             let _ = app.emit("friends-changed", ());
         }
 
+        "announce" => {
+            let _ = app.emit("announce-changed", ());
+        }
+
         "chat" => {
             let _ = app.emit(
                 "chat-message",

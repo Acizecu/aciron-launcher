@@ -1,6 +1,6 @@
 [package]
 name = "aciron-launcher"
-version = "1.1.1"
+version = "1.1.2"
 description = "Aciron Minecraft Launcher"
 authors = ["acizecu"]
 edition = "2021"

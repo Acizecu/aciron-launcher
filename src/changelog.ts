@@ -14,6 +14,24 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.1.2",
+    date: "2026-08-30",
+    added: [],
+    fixed: [
+      {
+        ru:
+          "Полоса объявления менялась только после перезапуска: лаунчер спрашивал сервер раз в десять минут. " +
+          "Теперь сервер сам сообщает об изменении, и полоса появляется и гаснет сразу.",
+        en:
+          "The announcement strip only changed after a restart: the launcher asked the server every ten minutes. " +
+          "The server now says when something changes, so the strip appears and disappears right away.",
+        tr:
+          "Duyuru şeridi yalnızca yeniden başlatınca değişiyordu: başlatıcı sunucuya on dakikada bir soruyordu. " +
+          "Artık sunucu değişikliği kendisi bildiriyor, şerit anında beliriyor ve kayboluyor.",
+      },
+    ],
+  },
+  {
     version: "1.1.1",
     date: "2026-08-30",
     added: [
