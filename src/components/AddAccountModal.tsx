@@ -3,24 +3,29 @@ import Modal from "./Modal";
 import {
   addOfflineAccount,
   addMicrosoftAccount,
-  acironLogin,
+  acironLoginStart,
+  acironLoginFinish,
+  acironLoginTelegramSend,
   acironRegister,
   acironVerifyEmail,
   acironResendCode,
   openUrl,
   isTauri,
   ACIRON_ID_WEB,
+  type AcironTwofaMethod,
 } from "../api";
 import { MicrosoftIcon } from "./Icons";
 import { ACIRON_LOGIN_ENABLED } from "../config";
-import { t, ts } from "../i18n";
+import { t, ts, useLang } from "../i18n";
 
-type Step = "choose" | "offline" | "aciron" | "register" | "verify" | "microsoft";
+type Step = "choose" | "offline" | "aciron" | "twofa" | "register" | "verify" | "microsoft";
 
 const NICK_RE = /^[A-Za-z0-9_]{3,16}$/;
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
 const RESEND_COOLDOWN = 30;
+
+const TELEGRAM_COOLDOWN = 60;
 
 const inputCls =
   "w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent";
@@ -35,6 +40,8 @@ export default function AddAccountModal({
 
   initialStep?: Step;
 }) {
+
+  useLang();
   const [step, setStep] = useState<Step>(initialStep);
   const [name, setName] = useState("");
   const [login, setLogin] = useState("");
@@ -44,7 +51,12 @@ export default function AddAccountModal({
   const [notice, setNotice] = useState("");
   const [authUrl, setAuthUrl] = useState("");
   const [code, setCode] = useState("");
-  const [twofa, setTwofa] = useState(false);
+
+  const [ticket, setTicket] = useState("");
+  const [methods, setMethods] = useState<AcironTwofaMethod[]>([]);
+  const [method, setMethod] = useState<AcironTwofaMethod>("totp");
+
+  const [tgSent, setTgSent] = useState(false);
 
   const [regNick, setRegNick] = useState("");
   const [email, setEmail] = useState("");
@@ -86,18 +98,22 @@ export default function AddAccountModal({
     setError("");
     setNotice("");
     if (!login.trim() || !password) return setError(t("Введите ник/e-mail и пароль"));
-    if (twofa && !code.trim()) return setError(t("Введите код 2FA"));
     setBusy(true);
     try {
-      await acironLogin(login.trim(), password, twofa ? code.trim() : undefined);
-      done();
+      const r = await acironLoginStart(login.trim(), password);
+      if (!r.twofaRequired) return done();
+
+      setTicket(r.ticket);
+      setMethods(r.methods);
+
+      setMethod(r.methods.includes("totp") ? "totp" : r.methods[0]);
+      setCode("");
+      setTgSent(false);
+      setCooldown(0);
+      setStep("twofa");
     } catch (e) {
       const msg = ts(String(e));
-      if (msg === "2FA_REQUIRED") {
-        setTwofa(true);
-        setNotice(t("У аккаунта включена 2FA — введите код из приложения или резервный код"));
-      } else if (msg.startsWith("EMAIL_NOT_VERIFIED")) {
-
+      if (msg.startsWith("EMAIL_NOT_VERIFIED")) {
         setEmail(msg.slice("EMAIL_NOT_VERIFIED:".length) || login.trim());
         setCode("");
         setCooldown(RESEND_COOLDOWN);
@@ -109,6 +125,55 @@ export default function AddAccountModal({
     } finally {
       setBusy(false);
     }
+  };
+
+  const submitTwofa = async () => {
+    setError("");
+    if (!code.trim())
+      return setError(method === "telegram" ? t("Введите код из Telegram") : t("Введите код 2FA"));
+    setBusy(true);
+    try {
+      await acironLoginFinish(ticket, code.trim());
+      done();
+    } catch (e) {
+      setError(ts(String(e)));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendTelegram = async () => {
+    if (cooldown > 0 || busy) return;
+    setError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      await acironLoginTelegramSend(ticket);
+      setTgSent(true);
+      setCooldown(TELEGRAM_COOLDOWN);
+      setNotice(t("Код отправлен в Telegram"));
+    } catch (e) {
+      setError(ts(String(e)));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pickMethod = (m: AcironTwofaMethod) => {
+    setMethod(m);
+    setCode("");
+    setError("");
+    setNotice("");
+  };
+
+  const leaveTwofa = () => {
+    setError("");
+    setNotice("");
+    setCode("");
+    setTicket("");
+    setTgSent(false);
+    setCooldown(0);
+    setStep("aciron");
   };
 
   const submitRegister = async () => {
@@ -190,6 +255,8 @@ export default function AddAccountModal({
       ? t("Пиратский аккаунт")
       : step === "aciron"
       ? t("Вход в Aciron ID")
+      : step === "twofa"
+      ? t("Подтверждение входа")
       : step === "register"
       ? t("Регистрация Aciron ID")
       : step === "verify"
@@ -337,22 +404,6 @@ export default function AddAccountModal({
                 onKeyDown={(e) => e.key === "Enter" && submitAciron()}
               />
             </label>
-            {twofa && (
-              <label className="block">
-                <span className="mb-1.5 block text-xs text-muted">{t("Код 2FA")}</span>
-                <input
-                  autoFocus
-                  className={`${inputCls} text-center tracking-[0.3em]`}
-                  value={code}
-                  placeholder="000000"
-                  maxLength={9}
-                  onChange={(e) =>
-                    setCode(e.target.value.replace(/[^0-9A-Za-z-]/g, "").toUpperCase())
-                  }
-                  onKeyDown={(e) => e.key === "Enter" && submitAciron()}
-                />
-              </label>
-            )}
             {error && <Err msg={error} />}
             {notice && <Notice msg={notice} />}
             <div className="flex gap-2 pt-1">
@@ -372,6 +423,105 @@ export default function AddAccountModal({
               >
                 {t("Зарегистрироваться")}
               </button>
+            </div>
+          </div>
+        )}
+
+        {}
+        {step === "twofa" && (
+          <div className="space-y-3">
+            <div className="flex flex-col items-center gap-2 py-2 text-center">
+              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/15 text-accent">
+                <i
+                  className={`text-2xl ${
+                    method === "telegram" ? "fa-brands fa-telegram" : "fa-solid fa-shield-halved"
+                  }`}
+                />
+              </div>
+              <p className="text-sm text-text">{t("У аккаунта включён второй фактор")}</p>
+              <p className="text-xs text-muted">
+                {method === "telegram"
+                  ? t("Пришлём 6-значный код в привязанный Telegram")
+                  : t("Введите код из приложения-аутентификатора или резервный код")}
+              </p>
+            </div>
+
+            {}
+            {methods.length > 1 && (
+              <div className="grid grid-cols-2 gap-2">
+                {methods.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => pickMethod(m)}
+                    className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                      method === m
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border text-muted hover:text-text"
+                    }`}
+                  >
+                    <i
+                      className={
+                        m === "telegram" ? "fa-brands fa-telegram" : "fa-solid fa-mobile-screen"
+                      }
+                    />
+                    {m === "telegram" ? "Telegram" : t("Приложение")}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {method === "telegram" && !tgSent ? (
+              <button
+                onClick={sendTelegram}
+                disabled={busy}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
+              >
+                <i className={busy ? "fa-solid fa-spinner fa-spin" : "fa-brands fa-telegram"} />
+                {t("Прислать код")}
+              </button>
+            ) : (
+              <>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs text-muted">
+                    {method === "telegram" ? t("Код из Telegram") : t("Код 2FA")}
+                  </span>
+                  <input
+                    autoFocus
+                    className={`${inputCls} text-center tracking-[0.3em]`}
+                    value={code}
+                    placeholder="000000"
+                    maxLength={method === "telegram" ? 6 : 9}
+                    onChange={(e) =>
+                      setCode(
+                        method === "telegram"
+                          ? e.target.value.replace(/\D/g, "")
+                          : e.target.value.replace(/[^0-9A-Za-z-]/g, "").toUpperCase()
+                      )
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && submitTwofa()}
+                  />
+                </label>
+                {method === "telegram" && (
+                  <button
+                    onClick={sendTelegram}
+                    disabled={busy || cooldown > 0}
+                    className="w-full rounded-lg border border-border bg-bg px-4 py-2.5 text-sm text-muted transition-colors hover:text-text disabled:opacity-50"
+                  >
+                    {cooldown > 0
+                      ? t("Отправить код снова через {n} с", { n: cooldown })
+                      : t("Отправить код снова")}
+                  </button>
+                )}
+              </>
+            )}
+
+            {error && <Err msg={error} />}
+            {notice && <Notice msg={notice} />}
+            <div className="flex gap-2 pt-1">
+              <BackBtn onClick={leaveTwofa} />
+              {(method !== "telegram" || tgSent) && (
+                <PrimaryBtn onClick={submitTwofa} busy={busy} label={t("Войти")} />
+              )}
             </div>
           </div>
         )}

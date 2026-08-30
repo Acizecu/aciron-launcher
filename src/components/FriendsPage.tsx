@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import Head from "./Head";
+import { ContactAvatar } from "./ContactAvatar";
+import BotRow from "./BotRow";
 import ChatPanel from "./ChatPanel";
 import TypingDots from "./chat/TypingDots";
-import { friendSkinUrl, type Friend } from "../api";
-import { PRESENCE_COLOR, presenceText, sortFriends, useFriends } from "../friends";
+import { type Friend } from "../api";
+import { contacts, PRESENCE_COLOR, presenceText, sortFriends, useFriends } from "../friends";
 import { useChat, useTyping } from "../chat";
 import { cardInDelay } from "../anim";
 import { useLang } from "../i18n";
@@ -32,9 +33,8 @@ function ChatRow({
         active ? "bg-accent/10" : "hover:bg-card"
       }`}
     >
-      <Head
-        skin={friendSkinUrl(f)}
-        name={f.username}
+      <ContactAvatar
+        c={f}
         size={38}
         className={`shrink-0 rounded-lg ${f.presence.state === "offline" ? "opacity-50" : ""}`}
       />
@@ -89,10 +89,12 @@ export default function FriendsPage() {
       .map((x) => x.f);
   }, [data, last]);
 
+  const bots = data?.bots ?? [];
+
   useEffect(() => {
     if (!data) return;
-    if (openId && !friends.some((f) => f.id === openId)) setOpenId(null);
-  }, [data, friends, openId]);
+    if (openId && !contacts(data).some((f) => f.id === openId)) setOpenId(null);
+  }, [data, openId]);
 
   useEffect(() => {
     const open = (e: Event) => {
@@ -106,7 +108,7 @@ export default function FriendsPage() {
     return () => window.removeEventListener("aciron-open-chat", open);
   }, []);
 
-  const open = friends.find((f) => f.id === openId) ?? null;
+  const open = contacts(data).find((f) => f.id === openId) ?? null;
 
   if (loading && !data) {
     return (
@@ -139,6 +141,22 @@ export default function FriendsPage() {
       <aside className="flex w-[260px] shrink-0 flex-col border-r border-border/70">
         <div className="px-4 pb-2 pt-4 text-[20px] font-light text-text">{t("Переписки")}</div>
         <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-3">
+          {}
+          {bots.length > 0 && (
+            <div className="mb-1 space-y-1 border-b border-border/70 pb-1.5">
+              {bots.map((b) => (
+                <BotRow
+                  key={b.id}
+                  bot={b}
+                  size={38}
+                  unread={unread[b.id] ?? 0}
+                  active={b.id === openId}
+                  className={b.id === openId ? "bg-accent/10" : "hover:bg-card"}
+                  onClick={() => setOpenId(b.id)}
+                />
+              ))}
+            </div>
+          )}
           {friends.length === 0 ? (
             <div className="px-3 py-6 text-center text-xs leading-relaxed text-muted">
               {t("Друзей пока нет. Добавить можно на главной — в панели справа.")}

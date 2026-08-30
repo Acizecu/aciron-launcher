@@ -1,5 +1,6 @@
 mod accounts;
 mod aciron;
+mod announce;
 mod atomic;
 mod builds;
 mod cancel;
@@ -119,11 +120,14 @@ pub fn run() {
             accounts::remove_account,
             accounts::set_active_account,
             microsoft::add_microsoft_account,
-            aciron::aciron_login,
+            aciron::aciron_login_start,
+            aciron::aciron_login_finish,
+            aciron::aciron_login_telegram_send,
             aciron::aciron_register,
             aciron::aciron_verify_email,
             aciron::aciron_resend_code,
             aciron::aciron_link_license,
+            announce::announce_current,
             social::friends_list,
             social::friend_request,
             social::friend_respond,

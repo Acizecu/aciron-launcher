@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import Head from "./Head";
+import { ContactAvatar, VerifiedMark } from "./ContactAvatar";
 import ProfileModal from "./ProfileModal";
 import MessageMenu, { type MenuItem } from "./chat/MessageMenu";
 import ForwardModal from "./chat/ForwardModal";
@@ -7,7 +7,7 @@ import TypingDots from "./chat/TypingDots";
 import LoadingDots from "./LoadingDots";
 import EmojiPicker from "./chat/EmojiPicker";
 import Twemoji from "./chat/Twemoji";
-import { friendSkinUrl, getAccounts, MAX_MESSAGE, type Friend } from "../api";
+import { getAccounts, MAX_MESSAGE, type Friend } from "../api";
 import { PRESENCE_COLOR, presenceText } from "../friends";
 import ReactionPicker from "./chat/ReactionPicker";
 import {
@@ -98,6 +98,7 @@ const Bubble = memo(function Bubble({
   onReply,
   reactions,
   onReact,
+  reactable,
 }: {
   msg: LocalMessage;
   mine: boolean;
@@ -109,6 +110,8 @@ const Bubble = memo(function Bubble({
   onReply: (msg: LocalMessage) => void;
   reactions?: Reaction[];
   onReact: (msg: LocalMessage, emoji: string) => void;
+
+  reactable: boolean;
 }) {
 
   useLang();
@@ -125,7 +128,7 @@ const Bubble = memo(function Bubble({
       } ${selecting ? "cursor-pointer" : ""} ${selected ? "rounded-lg bg-accent/10" : ""}`}
     >
       {}
-      {mine && !selecting && (
+      {mine && !selecting && reactable && (
         <ReactionPicker current={myReaction(reactions)} onPick={(e) => onReact(msg, e)} />
       )}
       {selecting && (
@@ -212,7 +215,7 @@ const Bubble = memo(function Bubble({
         )}
       </div>
 
-      {!mine && !selecting && (
+      {!mine && !selecting && reactable && (
         <ReactionPicker current={myReaction(reactions)} onPick={(e) => onReact(msg, e)} />
       )}
     </div>
@@ -432,6 +435,8 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
 
   const startReply = useCallback(
     (msg: LocalMessage) => {
+
+      if (friend.system) return;
       const shown = parseForward(msg.body);
       const author = msg.from === friend.id ? friend.username : myName;
       setReply({
@@ -440,7 +445,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         text: parseReply(shown.text).text.replace(/\s+/g, " ").trim(),
       });
     },
-    [friend.id, friend.username, myName]
+    [friend.id, friend.username, friend.system, myName]
   );
 
   const copy = useCallback(
@@ -474,7 +479,10 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
     const ids = selected.has(msg.id) ? [...selected] : [msg.id];
     const mine = msg.from !== friend.id;
     const items: MenuItem[] = [
-      { icon: "fa-reply", label: t("Ответить"), onClick: () => startReply(msg) },
+
+      ...(friend.system
+        ? []
+        : [{ icon: "fa-reply", label: t("Ответить"), onClick: () => startReply(msg) }]),
       { icon: "fa-copy", label: ids.length > 1 ? t("Копировать выбранные") : t("Копировать"), onClick: () => copy(ids) },
       { icon: "fa-share", label: t("Переслать"), onClick: () => setForward(ids) },
       {
@@ -505,7 +513,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       });
     }
     setMenu({ x: e.clientX, y: e.clientY, items });
-  }, [selected, friend.id, copy, del, startReply, toast]);
+  }, [selected, friend.id, friend.system, copy, del, startReply, toast]);
 
   const onToggle = useCallback((id: string) => {
     setSelected((s) => {
@@ -525,11 +533,13 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
 
   const onReact = useCallback(
     (msg: LocalMessage, emoji: string) => {
+
+      if (friend.system) return;
       void react(friend.id, msg.id, emoji, myReaction(reactions[msg.id])).catch((e) =>
         toast(ts(String(e)), "error")
       );
     },
-    [friend.id, reactions, toast]
+    [friend.id, friend.system, reactions, toast]
   );
 
   const rows = useMemo(
@@ -551,36 +561,47 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
     <section className="flex min-w-0 flex-1 flex-col">
       {}
       <div className="flex items-center gap-3 border-b border-border/70 px-5 py-3">
-        <button
-          onClick={() => setProfile(true)}
-          title={t("Открыть профиль")}
-          className="flex min-w-0 items-center gap-3 text-left"
-        >
-          <Head
-            skin={friendSkinUrl(friend)}
-            name={friend.username}
-            size={36}
-            className="shrink-0 rounded-lg"
-          />
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="truncate text-sm font-semibold text-text hover:text-accent">
-                {friend.username}
-              </span>
-              <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ background: PRESENCE_COLOR[friend.presence.state] }}
-              />
-            </div>
-            <div className="truncate text-[11px]">
-              {typing ? (
-                <TypingDots />
-              ) : (
-                <span className="text-muted">{presenceText(friend.presence)}</span>
-              )}
+        {}
+        {friend.system ? (
+          <div className="flex min-w-0 items-center gap-3">
+            <ContactAvatar c={friend} size={36} className="shrink-0 rounded-lg" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-sm font-semibold text-text">{friend.username}</span>
+                <VerifiedMark className="text-[11px]" />
+              </div>
+              <div className="truncate text-[11px] text-muted">
+                {t("Официальные уведомления")}
+              </div>
             </div>
           </div>
-        </button>
+        ) : (
+          <button
+            onClick={() => setProfile(true)}
+            title={t("Открыть профиль")}
+            className="flex min-w-0 items-center gap-3 text-left"
+          >
+            <ContactAvatar c={friend} size={36} className="shrink-0 rounded-lg" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-sm font-semibold text-text hover:text-accent">
+                  {friend.username}
+                </span>
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: PRESENCE_COLOR[friend.presence.state] }}
+                />
+              </div>
+              <div className="truncate text-[11px]">
+                {typing ? (
+                  <TypingDots />
+                ) : (
+                  <span className="text-muted">{presenceText(friend.presence)}</span>
+                )}
+              </div>
+            </div>
+          </button>
+        )}
 
         {selecting && (
           <div className="ml-auto flex items-center gap-1.5">
@@ -638,7 +659,9 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
             <div>
               <i className="fa-regular fa-comments mb-3 block text-3xl text-muted/50" />
               <div className="text-sm text-muted">
-                {t("Здесь пока пусто. Напишите {who} первым.", { who: friend.username })}
+                {friend.system
+                  ? t("Этому аккаунту нельзя писать")
+                  : t("Здесь пока пусто. Напишите {who} первым.", { who: friend.username })}
               </div>
             </div>
           </div>
@@ -676,6 +699,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
               onReply={startReply}
               reactions={reactions[m.id]}
               onReact={onReact}
+              reactable={!friend.system}
             />
           </div>
         ))}
@@ -683,15 +707,23 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       </div>
 
       {}
-      <Composer
-        key={friend.id}
-        username={friend.username}
-        sending={sending}
-        reply={reply}
-        onSubmit={submit}
-        onTyping={() => notifyTyping(friend.id)}
-        onCancelReply={() => setReply(null)}
-      />
+      {}
+      {friend.system ? (
+        <div className="flex items-center justify-center gap-2 border-t border-border/70 px-5 py-4 text-[12px] text-muted">
+          <i className="fa-solid fa-lock text-[11px]" />
+          {t("Этому аккаунту нельзя писать")}
+        </div>
+      ) : (
+        <Composer
+          key={friend.id}
+          username={friend.username}
+          sending={sending}
+          reply={reply}
+          onSubmit={submit}
+          onTyping={() => notifyTyping(friend.id)}
+          onCancelReply={() => setReply(null)}
+        />
+      )}
 
       {menu && <MessageMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
       {forward && (
@@ -717,7 +749,11 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         />
       )}
       {profile && (
-        <ProfileModal userId={friend.id} username={friend.username} onClose={() => setProfile(false)} />
+        <ProfileModal
+          userId={friend.id}
+          username={friend.username}
+          onClose={() => setProfile(false)}
+        />
       )}
     </section>
   );

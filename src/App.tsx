@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useState } from "react";
 import TitleBar from "./components/TitleBar";
+import AnnounceBar from "./components/AnnounceBar";
 import ResizeHandles from "./components/ResizeHandles";
 import DownloadOrb from "./components/DownloadOrb";
 import Sidebar, { type NavId } from "./components/Sidebar";
@@ -322,6 +323,8 @@ function AppInner() {
           <div className="flex min-h-0 flex-1">
             <Sidebar active={active} onSelect={requestNav} />
             <div className="flex min-w-0 flex-1 flex-col">
+              {}
+              <AnnounceBar />
               {}
               <main className="min-h-0 flex-1 overflow-hidden">
                 {active === "home" && <Home />}

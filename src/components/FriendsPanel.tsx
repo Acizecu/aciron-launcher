@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import ProfileModal from "./ProfileModal";
 import Head from "./Head";
+import BotRow from "./BotRow";
+import { ContactAvatar } from "./ContactAvatar";
 import ConfirmModal from "./ConfirmModal";
 import AddAccountModal from "./AddAccountModal";
 import FriendSettingsModal, {
@@ -23,6 +25,7 @@ import {
   type PendingUser,
 } from "../api";
 import {
+  contacts,
   patchFriends,
   PRESENCE_COLOR,
   presenceText,
@@ -93,9 +96,8 @@ const FriendRow = memo(function FriendRow({
         title={t("Открыть профиль")}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        <Head
-          skin={friendSkinUrl(f)}
-          name={f.username}
+        <ContactAvatar
+          c={f}
           size={40}
           className={`shrink-0 rounded-lg ${f.presence.state === "offline" ? "opacity-50" : ""}`}
         />
@@ -132,11 +134,7 @@ const FriendRow = memo(function FriendRow({
       {}
       <div className="hidden shrink-0 gap-1 group-hover:flex">
         <IconBtn icon="fa-comment" title={t("Написать")} onClick={() => onChat(f.id)} />
-        <IconBtn
-          icon="fa-user-minus"
-          title={t("Удалить из друзей")}
-          onClick={() => onRemove(f)}
-        />
+        <IconBtn icon="fa-user-minus" title={t("Удалить из друзей")} onClick={() => onRemove(f)} />
       </div>
     </div>
   );
@@ -211,6 +209,7 @@ export default function FriendsPanel() {
   const nick = query.trim();
 
   const friends = useMemo(() => (data ? sortFriends(data.friends) : []), [data?.friends]);
+  const bots = data?.bots ?? [];
   const list = useMemo(
     () => friends.filter((f) => f.username.toLowerCase().includes(nick.toLowerCase())),
     [friends, nick]
@@ -219,8 +218,10 @@ export default function FriendsPanel() {
   const outgoing = data?.outgoing ?? [];
 
   const canInvite = useMemo(
-    () => NICK_RE.test(nick) && !friends.some((f) => f.username.toLowerCase() === nick.toLowerCase()),
-    [friends, nick]
+    () =>
+      NICK_RE.test(nick) &&
+      !contacts(data).some((f) => f.username.toLowerCase() === nick.toLowerCase()),
+    [data, nick]
   );
 
   const actOpt = useCallback(
@@ -295,6 +296,24 @@ export default function FriendsPanel() {
 
   return (
     <aside className="flex w-[240px] shrink-0 flex-col">
+      {}
+      {bots.length > 0 && (
+        <div className="mb-4 space-y-1.5 border-b border-border/70 pb-3">
+          <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            {t("Боты")}
+          </div>
+          {bots.map((b) => (
+            <BotRow
+              key={b.id}
+              bot={b}
+              unread={unread[b.id] ?? 0}
+              className="bg-card"
+              onClick={() => openChat(b.id)}
+            />
+          ))}
+        </div>
+      )}
+
       {}
       <div className="mb-4 flex items-baseline gap-4">
         {(

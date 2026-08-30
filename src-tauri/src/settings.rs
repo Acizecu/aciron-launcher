@@ -264,6 +264,16 @@ pub struct Settings {
     /// `first_run_pending` — см. App.tsx.
     #[serde(default)]
     pub seen_version: String,
+
+    /// Id объявления, которое человек убрал крестиком (см. AnnounceBar.tsx).
+    ///
+    /// 0 — ничего не скрывали. Храним именно id, а не флаг: следующее
+    /// объявление приедет с другим id и покажется снова, а спрятанное так и
+    /// останется спрятанным. `serde(default)` обязателен — без него старый
+    /// settings.json, где поля нет, перестал бы читаться целиком, и человек
+    /// потерял бы ВСЕ настройки разом.
+    #[serde(default)]
+    pub dismissed_announce_id: i64,
 }
 
 fn default_ui_scale() -> u32 {
@@ -302,6 +312,7 @@ impl Default for Settings {
             onboarded: false,
             crash_reports: true,
             seen_version: String::new(),
+            dismissed_announce_id: 0,
         }
     }
 }

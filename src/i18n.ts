@@ -131,6 +131,11 @@ const EN: Record<string, string> = {
   "В чёрный список": "Block",
   "Удалить из друзей": "Remove friend",
   "Открыть профиль": "Open profile",
+  "Открыть переписку": "Open chat",
+  "Проверенный аккаунт": "Verified account",
+  "Этому аккаунту нельзя писать": "You can't message this account",
+  "Боты": "Bots",
+  "Официальные уведомления": "Official notifications",
   "Заявок пока нет": "No requests yet",
   "Хочет добавить вас": "Wants to add you",
   "Заявка отправлена": "Request sent",
@@ -198,6 +203,20 @@ const EN: Record<string, string> = {
   "Повтор пароля": "Repeat password",
   "от 8 символов": "8 characters or more",
   "Код 2FA": "2FA code",
+  "Подтверждение входа": "Sign-in confirmation",
+  "У аккаунта включён второй фактор": "This account has a second factor enabled",
+  "Введите код из приложения-аутентификатора или резервный код":
+    "Enter the code from your authenticator app, or a backup code",
+  "Пришлём 6-значный код в привязанный Telegram":
+    "We'll send a 6-digit code to the linked Telegram",
+  "Приложение": "App",
+  "Прислать код": "Send the code",
+  "Код из Telegram": "Telegram code",
+  "Введите код из Telegram": "Enter the code from Telegram",
+  "Код отправлен в Telegram": "The code has been sent to Telegram",
+  "Telegram не привязан.": "Telegram is not linked.",
+  "Вход через Telegram недоступен.": "Signing in via Telegram is unavailable.",
+  "Слишком часто. Попробуйте позже.": "Too often. Try again later.",
   "Зарегистрироваться": "Sign up",
   "Продолжить и войти": "Continue and sign in",
   "Под этим ником вас будут находить друзья и видеть в игре":
@@ -907,7 +926,6 @@ const EN: Record<string, string> = {
   "Тема сохранена": "Theme saved",
   "Тонкие руки": "Slim arms",
   "Тусклый текст почти не виден (контраст {v}).": "Dimmed text is nearly invisible (contrast {v}).",
-  "У аккаунта включена 2FA — введите код из приложения или резервный код": "This account has 2FA enabled — enter the code from your app or a backup code",
   "У Feed The Beast нет отдельных модов — только целые модпаки. Найти их можно во вкладке «Сборки» → «Популярные».": "Feed The Beast has no standalone mods — only whole modpacks. You'll find them on the Instances tab → Popular.",
   "Уведомления от друзей не приходят": "Notifications from friends will not come through",
   "Удалено: {n} шт.": "Deleted: {n} item(s)",
@@ -1043,6 +1061,8 @@ const EN: Record<string, string> = {
   "Все версии": "All releases",
   "Понятно": "Got it",
   "Исправлено": "Fixed",
+
+  "Подробнее": "Learn more",
 
   "Запускать вместе с Windows": "Start with Windows",
   "Лаунчер стартует значком в трее, без окна. Открыть — клик по значку.":
@@ -1180,6 +1200,11 @@ const TR: Record<string, string> = {
   "В чёрный список": "Engelle",
   "Удалить из друзей": "Arkadaşlıktan çıkar",
   "Открыть профиль": "Profili aç",
+  "Открыть переписку": "Sohbeti aç",
+  "Проверенный аккаунт": "Doğrulanmış hesap",
+  "Этому аккаунту нельзя писать": "Bu hesaba mesaj gönderilemez",
+  "Боты": "Botlar",
+  "Официальные уведомления": "Resmî bildirimler",
   "Заявок пока нет": "Henüz istek yok",
   "Хочет добавить вас": "Sizi eklemek istiyor",
   "Заявка отправлена": "İstek gönderildi",
@@ -1247,6 +1272,20 @@ const TR: Record<string, string> = {
   "Повтор пароля": "Parola tekrarı",
   "от 8 символов": "en az 8 karakter",
   "Код 2FA": "2FA kodu",
+  "Подтверждение входа": "Giriş doğrulaması",
+  "У аккаунта включён второй фактор": "Bu hesapta ikinci faktör açık",
+  "Введите код из приложения-аутентификатора или резервный код":
+    "Kimlik doğrulama uygulamasındaki kodu ya da bir yedek kodu girin",
+  "Пришлём 6-значный код в привязанный Telegram":
+    "Bağlı Telegram hesabına 6 haneli bir kod göndereceğiz",
+  "Приложение": "Uygulama",
+  "Прислать код": "Kodu gönder",
+  "Код из Telegram": "Telegram kodu",
+  "Введите код из Telegram": "Telegram'dan gelen kodu girin",
+  "Код отправлен в Telegram": "Kod Telegram'a gönderildi",
+  "Telegram не привязан.": "Telegram bağlı değil.",
+  "Вход через Telegram недоступен.": "Telegram ile giriş kullanılamıyor.",
+  "Слишком часто. Попробуйте позже.": "Çok sık denendi. Daha sonra tekrar deneyin.",
   "Зарегистрироваться": "Kayıt ol",
   "Продолжить и войти": "Devam et ve giriş yap",
   "Под этим ником вас будут находить друзья и видеть в игре":
@@ -1982,8 +2021,6 @@ const TR: Record<string, string> = {
   "Тонкие руки": "İnce kollar",
   "Тусклый текст почти не виден (контраст {v}).":
     "Soluk metin neredeyse görünmüyor (kontrast {v}).",
-  "У аккаунта включена 2FA — введите код из приложения или резервный код":
-    "Bu hesapta 2FA etkin — uygulamadaki kodu veya bir yedek kodu girin",
   "У Feed The Beast нет отдельных модов — только целые модпаки. Найти их можно во вкладке «Сборки» → «Популярные».":
     "Feed The Beast'te ayrı modlar yok — yalnızca komple mod paketleri var. Bunları “Derlemeler” → “Popüler” sekmesinde bulabilirsiniz.",
   "Уведомления от друзей не приходят": "Arkadaşlarınızdan bildirim gelmez",
@@ -2138,6 +2175,8 @@ const TR: Record<string, string> = {
   "Все версии": "Tüm sürümler",
   "Понятно": "Anladım",
   "Исправлено": "Düzeltildi",
+
+  "Подробнее": "Ayrıntılar",
 
   "Запускать вместе с Windows": "Windows ile başlat",
   "Лаунчер стартует значком в трее, без окна. Открыть — клик по значку.":

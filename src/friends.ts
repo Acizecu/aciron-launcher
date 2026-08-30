@@ -2,9 +2,12 @@
 import { useSyncExternalStore } from "react";
 import { dtf, t, ts } from "./i18n";
 import {
+  cacheBust,
   cachePeek,
   friendsList,
   isTauri,
+  splitBots,
+  type Friend,
   type FriendPresence,
   type FriendsData,
   type PresenceState,
@@ -19,7 +22,13 @@ export type FriendsSnapshot = {
   loading: boolean;
 };
 
-let snap: FriendsSnapshot = { data: cachePeek<FriendsData>("friends") ?? null, error: "", loading: false };
+const peeked = cachePeek<FriendsData>("friends");
+
+let snap: FriendsSnapshot = {
+  data: peeked ? splitBots(peeked) : null,
+  error: "",
+  loading: false,
+};
 const subs = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 let inflight = false;
@@ -48,6 +57,22 @@ export function refreshFriends() {
   void fetchOnce();
 }
 
+const rechecked = new Set<string>();
+
+export function noteMessageFrom(id: string) {
+  if (!id || rechecked.has(id)) return;
+  if (snap.data && contacts(snap.data).some((f) => f.id === id)) return;
+  rechecked.add(id);
+
+  cacheBust("friends");
+  void fetchOnce();
+}
+
+export function contacts(d: FriendsData | null | undefined): Friend[] {
+  if (!d) return [];
+  return [...(d.bots ?? []), ...d.friends];
+}
+
 export function patchFriends(fn: (d: FriendsData) => FriendsData): FriendsData | null {
   if (!snap.data) return null;
   const prev = snap.data;
@@ -61,6 +86,8 @@ export function restoreFriends(prev: FriendsData | null) {
 }
 
 const onAccount = () => {
+
+  rechecked.clear();
   snap = { data: null, error: "", loading: true };
   for (const f of subs) f();
   void fetchOnce();

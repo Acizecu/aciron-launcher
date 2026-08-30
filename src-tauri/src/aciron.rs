@@ -1,6 +1,6 @@
 use crate::accounts::{self, Account};
 use crate::launcher::offline_uuid;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::AppHandle;
 
@@ -159,12 +159,20 @@ fn id_skin_url(name: &str) -> String {
     format!("{}/skins/{}.png", base(), name.to_lowercase())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoginStart {
+
+    pub account: Option<Account>,
+    pub twofa_required: bool,
+
+    pub ticket: String,
+
+    pub methods: Vec<String>,
+}
+
 #[tauri::command]
-pub async fn aciron_login(
-    login: String,
-    password: String,
-    code: Option<String>,
-) -> Result<Account, String> {
+pub async fn aciron_login_start(login: String, password: String) -> Result<LoginStart, String> {
     let resp = post("/api/login")?
         .json(&json!({ "login": login.trim(), "password": password }))
         .send()
@@ -182,26 +190,57 @@ pub async fn aciron_login(
         return Err(body["error"].as_str().unwrap_or("Не удалось войти в Aciron ID").to_string());
     }
 
-    let data: AuthResp = if body["twofaRequired"].as_bool() == Some(true) {
-        let c = code.unwrap_or_default();
-        if c.trim().is_empty() {
-            return Err("2FA_REQUIRED".into());
+    if body["twofaRequired"].as_bool() == Some(true) {
+        let ticket = body["ticket"].as_str().unwrap_or_default().to_string();
+        if ticket.is_empty() {
+            return Err("Не удалось войти в Aciron ID".into());
         }
-        let ticket = body["ticket"].as_str().unwrap_or("");
-        let r2 = post("/api/login/2fa")?
-            .json(&json!({ "ticket": ticket, "code": c.trim() }))
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-        if !r2.status().is_success() {
-            return Err(read_error(r2).await);
-        }
-        r2.json().await.map_err(|e| e.to_string())?
-    } else {
-        serde_json::from_value(body).map_err(|e| e.to_string())?
-    };
+        let methods = body["methods"]
+            .as_array()
+            .map(|a| a.iter().filter_map(|m| m.as_str().map(String::from)).collect())
+            .unwrap_or_default();
+        return Ok(LoginStart {
+            account: None,
+            twofa_required: true,
+            ticket,
+            methods,
+        });
+    }
 
+    let data: AuthResp = serde_json::from_value(body).map_err(|e| e.to_string())?;
+    Ok(LoginStart {
+        account: Some(account_from(data)),
+        twofa_required: false,
+        ticket: String::new(),
+        methods: Vec::new(),
+    })
+}
+
+#[tauri::command]
+pub async fn aciron_login_finish(ticket: String, code: String) -> Result<Account, String> {
+    let resp = post("/api/login/2fa")?
+        .json(&json!({ "ticket": ticket, "code": code.trim() }))
+        .send()
+        .await
+        .map_err(|_| OFFLINE.to_string())?;
+    if !resp.status().is_success() {
+        return Err(read_error(resp).await);
+    }
+    let data: AuthResp = resp.json().await.map_err(|e| e.to_string())?;
     Ok(account_from(data))
+}
+
+#[tauri::command]
+pub async fn aciron_login_telegram_send(ticket: String) -> Result<(), String> {
+    let resp = post("/api/login/telegram/send")?
+        .json(&json!({ "ticket": ticket }))
+        .send()
+        .await
+        .map_err(|_| OFFLINE.to_string())?;
+    if !resp.status().is_success() {
+        return Err(read_error(resp).await);
+    }
+    Ok(())
 }
 
 fn account_from(data: AuthResp) -> Account {

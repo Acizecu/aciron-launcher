@@ -29,6 +29,9 @@ pub struct Friend {
     #[serde(default)]
     pub has_skin: bool,
     pub presence: FriendPresence,
+
+    #[serde(default)]
+    pub system: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +61,9 @@ fn yes() -> bool {
 #[serde(rename_all = "camelCase")]
 pub struct FriendsData {
     pub me: MyState,
+
+    #[serde(default)]
+    pub bots: Vec<Friend>,
     #[serde(default)]
     pub friends: Vec<Friend>,
     #[serde(default)]

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import Head from "./Head";
-import { friendSkinUrl, type ChatMessage, type Friend } from "../api";
+import { ContactAvatar, VerifiedMark } from "./ContactAvatar";
+import { type ChatMessage, type Friend } from "../api";
 import { onMessage, parseForward } from "../chat";
-import { useFriends } from "../friends";
+import { contacts, useFriends } from "../friends";
 import { playNotification } from "../sound";
 import { cardInDelay } from "../anim";
 import { isMuted } from "../mutes";
-import { t as tr } from "../i18n";
+import { useLang } from "../i18n";
 
 const LIFE_MS = 6000;
 const SLIDE_MS = 220;
@@ -25,6 +25,7 @@ function Toast({
   onDone: () => void;
 }) {
 
+  const { t } = useLang();
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
@@ -51,15 +52,18 @@ function Toast({
       }}
       className="pointer-events-auto flex w-[280px] items-start gap-2.5 rounded-xl border border-border bg-panel p-2.5 text-left shadow-lg"
     >
-      <Head
-        skin={friend ? friendSkinUrl(friend) : ""}
-        name={friend?.username ?? "?"}
+      {}
+      <ContactAvatar
+        c={friend ?? { username: "?", hasSkin: false }}
         size={32}
         className="shrink-0 rounded-lg"
       />
       <div className="min-w-0 flex-1 leading-tight">
-        <div className="truncate text-xs font-semibold text-text">
-          {friend?.username ?? tr("Новое сообщение")}
+        <div className="flex items-center gap-1">
+          <span className="truncate text-xs font-semibold text-text">
+            {friend?.username ?? t("Новое сообщение")}
+          </span>
+          {friend?.system && <VerifiedMark className="text-[9px]" />}
         </div>
         {}
         <div className="mt-0.5 line-clamp-2 text-[11px] text-muted">
@@ -78,15 +82,17 @@ export default function ChatToasts({
   onOpen: (userId: string) => void;
 }) {
   const [queue, setQueue] = useState<Item[]>([]);
+
+  const [barBottom, setBarBottom] = useState(0);
   const { data } = useFriends();
 
   const dnd = data?.me?.status === "dnd";
 
   const byId = useMemo(() => {
     const m = new Map<string, Friend>();
-    for (const f of data?.friends ?? []) m.set(f.id, f);
+    for (const f of contacts(data)) m.set(f.id, f);
     return m;
-  }, [data?.friends]);
+  }, [data]);
 
   useEffect(() => {
     let n = 0;
@@ -100,10 +106,19 @@ export default function ChatToasts({
     });
   }, [sound, dnd]);
 
+  useEffect(() => {
+    const on = (e: Event) => setBarBottom(Number((e as CustomEvent).detail) || 0);
+    window.addEventListener("aciron-announce-bar", on);
+    return () => window.removeEventListener("aciron-announce-bar", on);
+  }, []);
+
   if (queue.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed left-4 top-14 z-[60] flex flex-col gap-2">
+    <div
+      style={barBottom > 0 ? { top: barBottom + 8 } : undefined}
+      className="pointer-events-none fixed left-4 top-14 z-[60] flex flex-col gap-2"
+    >
       {queue.map((it) => (
         <Toast
           key={it.key}

@@ -13,6 +13,7 @@ import {
   sendTyping,
   type ChatMessage,
 } from "./api";
+import { noteMessageFrom } from "./friends";
 import { KNOWN } from "./twemoji";
 
 export type SendState = "sending" | "failed";
@@ -431,6 +432,8 @@ function listen(): () => void {
     const a = await on<{ with: string; message: ChatMessage }>("chat-message", (e) => {
       const { with: other, message } = e.payload;
       receive(other, message);
+
+      if (message.from === other) noteMessageFrom(other);
 
       if (message.from === other && !parseReaction(message.body)) {
         for (const cb of arrivals) cb(message, other);

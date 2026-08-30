@@ -813,3 +813,47 @@ body {
 .splash-pulse {
   animation: splash-pulse 1.1s ease-in-out infinite;
 }
+
+/* ---- полоса объявления (AnnounceBar) ----
+   Поверхность и текст полосы берутся ТОЛЬКО из токенов темы: ThemeProvider
+   переписывает --color-* в рантайме, и среди пресетов есть светлые — залитая
+   тёмным полоса стала бы на них чёрной раной поперёк окна.
+
+   Тон задаёт не цвет фона, а подмешивание: --tone уходит в color-mix с панелью
+   и границей, а чистым цветом остаётся одна иконка. Поэтому на любой теме фон
+   полосы — это фон панели с оттенком, а не самостоятельный цвет. Сами оттенки
+   держим переменными здесь, а не hex-ами в компоненте: их три на весь лаунчер,
+   и когда у темы появится своя палитра предупреждений, менять придётся строчку. */
+:root {
+  --tone-info: var(--color-accent);
+  --tone-warning: #e0a44a;
+  --tone-danger: #e5544b;
+}
+
+.announce {
+  --tone: var(--tone-info);
+  background: color-mix(in srgb, var(--tone) 12%, var(--color-panel));
+  border-bottom: 1px solid color-mix(in srgb, var(--tone) 30%, var(--color-border));
+  color: var(--color-text);
+}
+.announce-warning {
+  --tone: var(--tone-warning);
+}
+.announce-danger {
+  --tone: var(--tone-danger);
+}
+.announce-icon {
+  color: var(--tone);
+}
+
+/* Текст объявления — одна-две строки в полосе, а не описание мода: сбиваем
+   размер и снимаем отступы абзацев, которые .rich задаёт для длинных статей. */
+.announce-body {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.announce-body p,
+.announce-body ul,
+.announce-body ol {
+  margin: 0;
+}

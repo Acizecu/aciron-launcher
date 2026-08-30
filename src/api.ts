@@ -30,6 +30,8 @@ export type Settings = {
 
   seen_version: string;
 
+  dismissed_announce_id: number;
+
   dev_mode_disable_updates: boolean;
   skipped_update_version: string;
   defer_update_until: number | null;
@@ -193,6 +195,7 @@ const mockSettings: Settings = {
   onboarded: true,
   crash_reports: true,
   seen_version: "",
+  dismissed_announce_id: 0,
 };
 
 export async function getSettings(): Promise<Settings> {
@@ -286,6 +289,27 @@ export async function openUrl(url: string): Promise<void> {
   }
   const { openUrl } = await import("@tauri-apps/plugin-opener");
   await openUrl(url);
+}
+
+export type AnnounceLink = { url: string; label: string };
+export type Announce = {
+  id: number;
+  tone: string;
+  body: string;
+  link: AnnounceLink | null;
+};
+
+const mockAnnounce: Announce = {
+  id: 1,
+  tone: "info",
+  body: "Профилактика серверов **31 августа с 03:00 до 05:00 МСК** — вход в аккаунт и чат будут недоступны.",
+  link: { url: "https://aciron.pro", label: "" },
+};
+
+export async function announceCurrent(lang: string): Promise<Announce | null> {
+  if (!isTauri) return { ...mockAnnounce };
+  const a = await invoke<Announce | null>("announce_current", { lang });
+  return a ?? null;
 }
 
 export async function crashReportsAvailable(): Promise<boolean> {
@@ -487,26 +511,59 @@ export async function addMicrosoftAccount(): Promise<Account> {
   return invoke<Account>("add_microsoft_account");
 }
 
-export async function acironLogin(
+export type AcironTwofaMethod = "totp" | "telegram";
+
+export type AcironLoginStart =
+  | { twofaRequired: false; account: Account }
+  | { twofaRequired: true; ticket: string; methods: AcironTwofaMethod[] };
+
+function mockAcironAccount(login: string): Account {
+  return {
+    id: String(Date.now()),
+    username: login,
+    uuid: "",
+    type: "aciron",
+    access_token: "0",
+    skin_url: "",
+    aciron_name: login,
+    licensed: false,
+  };
+}
+
+export async function acironLoginStart(
   login: string,
-  password: string,
-  code?: string
-): Promise<Account> {
-  if (!isTauri) {
-    return {
-      id: String(Date.now()),
-      username: login,
-      uuid: "",
-      type: "aciron",
-      access_token: "0",
-      skin_url: "",
-      aciron_name: login,
-      licensed: false,
-    };
+  password: string
+): Promise<AcironLoginStart> {
+  if (!isTauri) return { twofaRequired: false, account: mockAcironAccount(login) };
+  const r = await invoke<{
+    account: Account | null;
+    twofaRequired: boolean;
+    ticket: string;
+    methods: string[];
+  }>("aciron_login_start", { login, password });
+
+  if (r.twofaRequired) {
+    const known = r.methods.filter(
+      (m): m is AcironTwofaMethod => m === "totp" || m === "telegram"
+    );
+
+    return { twofaRequired: true, ticket: r.ticket, methods: known.length ? known : ["totp"] };
   }
-  const acc = await invoke<Account>("aciron_login", { login, password, code });
+  if (!r.account) throw new Error("Не удалось войти в Aciron ID");
+  accountsChanged();
+  return { twofaRequired: false, account: r.account };
+}
+
+export async function acironLoginFinish(ticket: string, code: string): Promise<Account> {
+  if (!isTauri) return mockAcironAccount("Steve");
+  const acc = await invoke<Account>("aciron_login_finish", { ticket, code });
   accountsChanged();
   return acc;
+}
+
+export async function acironLoginTelegramSend(ticket: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("aciron_login_telegram_send", { ticket });
 }
 
 export async function acironRegister(
@@ -571,12 +628,16 @@ export type Friend = {
   username: string;
   hasSkin: boolean;
   presence: FriendPresence;
+
+  system?: boolean;
 };
 
 export type PendingUser = { id: string; username: string; hasSkin: boolean };
 
 export type FriendsData = {
   me: { status: PresenceStatus; acceptRequests: boolean };
+
+  bots: Friend[];
   friends: Friend[];
   incoming: PendingUser[];
   outgoing: PendingUser[];
@@ -584,8 +645,19 @@ export type FriendsData = {
   blocked?: PendingUser[];
 };
 
+export function splitBots(d: FriendsData): FriendsData {
+  const friends = d.friends ?? [];
+  const strays = friends.filter((f) => f.system);
+  if (strays.length === 0) return d.bots ? d : { ...d, bots: [] };
+  return { ...d, bots: [...(d.bots ?? []), ...strays], friends: friends.filter((f) => !f.system) };
+}
+
 const mockFriends: FriendsData = {
   me: { status: "online", acceptRequests: true },
+
+  bots: [
+    { id: "sys", username: "Aciron", hasSkin: true, system: true, presence: { state: "online" } },
+  ],
   friends: [
     {
       id: "f1",
@@ -607,7 +679,7 @@ const mockFriends: FriendsData = {
 
 export async function friendsList(): Promise<FriendsData> {
   if (!isTauri) return structuredClone(mockFriends);
-  return cached("friends", 5_000, () => invoke<FriendsData>("friends_list"));
+  return splitBots(await cached("friends", 5_000, () => invoke<FriendsData>("friends_list")));
 }
 
 export async function friendRequest(username: string): Promise<"requested" | "accepted"> {

@@ -23,6 +23,7 @@ export default function ForwardModal({
     () => sorted.filter((f) => f.username.toLowerCase().includes(q)),
     [sorted, q]
   );
+  const total = sorted.length;
 
   return (
     <Modal
@@ -44,7 +45,7 @@ export default function ForwardModal({
         <div className="max-h-[320px] space-y-1 overflow-y-auto">
           {friends.length === 0 ? (
             <div className="px-3 py-6 text-center text-xs text-muted">
-              {data?.friends.length ? t("Никого не нашлось") : t("Друзей пока нет")}
+              {total ? t("Никого не нашлось") : t("Друзей пока нет")}
             </div>
           ) : (
             friends.map((f) => (

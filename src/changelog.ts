@@ -14,6 +14,85 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.1.1",
+    date: "2026-08-30",
+    added: [
+      {
+        ru: {
+          title: "Объявления сверху окна",
+          body:
+            "Когда на серверах профилактика или вышло что-то, о чём стоит знать, над окном появляется полоса с текстом. " +
+            "Её можно скрыть, и она не вернётся, пока не появится следующее объявление.",
+        },
+        en: {
+          title: "Announcements above the window",
+          body:
+            "When there is maintenance or something worth knowing, a strip appears above the window. " +
+            "You can hide it, and it stays hidden until the next announcement.",
+        },
+        tr: {
+          title: "Pencerenin üstünde duyurular",
+          body:
+            "Sunucularda bakım olduğunda ya da bilmeniz gereken bir şey çıktığında pencerenin üstünde bir şerit belirir. " +
+            "Gizleyebilirsiniz, bir sonraki duyuruya kadar geri gelmez.",
+        },
+      },
+      {
+        ru: {
+          title: "Сообщения от Aciron",
+          body:
+            "В списке контактов закреплён аккаунт Aciron с галочкой — через него приходят объявления. " +
+            "Писать ему нельзя, он только рассылает. В друзьях он не числится и на счётчик друзей не влияет.",
+        },
+        en: {
+          title: "Messages from Aciron",
+          body:
+            "The Aciron account is pinned at the top of your contacts with a check mark, and announcements arrive there. " +
+            "You cannot write to it. It does not count as a friend.",
+        },
+        tr: {
+          title: "Aciron'dan mesajlar",
+          body:
+            "Aciron hesabı kişi listenizin en üstünde sabit duruyor, yanında onay işareti var; duyurular oradan gelir. " +
+            "Ona yazamazsınız ve arkadaş sayınıza dahil değildir.",
+        },
+      },
+      {
+        ru: {
+          title: "Вход по коду из Telegram",
+          body:
+            "Привяжите Telegram в кабинете на id.aciron.pro, и при входе можно будет получить код от бота. " +
+            "Приложение-аутентификатор при этом заводить не обязательно: Telegram работает как самостоятельный второй фактор.",
+        },
+        en: {
+          title: "Sign in with a Telegram code",
+          body:
+            "Link Telegram in your account at id.aciron.pro and you can get a sign-in code from the bot. " +
+            "You do not need an authenticator app: Telegram works as a second factor on its own.",
+        },
+        tr: {
+          title: "Telegram kodu ile giriş",
+          body:
+            "id.aciron.pro üzerindeki hesabınızda Telegram'ı bağlayın, girişte bottan kod alabilirsiniz. " +
+            "Kimlik doğrulama uygulaması kurmanız şart değil: Telegram tek başına ikinci faktör olarak çalışır.",
+        },
+      },
+    ],
+    fixed: [
+      {
+        ru:
+          "Отчёты о сбоях уходили в никуда: на сервере не было приёмника, и лаунчер удалял отчёт после первой же попытки. " +
+          "Теперь они доходят, а те, что скопились, отправятся при запуске.",
+        en:
+          "Crash reports went nowhere: the server had no receiver, and the launcher dropped each report after the first attempt. " +
+          "They arrive now, and whatever piled up is sent at startup.",
+        tr:
+          "Çökme raporları hiçbir yere gitmiyordu: sunucuda alıcı yoktu ve başlatıcı her raporu ilk denemeden sonra siliyordu. " +
+          "Artık ulaşıyorlar, biriken raporlar açılışta gönderilir.",
+      },
+    ],
+  },
+  {
     version: "1.1.0",
     date: "2026-08-29",
     added: [

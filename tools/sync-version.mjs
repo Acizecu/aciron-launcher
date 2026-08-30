@@ -90,4 +90,32 @@ let changed = 0;
   }
 }
 
+// --- src-tauri/Cargo.lock ---------------------------------------------------
+//
+// Версию пакета надо поправить и здесь, иначе её перепишет сам cargo — но уже
+// ВО ВРЕМЯ сборки. build.rs отрабатывает после этого, видит изменённый
+// Cargo.lock и честно ставит dirty=1: в шапке появляется «+dirty», хотя перед
+// сборкой дерево было чистым. Один раз на этом уже сожгли релиз.
+//
+// Правим точечно текстом, а не запуском cargo: инструмент не должен зависеть от
+// того, установлен ли Rust у того, кто поднимает версию.
+{
+  const p = path.join(ROOT, "src-tauri", "Cargo.lock");
+  if (fs.existsSync(p)) {
+    const src = fs.readFileSync(p, "utf8");
+    // Запись ровно нашего пакета: name, сразу за ним version.
+    const re = /(\[\[package\]\]\r?\nname = "aciron-launcher"\r?\nversion = ")([^"]*)(")/;
+    const m = src.match(re);
+    if (!m) {
+      console.log("Cargo.lock       ? записи aciron-launcher нет — пропускаю");
+    } else if (m[2] === version) {
+      console.log(`Cargo.lock       = ${version} (без изменений)`);
+    } else {
+      fs.writeFileSync(p, src.replace(re, `$1${version}$3`));
+      console.log(`Cargo.lock       -> ${version}`);
+      changed++;
+    }
+  }
+}
+
 console.log(`\nГотово. Версия синхронизирована: ${version} (изменено файлов: ${changed}).`);
