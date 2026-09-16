@@ -1,0 +1,85 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Aciron Launcher",
+  "version": "1.1.4",
+  "identifier": "com.aciron.launcher",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Aciron Launcher",
+        "width": 1000,
+        "height": 600,
+        "minWidth": 1003,
+        "minHeight": 600,
+        "resizable": true,
+        "maximizable": true,
+        "decorations": false,
+        "transparent": true,
+        "center": true,
+        "label": "main",
+        "visible": false
+      },
+      {
+        "label": "splash",
+        "url": "index.html?window=splash",
+        "title": "Aciron Launcher",
+        "width": 200,
+        "height": 240,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "decorations": false,
+        "transparent": true,
+        "center": true,
+        "skipTaskbar": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "resources": [
+      "icons/acpack.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "nsis/hooks.nsh",
+        "languages": [
+          "English",
+          "Russian",
+          "Turkish"
+        ],
+        "sidebarImage": "nsis/sidebar.bmp",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico"
+      }
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY2MDVGRjJFOEFGMjNGNgpSV1QySTYvbzhsOWdEM0o2VlpWZHFwNjlwZG1FRnk0d0crdzFnM0tiTGpYT1hyazA3V0l0OW1idQo=",
+      "endpoints": [
+        "https://github.com/Acizecu/aciron-launcher/releases/latest/download/latest.json",
+        "https://dl.aciron.pro/latest.json"
+      ]
+    }
+  }
+}

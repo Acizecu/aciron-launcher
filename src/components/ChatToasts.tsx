@@ -1,0 +1,136 @@
+import { useEffect, useMemo, useState } from "react";
+import { ContactAvatar, isVerified, VerifiedMark } from "./ContactAvatar";
+import { type ChatMessage, type Friend } from "../api";
+import { onMessage, parseForward } from "../chat";
+import { contacts, useFriends } from "../friends";
+import { playNotification } from "../sound";
+import { cardInDelay } from "../anim";
+import { isMuted } from "../mutes";
+import { useLang } from "../i18n";
+
+const LIFE_MS = 6000;
+const SLIDE_MS = 220;
+
+type Item = { key: number; msg: ChatMessage; from: string };
+
+function Toast({
+  item,
+  friend,
+  onOpen,
+  onDone,
+}: {
+  item: Item;
+  friend: Friend | undefined;
+  onOpen: () => void;
+  onDone: () => void;
+}) {
+
+  const { t } = useLang();
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setShown(true));
+    const t = window.setTimeout(() => {
+      setShown(false);
+      window.setTimeout(onDone, SLIDE_MS);
+    }, LIFE_MS);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t);
+    };
+
+  }, []);
+
+  return (
+    <button
+      onClick={onOpen}
+      style={{
+        transition: `transform ${SLIDE_MS}ms cubic-bezier(.2,.8,.2,1), opacity ${SLIDE_MS}ms`,
+        transform: shown ? "translateX(0)" : "translateX(-120%)",
+        opacity: shown ? 1 : 0,
+        animationDelay: `${cardInDelay(0)}ms`,
+      }}
+      className="pointer-events-auto flex w-[280px] items-start gap-2.5 rounded-xl border border-border bg-panel p-2.5 text-left shadow-lg"
+    >
+      {}
+      <ContactAvatar
+        c={friend ?? { username: "?", hasSkin: false }}
+        size={32}
+        className="shrink-0 rounded-lg"
+      />
+      <div className="min-w-0 flex-1 leading-tight">
+        <div className="flex items-center gap-1">
+          <span className="truncate text-xs font-semibold text-text">
+            {friend?.username ?? t("Новое сообщение")}
+          </span>
+          {isVerified(friend) && <VerifiedMark className="text-[9px]" />}
+        </div>
+        {}
+        <div className="mt-0.5 line-clamp-2 text-[11px] text-muted">
+          {parseForward(item.msg.body).text}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+export default function ChatToasts({
+  sound,
+  onOpen,
+}: {
+  sound: boolean;
+  onOpen: (userId: string) => void;
+}) {
+  const [queue, setQueue] = useState<Item[]>([]);
+
+  const [barBottom, setBarBottom] = useState(0);
+  const { data } = useFriends();
+
+  const dnd = data?.me?.status === "dnd";
+
+  const byId = useMemo(() => {
+    const m = new Map<string, Friend>();
+    for (const f of contacts(data)) m.set(f.id, f);
+    return m;
+  }, [data]);
+
+  useEffect(() => {
+    let n = 0;
+    return onMessage((msg, from) => {
+
+      if (dnd) return;
+
+      if (isMuted(from)) return;
+      setQueue((q) => [...q, { key: ++n, msg, from }]);
+      playNotification(sound);
+    });
+  }, [sound, dnd]);
+
+  useEffect(() => {
+    const on = (e: Event) => setBarBottom(Number((e as CustomEvent).detail) || 0);
+    window.addEventListener("aciron-announce-bar", on);
+    return () => window.removeEventListener("aciron-announce-bar", on);
+  }, []);
+
+  if (queue.length === 0) return null;
+
+  return (
+    <div
+      style={barBottom > 0 ? { top: barBottom + 8 } : undefined}
+      className="pointer-events-none fixed left-4 top-14 z-[60] flex flex-col gap-2"
+    >
+      {queue.map((it) => (
+        <Toast
+          key={it.key}
+          item={it}
+          friend={byId.get(it.from)}
+          onOpen={() => {
+            onOpen(it.from);
+            setQueue((q) => q.filter((x) => x.key !== it.key));
+          }}
+          onDone={() => setQueue((q) => q.filter((x) => x.key !== it.key))}
+        />
+      ))}
+    </div>
+  );
+}

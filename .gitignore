@@ -1,0 +1,44 @@
+# --- Node / Vite ---
+node_modules
+dist
+dist-ssr
+*.local
+
+# --- Rust / Tauri ---
+src-tauri/target
+src-tauri/gen
+
+# --- Secrets / local config (не публикуем) ---
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+**/apikeys.json
+**/*.secret.*
+.cargo/config.toml
+**/.cargo/config.toml
+.env.example
+**/config.toml.example
+
+TODO.md
+launcher-screenshot.png
+/aciron-launcher
+RELEASE.md
+WORKFLOW.md
+
+latest.json
+
+*.log
+npm-debug.log*
+.cache
+design.md
+
+# --- ОС / IDE ---
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+*.suo
+*.user
+latest.mirror.json
