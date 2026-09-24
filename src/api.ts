@@ -466,6 +466,10 @@ const ID_URL = import.meta.env.VITE_ACIRON_ID_URL || "https://example.invalid";
 
 export const ACIRON_ID_WEB = ID_URL;
 
+export function acironProfileUrl(username: string): string {
+  return `${ACIRON_ID_WEB}/u/${encodeURIComponent(username)}`;
+}
+
 export const ACIRON_ID_API = ID_URL;
 
 export type AccountsState = { accounts: Account[]; active: string };
@@ -1436,7 +1440,7 @@ export async function modrinthSearch(
   limit: number,
   project_type = "mod"
 ): Promise<ModSearch> {
-  if (!isTauri) return { hits: [], total_hits: 0, offset: 0, limit };
+  if (!isTauri) return previewModrinthSearch(query, categories, index, offset, limit, project_type);
   const key = "search:modrinth:" + JSON.stringify([query, loader, game_version, [...categories].sort(), index, offset, limit, project_type]);
   return cached(key, 120_000, () => invoke<ModSearch>("modrinth_search", {
     query,
@@ -1455,8 +1459,101 @@ export async function installModpack(project_id: string, version_id?: string): P
   return invoke<Build>("install_modpack", { projectId: project_id, versionId: version_id ?? null });
 }
 
+const MR_API = "https://api.modrinth.com/v2";
+
+async function previewModrinthSearch(
+  query: string,
+  categories: string[],
+  index: string,
+  offset: number,
+  limit: number,
+  project_type: string
+): Promise<ModSearch> {
+  const params = new URLSearchParams({
+    query,
+    index: index || "relevance",
+    offset: String(offset),
+    limit: String(limit),
+    facets: JSON.stringify([[`project_type:${project_type}`], ...categories.map((c) => [`categories:${c}`])]),
+  });
+  try {
+    const r = await fetch(`${MR_API}/search?${params}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    return {
+      hits: (j.hits ?? []).map((h: Record<string, unknown>) => ({
+        project_id: String(h.project_id),
+        slug: String(h.slug),
+        title: String(h.title),
+        description: String(h.description ?? ""),
+        icon_url: String(h.icon_url ?? ""),
+        downloads: Number(h.downloads ?? 0),
+        categories: (h.display_categories as string[]) ?? [],
+        author: String(h.author ?? ""),
+      })),
+      total_hits: Number(j.total_hits ?? 0),
+      offset,
+      limit,
+    };
+  } catch {
+    return { hits: [], total_hits: 0, offset, limit };
+  }
+}
+
+async function previewModrinthProject(project_id: string): Promise<ModProject> {
+  const r = await fetch(`${MR_API}/project/${encodeURIComponent(project_id)}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
+  return {
+    title: j.title,
+    slug: j.slug,
+    description: j.description ?? "",
+    body: j.body ?? "",
+    body_format: j.body ? "markdown" : "",
+    body_truncated: false,
+    categories: j.categories ?? [],
+    additional_categories: j.additional_categories ?? [],
+    downloads: j.downloads ?? 0,
+    followers: j.followers ?? null,
+    icon_url: j.icon_url ?? "",
+    gallery: (j.gallery ?? []).map((g: Record<string, unknown>) => ({
+      url: String(g.url),
+      title: (g.title as string) ?? undefined,
+      description: (g.description as string) ?? undefined,
+      featured: Boolean(g.featured),
+    })),
+    authors: [],
+    game_versions: [...(j.game_versions ?? [])].reverse(),
+    loaders: j.loaders ?? [],
+    donation_urls: (j.donation_urls ?? []).map((d: Record<string, unknown>) => ({
+      platform: String(d.platform ?? ""),
+      url: String(d.url),
+    })),
+    license_name: j.license?.name || j.license?.id || null,
+    license_url: j.license?.url ?? null,
+    client_side: j.client_side ?? null,
+    server_side: j.server_side ?? null,
+    published: j.published ?? null,
+    updated: j.updated ?? null,
+    project_type: j.project_type ?? null,
+    status: j.status ?? null,
+    versions_count: (j.versions ?? []).length,
+    is_available: j.status !== "archived",
+    source_url: j.source_url ?? null,
+    issues_url: j.issues_url ?? null,
+    wiki_url: j.wiki_url ?? null,
+    discord_url: j.discord_url ?? null,
+    website_url: null,
+  };
+}
+
 export async function modrinthCategories(): Promise<string[]> {
-  if (!isTauri) return ["adventure", "optimization", "utility", "worldgen", "library"];
+  if (!isTauri)
+    return [
+      "adventure", "cursed", "decoration", "economy", "equipment", "food", "game-mechanics", "library", "magic",
+      "management", "minigame", "mobs", "optimization", "social", "storage", "technology", "transportation",
+      "utility", "worldgen",
+    ];
   return cached("cats:modrinth", 86_400_000, () => invoke<string[]>("modrinth_categories"));
 }
 
@@ -1527,6 +1624,7 @@ export type ModProject = {
 };
 
 export async function modrinthProject(project_id: string): Promise<ModProject> {
+  if (!isTauri) return previewModrinthProject(project_id);
   return cached("proj:modrinth:" + project_id, 600_000, () =>
     invoke<ModProject>("modrinth_project", { projectId: project_id }));
 }

@@ -11,12 +11,13 @@ import {
 import LoadingDots from "../LoadingDots";
 import Modal from "../Modal";
 import { ts, useLang } from "../../i18n";
+import Icon from "../Icon";
 
 export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
 
 const LEVEL_STYLE: Record<LogLevel, string> = {
-  error: "text-[#f87171]",
-  warn: "text-[#fbbf24]",
+  error: "text-danger",
+  warn: "text-warn",
   info: "text-text/85",
   debug: "text-muted",
   trace: "text-[#f87171]/70",
@@ -187,7 +188,7 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[16px] border border-border/60 bg-card/35">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[16px] border border-line bg-card/35">
       {}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/50 bg-card/50 px-3 py-2">
         {FILTERS.map((f) => {
@@ -196,7 +197,7 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
             <button
               key={f.id}
               onClick={() => setFilter(f.id)}
-              className={`rounded-full px-2.5 py-1 text-[11px] transition-colors ${
+              className={`rounded-full px-2.5 py-1 text-[12px] transition-colors ${
                 on ? "bg-accent/15 text-accent" : "text-muted hover:text-text"
               }`}
             >
@@ -208,17 +209,17 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
         {}
         {(counts.errors > 0 || counts.warns > 0) && (
           <span
-            className="flex items-center gap-2 text-[11px] tabular-nums"
+            className="flex items-center gap-2 text-[12px] tabular-nums"
             title={t("Ошибок и предупреждений за сессию")}
           >
             {counts.errors > 0 && (
-              <span className="flex items-center gap-1 text-[#f87171]">
+              <span className="flex items-center gap-1 text-danger">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#f87171]" />
                 {counts.errors}
               </span>
             )}
             {counts.warns > 0 && (
-              <span className="flex items-center gap-1 text-[#fbbf24]">
+              <span className="flex items-center gap-1 text-warn">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#fbbf24]" />
                 {counts.warns}
               </span>
@@ -227,20 +228,20 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          <div className="flex h-7 items-center gap-1.5 rounded-lg bg-bg/60 px-2">
-            <i className="fa-solid fa-magnifying-glass text-[10px] text-muted" />
+          <div className="flex h-7 items-center gap-1.5 rounded-[12px] bg-bg/60 px-2">
+            <Icon cls="fa-solid fa-magnifying-glass text-[11.5px] text-muted" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("Поиск")}
-              className="w-28 bg-transparent text-[11px] text-text outline-none placeholder:text-muted"
+              className="w-28 bg-transparent text-[12px] text-text outline-none placeholder:text-muted"
             />
             {query && (
               <button
                 onClick={() => setQuery("")}
                 className="text-muted transition-colors hover:text-text"
               >
-                <i className="fa-solid fa-xmark text-[10px]" />
+                <Icon cls="fa-solid fa-xmark text-[11.5px]" />
               </button>
             )}
           </div>
@@ -251,31 +252,31 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
                 ? t("Не прокручивать за новыми строками")
                 : t("Прокручивать за новыми строками")
             }
-            className={`grid h-7 w-7 place-items-center rounded-lg transition-colors ${
+            className={`grid h-7 w-7 place-items-center rounded-[12px] transition-colors ${
               follow ? "bg-accent/15 text-accent" : "text-muted hover:text-text"
             }`}
           >
-            <i className="fa-solid fa-angles-down text-[11px]" />
+            <Icon cls="fa-solid fa-angles-down text-[12px]" />
           </button>
           <button
             onClick={copyAll}
             title={t("Скопировать показанное")}
-            className="grid h-7 w-7 place-items-center rounded-lg text-muted transition-colors hover:text-text"
+            className="grid h-7 w-7 place-items-center rounded-[12px] text-muted transition-colors hover:text-text"
           >
-            <i className={`fa-solid ${copied ? "fa-check text-accent" : "fa-copy"} text-[11px]`} />
+            <Icon cls={`fa-solid ${copied ? "fa-check text-accent" : "fa-copy"} text-[12px]`} />
           </button>
           {}
           {shareReady && rows.length > 0 && (
             <button
               onClick={openShare}
               title={t("Создать ссылку на этот лог")}
-              className={`flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] transition-colors ${
+              className={`flex h-7 items-center gap-1.5 rounded-[12px] px-2 text-[12px] transition-colors ${
                 !running && counts.errors > 0
                   ? "bg-accent/15 text-accent hover:bg-accent/25"
                   : "text-muted hover:text-text"
               }`}
             >
-              <i className="fa-solid fa-link text-[10px]" />
+              <Icon cls="fa-solid fa-link text-[11.5px]" />
               {t("Создать лог")}
             </button>
           )}
@@ -290,10 +291,10 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
 
           setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
         }}
-        className="min-h-0 flex-1 overflow-auto bg-bg/45 py-1.5 font-mono text-[11px] leading-[1.55]"
+        className="min-h-0 flex-1 overflow-auto bg-bg/45 py-1.5 font-mono text-[12px] leading-[1.55]"
       >
         {shown.length === 0 ? (
-          <div className="grid h-full place-items-center text-center text-[11px] text-muted">
+          <div className="grid h-full place-items-center text-center text-[12px] text-muted">
             {rows.length === 0 ? (
               running ? (
                 <span className="inline-flex items-center">
@@ -302,7 +303,7 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
                 </span>
               ) : (
                 <span className="flex flex-col items-center gap-2">
-                  <i className="fa-solid fa-terminal text-lg opacity-40" />
+                  <Icon cls="fa-solid fa-terminal text-lg opacity-40" />
                   {t("Запустите игру, чтобы увидеть её вывод")}
                 </span>
               )
@@ -342,8 +343,8 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
           <div className="p-1">
             {shared ? (
               <>
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2.5">
-                  <i className="fa-solid fa-link text-xs text-accent" />
+                <div className="flex items-center gap-2 rounded-[12px] border border-line bg-bg px-3 py-2.5">
+                  <Icon cls="fa-solid fa-link text-[12.5px] text-accent" />
                   <span className="selectable min-w-0 flex-1 truncate font-mono text-[13px] text-text">
                     {shared.url}
                   </span>
@@ -355,22 +356,22 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
                       setLinkCopied(true);
                       window.setTimeout(() => setLinkCopied(false), 1600);
                     }}
-                    className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+                    className="btn btn-accent"
                   >
-                    <i className={`fa-solid ${linkCopied ? "fa-check" : "fa-copy"}`} />
+                    <Icon cls={`fa-solid ${linkCopied ? "fa-check" : "fa-copy"}`} />
                     {linkCopied ? t("Скопировано") : t("Скопировать")}
                   </button>
                   <button
                     onClick={() => openUrl(shared.url)}
-                    className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                    className="flex items-center gap-2 rounded-[12px] border border-line px-4 py-2 text-sm font-medium text-muted transition-colors hover:border-line-strong hover:text-accent"
                   >
-                    <i className="fa-solid fa-arrow-up-right-from-square text-xs" />
+                    <Icon cls="fa-solid fa-arrow-up-right-from-square text-[12.5px]" />
                     {t("Открыть")}
                   </button>
                 </div>
                 {shared.expires_at > 0 && (
                   <p className="mt-4 text-[12px] leading-relaxed text-muted">
-                    <i className="fa-solid fa-clock mr-1.5 text-[11px]" />
+                    <Icon cls="fa-solid fa-clock mr-1.5 text-[12px]" />
                     {t("Ссылка перестанет работать через {left} — лог удалится сам.", {
                       left: expiresIn(shared.expires_at),
                     })}
@@ -393,24 +394,24 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
                 {}
                 <ul className="mt-3 space-y-1.5 text-[12px] leading-relaxed text-muted">
                   <li className="flex gap-2">
-                    <i className="fa-solid fa-eye mt-0.5 shrink-0 text-[11px]" />
+                    <Icon cls="fa-solid fa-eye mt-0.5 shrink-0 text-[12px]" />
                     <span>{t("Лог увидит каждый, у кого есть ссылка.")}</span>
                   </li>
                   <li className="flex gap-2">
-                    <i className="fa-solid fa-shield-halved mt-0.5 shrink-0 text-[11px]" />
+                    <Icon cls="fa-solid fa-shield-halved mt-0.5 shrink-0 text-[12px]" />
                     <span>
                       {t("Токен входа и путь к вашим папкам из лога вырезаны. Ник останется.")}
                     </span>
                   </li>
                   <li className="flex gap-2">
-                    <i className="fa-solid fa-clock mt-0.5 shrink-0 text-[11px]" />
+                    <Icon cls="fa-solid fa-clock mt-0.5 shrink-0 text-[12px]" />
                     <span>{t("Через 12 часов ссылка перестанет работать.")}</span>
                   </li>
                 </ul>
 
                 {shareError && (
-                  <div className="mt-3 flex items-start gap-2 rounded-[12px] bg-[#ef4444]/10 px-3 py-2 text-[12px] text-[#ef4444]">
-                    <i className="fa-solid fa-circle-exclamation mt-0.5" />
+                  <div className="mt-3 flex items-start gap-2 rounded-[12px] bg-danger/10 px-3 py-2 text-[12px] text-danger">
+                    <Icon cls="fa-solid fa-circle-exclamation mt-0.5" />
                     <span className="min-w-0 break-words">{shareError}</span>
                   </div>
                 )}
@@ -418,16 +419,16 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
                 <div className="mt-5 flex justify-end gap-2">
                   <button
                     onClick={() => setShareOpen(false)}
-                    className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
+                    className="btn btn-sm btn-ghost"
                   >
                     {t("Отмена")}
                   </button>
                   <button
                     onClick={doShare}
                     disabled={sharing}
-                    className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-60"
+                    className="btn btn-accent"
                   >
-                    <i className={`fa-solid ${sharing ? "fa-spinner fa-spin" : "fa-link"}`} />
+                    <Icon cls={`fa-solid ${sharing ? "fa-spinner fa-spin" : "fa-link"}`} />
                     {sharing ? t("Отправляем…") : t("Создать ссылку")}
                   </button>
                 </div>

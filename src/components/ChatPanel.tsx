@@ -7,7 +7,7 @@ import TypingDots from "./chat/TypingDots";
 import LoadingDots from "./LoadingDots";
 import EmojiPicker from "./chat/EmojiPicker";
 import Twemoji from "./chat/Twemoji";
-import { getAccounts, MAX_MESSAGE, type Friend } from "../api";
+import { acironProfileUrl, getAccounts, MAX_MESSAGE, openUrl, type Friend } from "../api";
 import { PRESENCE_COLOR, presenceText } from "../friends";
 import ReactionPicker from "./chat/ReactionPicker";
 import {
@@ -34,6 +34,7 @@ import {
 } from "../chat";
 import { useToast } from "../ToastContext";
 import { dtf, t, useLang, ts } from "../i18n";
+import Icon from "./Icon";
 
 type ReplyTarget = { id: string; author: string; text: string };
 
@@ -53,12 +54,12 @@ function dayLabel(ms: number): string {
 }
 
 function Ticks({ msg }: { msg: LocalMessage }) {
-  if (msg.state === "sending") return <i className="fa-regular fa-clock" title={t("Отправляется")} />;
+  if (msg.state === "sending") return <Icon cls="fa-regular fa-clock" title={t("Отправляется")} />;
   if (msg.state === "failed")
-    return <i className="fa-solid fa-triangle-exclamation" title={t("Не отправлено")} />;
+    return <Icon cls="fa-solid fa-triangle-exclamation" title={t("Не отправлено")} />;
   return (
-    <i
-      className={`fa-solid ${msg.read ? "fa-check-double" : "fa-check"}`}
+    <Icon
+      cls={`fa-solid ${msg.read ? "fa-check-double" : "fa-check"}`}
       title={msg.read ? t("Прочитано") : t("Доставлено")}
     />
   );
@@ -78,7 +79,7 @@ function MessagesSkeleton() {
       {rows.map((r, i) => (
         <div key={i} className={`flex ${r.mine ? "justify-end" : "justify-start"}`}>
           <div
-            className="h-10 animate-pulse rounded-2xl bg-card"
+            className="h-10 animate-pulse rounded-[18px] bg-white/[0.04]"
             style={{ width: r.w, animationDelay: `${i * 80}ms` }}
           />
         </div>
@@ -125,7 +126,7 @@ const Bubble = memo(function Bubble({
       onDoubleClick={() => !selecting && onReply(msg)}
       className={`group flex items-center ${mine ? "justify-end" : "justify-start"} ${
         grouped ? "mt-0.5" : "mt-2"
-      } ${selecting ? "cursor-pointer" : ""} ${selected ? "rounded-lg bg-accent/10" : ""}`}
+      } ${selecting ? "cursor-pointer" : ""} ${selected ? "rounded-[12px] bg-accent/[0.08]" : ""}`}
     >
       {}
       {mine && !selecting && reactable && (
@@ -133,35 +134,36 @@ const Bubble = memo(function Bubble({
       )}
       {selecting && (
         <span
-          className={`mr-2 mt-2 grid h-4 w-4 shrink-0 place-items-center self-start rounded-full border ${
-            selected ? "border-accent bg-accent text-bg" : "border-border"
+          className={`mr-2 mt-2 grid h-[18px] w-[18px] shrink-0 place-items-center self-start rounded-full border transition-colors ${
+            selected ? "border-accent bg-accent text-bg" : "border-line-strong"
           }`}
         >
-          {selected && <i className="fa-solid fa-check text-[8px]" />}
+          {selected && <Icon cls="fa-solid fa-check text-[8px]" />}
         </span>
       )}
+      <div className={`flex min-w-0 max-w-[72%] flex-col ${mine ? "items-end" : "items-start"}`}>
       <div
-        className={`max-w-[78%] rounded-2xl px-3 py-2 ${
-          mine ? "bg-accent text-bg" : "bg-card text-text"
+        className={`max-w-full rounded-[18px] px-3.5 py-2 transition-[opacity,transform] duration-300 ${
+          mine ? "bubble-mine text-bg" : "bg-raised text-text"
         } ${msg.state === "failed" ? "opacity-60" : ""} ${
-          grouped ? (mine ? "rounded-tr-md" : "rounded-tl-md") : ""
+          grouped ? (mine ? "rounded-tr-[6px]" : "rounded-tl-[6px]") : mine ? "rounded-br-[6px]" : "rounded-bl-[6px]"
         }`}
       >
         {}
         {fwd.forwardedFrom && (
           <div
-            className={`mb-1 flex items-center gap-1 border-l-2 pl-1.5 text-[11px] ${
+            className={`mb-1 flex items-center gap-1 border-l-2 pl-1.5 text-[12px] ${
               mine ? "border-bg/40 text-bg/70" : "border-accent/50 text-muted"
             }`}
           >
-            <i className="fa-solid fa-share text-[9px]" />
+            <Icon cls="fa-solid fa-share text-[9px]" />
             {t("Переслано от {name}", { name: fwd.forwardedFrom })}
           </div>
         )}
         {}
         {rep.replyTo && (
           <div
-            className={`mb-1.5 rounded-md border-l-2 px-2 py-1 text-[11px] leading-tight ${
+            className={`mb-1.5 rounded-[10px] border-l-2 px-2 py-1 text-[12px] leading-tight ${
               mine ? "border-bg/40 bg-bg/10 text-bg/75" : "border-accent/60 bg-bg/40 text-muted"
             }`}
           >
@@ -174,11 +176,11 @@ const Bubble = memo(function Bubble({
           </div>
         )}
         {}
-        <div className="selectable whitespace-pre-wrap break-words text-sm leading-snug">
+        <div className="selectable whitespace-pre-wrap break-words text-[14px] leading-[1.45]">
           <Twemoji text={rep.text} />
         </div>
         <div
-          className={`mt-0.5 flex items-center justify-end gap-1 text-[10px] ${
+          className={`mt-0.5 flex items-center justify-end gap-1 text-[11.5px] ${
             mine ? "text-bg/60" : "text-muted"
           }`}
         >
@@ -186,33 +188,33 @@ const Bubble = memo(function Bubble({
           {mine && <Ticks msg={msg} />}
         </div>
 
-        {}
-        {reactions && reactions.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {reactions.map((r) => (
-              <button
-                key={r.emoji}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReact(msg, r.emoji);
-                }}
-                title={r.mine ? t("Убрать свою реакцию") : t("Поставить такую же")}
-                className={`flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] leading-none transition-colors ${
-                  r.mine
-                    ? mine
-                      ? "bg-bg/25 text-bg"
-                      : "bg-accent/20 text-accent"
-                    : mine
-                    ? "bg-bg/10 text-bg/80 hover:bg-bg/20"
-                    : "bg-bg/60 text-muted hover:bg-bg"
-                }`}
-              >
+      </div>
+
+      {}
+      {reactions && reactions.length > 0 && (
+        <div className={`relative z-10 -mt-1.5 mb-1 flex flex-wrap gap-1 ${mine ? "justify-end pr-2" : "pl-2"}`}>
+          {reactions.map((r) => (
+            <button
+              key={r.emoji}
+              onClick={(e) => {
+                e.stopPropagation();
+                onReact(msg, r.emoji);
+              }}
+              title={r.mine ? t("Убрать свою реакцию") : t("Поставить такую же")}
+              className={`pop flex h-[26px] items-center gap-1 rounded-full px-2 text-[12px] leading-none shadow-[0_4px_12px_rgba(0,0,0,0.35)] transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-px active:scale-95 ${
+                r.mine
+                  ? "bg-[color-mix(in_srgb,var(--color-accent)_18%,var(--color-popover))] text-accent-hover ring-1 ring-accent/60"
+                  : "bg-popover text-text2 ring-1 ring-line hover:bg-raised"
+              }`}
+            >
+              <span className="grid h-4 w-4 place-items-center [&_img]:h-4 [&_img]:w-4">
                 <Twemoji text={r.emoji} />
-                {r.count > 1 && <span className="tabular-nums">{r.count}</span>}
-              </button>
-            ))}
-          </div>
-        )}
+              </span>
+              {r.count > 1 && <span className="font-semibold tabular-nums">{r.count}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       </div>
 
       {!mine && !selecting && reactable && (
@@ -268,25 +270,26 @@ const Composer = memo(function Composer({
   };
 
   return (
-    <div className="border-t border-border/70 px-5 py-3">
+    <div className="px-[max(24px,calc((100%-780px)/2))] pb-5 pt-2">
       {}
+      <div className="rounded-[20px] bg-raised shadow-[0_10px_30px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-transparent transition-shadow duration-300 focus-within:ring-accent/40">
       {reply && (
-        <div className="msg-in mb-2 flex items-center gap-2 rounded-lg border-l-2 border-accent bg-card/70 px-2.5 py-1.5">
-          <i className="fa-solid fa-reply text-[10px] text-accent" />
+        <div className="msg-in mx-2 mt-2 flex items-center gap-2 rounded-[12px] border-l-2 border-accent bg-white/[0.04] px-2.5 py-1.5">
+          <Icon cls="fa-solid fa-reply text-[11.5px] text-accent" />
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="text-[11px] font-semibold text-accent">{reply.author}</div>
-            <div className="truncate text-[11px] text-muted">{reply.text || "…"}</div>
+            <div className="text-[12px] font-medium text-accent">{reply.author}</div>
+            <div className="truncate text-[12px] text-muted">{reply.text || "…"}</div>
           </div>
           <button
             onClick={onCancelReply}
             title={t("Отменить ответ")}
             className="shrink-0 text-muted transition-colors hover:text-text"
           >
-            <i className="fa-solid fa-xmark text-xs" />
+            <Icon cls="fa-solid fa-xmark text-[12.5px]" />
           </button>
         </div>
       )}
-      <div className="relative flex items-end gap-2">
+      <div className="relative flex items-end gap-1 p-1.5">
         <textarea
           ref={area}
           value={draft}
@@ -308,16 +311,16 @@ const Composer = memo(function Composer({
             }
           }}
           placeholder={t("Сообщение для {name}", { name: username })}
-          className="max-h-32 min-h-[42px] flex-1 resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none"
+          className="max-h-32 min-h-[40px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[14px] text-text outline-none placeholder:text-muted"
         />
         <button
           onClick={() => setPicker((v) => !v)}
           title={t("Эмодзи")}
-          className={`grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl transition-colors ${
-            picker ? "text-accent" : "text-muted hover:text-text"
+          className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-colors ${
+            picker ? "bg-white/[0.06] text-accent" : "text-muted hover:bg-white/[0.05] hover:text-text"
           }`}
         >
-          <i className="fa-regular fa-face-smile text-base" />
+          <Icon cls="fa-regular fa-face-smile text-[18px]" />
         </button>
         {picker && (
           <EmojiPicker onPick={insert} onClose={() => setPicker(false)} />
@@ -326,13 +329,15 @@ const Composer = memo(function Composer({
           onClick={submit}
           disabled={!draft.trim() || over}
           title={t("Отправить")}
-          className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl bg-accent text-bg transition-colors hover:bg-accent-hover disabled:opacity-40"
+          className="btn-accent grid h-10 w-10 shrink-0 place-items-center rounded-full disabled:opacity-35"
         >
-          <i className="fa-solid fa-paper-plane text-sm" />
+          <Icon cls="fa-solid fa-paper-plane text-[16px]" />
         </button>
       </div>
+      </div>
       {over && (
-        <div className="mt-1.5 text-[11px] text-[#fca5a5]">
+        <div className="mt-2 flex items-center gap-2 px-2 text-[12px] text-danger">
+          <span className="dot bg-danger" />
           {t("Слишком длинное: {n} из {max}", { n: draft.length, max: MAX_MESSAGE })}
         </div>
       )}
@@ -560,17 +565,17 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
   return (
     <section className="flex min-w-0 flex-1 flex-col">
       {}
-      <div className="flex items-center gap-3 border-b border-border/70 px-5 py-3">
+      <div className="flex items-center gap-3 border-b border-line px-6 py-3.5">
         {}
         {friend.system ? (
           <div className="flex min-w-0 items-center gap-3">
-            <ContactAvatar c={friend} size={36} className="shrink-0 rounded-lg" />
+            <ContactAvatar c={friend} size={36} className="shrink-0 rounded-full" />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="truncate text-sm font-semibold text-text">{friend.username}</span>
-                <VerifiedMark className="text-[11px]" />
+                <span className="truncate text-[15px] font-semibold text-text">{friend.username}</span>
+                <VerifiedMark className="text-[12px]" />
               </div>
-              <div className="truncate text-[11px] text-muted">
+              <div className="truncate text-[12.5px] text-muted">
                 {t("Официальные уведомления")}
               </div>
             </div>
@@ -579,21 +584,22 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
           <button
             onClick={() => setProfile(true)}
             title={t("Открыть профиль")}
-            className="flex min-w-0 items-center gap-3 text-left"
+            className="group flex min-w-0 items-center gap-3 text-left"
           >
-            <ContactAvatar c={friend} size={36} className="shrink-0 rounded-lg" />
+            <span
+              className="shrink-0 rounded-full transition-shadow duration-500"
+              style={{ boxShadow: `0 0 0 2px var(--color-bg), 0 0 0 3.5px ${PRESENCE_COLOR[friend.presence.state]}` }}
+            >
+              <ContactAvatar c={friend} size={38} className="rounded-full" />
+            </span>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="truncate text-sm font-semibold text-text hover:text-accent">
+                <span className="truncate text-[15px] font-semibold text-text transition-colors group-hover:text-accent">
                   {friend.username}
                 </span>
-                {friend.verified && <VerifiedMark className="text-[11px]" />}
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: PRESENCE_COLOR[friend.presence.state] }}
-                />
+                {friend.verified && <VerifiedMark className="text-[12px]" />}
               </div>
-              <div className="truncate text-[11px]">
+              <div className="truncate text-[12.5px]">
                 {typing ? (
                   <TypingDots />
                 ) : (
@@ -604,38 +610,54 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
           </button>
         )}
 
-        {selecting && (
+        {!selecting && !friend.system && (
           <div className="ml-auto flex items-center gap-1.5">
-            <span className="mr-1 text-[11px] text-muted">
+            <button onClick={() => setProfile(true)} className="btn btn-sm btn-ghost">
+              <Icon cls="fa-solid fa-user text-[15px]" />
+              {t("Профиль")}
+            </button>
+            <button
+              onClick={() => openUrl(acironProfileUrl(friend.username))}
+              title={t("Профиль на сайте")}
+              className="btn btn-sm btn-ghost btn-icon"
+            >
+              <Icon cls="fa-solid fa-up-right-from-square text-[15px]" />
+            </button>
+          </div>
+        )}
+
+        {selecting && (
+          <div className="page-in ml-auto flex items-center gap-1.5">
+            <span className="mr-1 text-[12px] text-muted">
               {t("Выбрано: {n}", { n: selected.size })}
             </span>
             <button
               onClick={() => copy([...selected])}
               title={t("Копировать")}
-              className="grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:text-accent"
+              className="btn btn-sm btn-ghost btn-icon"
             >
-              <i className="fa-solid fa-copy text-xs" />
+              <Icon cls="fa-solid fa-copy text-[12.5px]" />
             </button>
             <button
               onClick={() => setForward([...selected])}
               title={t("Переслать")}
-              className="grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:text-accent"
+              className="btn btn-sm btn-ghost btn-icon"
             >
-              <i className="fa-solid fa-share text-xs" />
+              <Icon cls="fa-solid fa-share text-[12.5px]" />
             </button>
             <button
               onClick={() => void del([...selected])}
               title={t("Удалить свои из выбранных")}
-              className="grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:text-[#f87171]"
+              className="btn btn-sm btn-ghost btn-icon hover:!text-danger"
             >
-              <i className="fa-solid fa-trash text-xs" />
+              <Icon cls="fa-solid fa-trash text-[12.5px]" />
             </button>
             <button
               onClick={() => setSelected(new Set())}
               title={t("Снять выделение")}
-              className="grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:text-text"
+              className="btn btn-sm btn-ghost btn-icon"
             >
-              <i className="fa-solid fa-xmark text-xs" />
+              <Icon cls="fa-solid fa-xmark text-[12.5px]" />
             </button>
           </div>
         )}
@@ -647,19 +669,22 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         ref={scroller}
         onScroll={onScroll}
         style={{ overflowAnchor: "none" }}
-        className="min-h-0 flex-1 overflow-y-auto px-5 py-3"
+        className="min-h-0 flex-1 overflow-y-auto px-[max(24px,calc((100%-780px)/2))] py-4"
       >
         {conv.loading && conv.messages.length === 0 && <MessagesSkeleton />}
         {conv.error && (
-          <div className="rounded-xl bg-[#ef4444]/10 px-4 py-3 text-xs text-[#fca5a5]">
+          <div className="flex items-center gap-2 text-[13px] text-danger">
+            <span className="dot bg-danger" />
             {conv.error}
           </div>
         )}
         {!conv.loading && conv.messages.length === 0 && !conv.error && (
           <div className="grid h-full place-items-center px-6 text-center">
             <div>
-              <i className="fa-regular fa-comments mb-3 block text-3xl text-muted/50" />
-              <div className="text-sm text-muted">
+              <span className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-white/[0.04] text-muted">
+                <Icon cls="fa-regular fa-comments text-[26px]" />
+              </span>
+              <div className="text-[14px] text-muted">
                 {friend.system
                   ? t("Этому аккаунту нельзя писать")
                   : t("Здесь пока пусто. Напишите {who} первым.", { who: friend.username })}
@@ -669,7 +694,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         )}
 
         {conv.more && conv.messages.length > 0 && (
-          <div className="pb-2 text-center text-[11px] text-muted">
+          <div className="pb-2 text-center text-[12px] text-muted">
             {conv.loading ? (
               <>
                 {t("Загружаем")}
@@ -687,7 +712,11 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
             className={m.at >= mountAt.current ? "msg-in" : undefined}
           >
             {newDay && (
-              <div className="my-3 text-center text-[11px] text-muted">{dayLabel(m.at)}</div>
+              <div className="my-4 flex items-center gap-3 text-[12px] text-muted">
+                <span className="h-px flex-1 bg-line" />
+                <span className="rounded-full bg-white/[0.04] px-3 py-1">{dayLabel(m.at)}</span>
+                <span className="h-px flex-1 bg-line" />
+              </div>
             )}
             <Bubble
               msg={m}
@@ -710,8 +739,8 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       {}
       {}
       {friend.system ? (
-        <div className="flex items-center justify-center gap-2 border-t border-border/70 px-5 py-4 text-[12px] text-muted">
-          <i className="fa-solid fa-lock text-[11px]" />
+        <div className="flex items-center justify-center gap-2 border-t border-line px-6 py-4 text-[13px] text-muted">
+          <Icon cls="fa-solid fa-lock text-[12px]" />
           {t("Этому аккаунту нельзя писать")}
         </div>
       ) : (

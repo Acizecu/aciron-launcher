@@ -6,6 +6,7 @@ import { getAccounts } from "../api";
 import { useLauncherCtx } from "../LauncherContext";
 import { useDownloadActive } from "../downloadTask";
 import { useLang } from "../i18n";
+import Icon from "./Icon";
 
 export default function PlayBar() {
   const { t } = useLang();
@@ -36,26 +37,36 @@ export default function PlayBar() {
   };
 
   return (
-    <div className="flex h-20 shrink-0 items-center gap-3 bg-bg px-4">
+
+    <div className="shrink-0 border-t border-line px-8 py-3.5">
+      <div className="flex items-center gap-2.5">
       {versionRunning ? (
         <button
           onClick={() => versionId && stop(versionId)}
-          className="group flex h-14 min-w-[168px] items-center justify-center gap-3 rounded-xl bg-[#ef4444] px-9 font-bold text-white transition-colors hover:bg-[#dc2626] active:bg-[#b91c1c]"
+          className="group flex h-14 min-w-[180px] items-center gap-3 rounded-[18px] bg-[#f2705b] pl-2 pr-7 font-semibold text-[#1a0d0a] shadow-[0_8px_26px_rgba(242,112,91,0.3)] transition-[filter,box-shadow,transform] duration-300 ease-[var(--ease-soft)] hover:brightness-105 active:scale-[0.98]"
         >
-          <i className="fa-solid fa-stop text-base" />
-          <span className="text-lg tracking-wide">{t("Закрыть")}</span>
+          <span className="grid h-10 w-10 place-items-center rounded-[13px] bg-black/15">
+            <Icon cls="fa-solid fa-stop text-[18px]" />
+          </span>
+          <span className="text-[17px]">{t("Закрыть")}</span>
         </button>
       ) : (
         <button
           onClick={onPlay}
           disabled={busy || !versionId}
           title={!versionId ? t("Сначала установите версию") : undefined}
-          className="group flex h-14 min-w-[168px] items-center justify-center gap-3 rounded-xl bg-accent px-9 font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
+          className={`play-btn group relative flex h-14 min-w-[180px] items-center gap-3 overflow-hidden rounded-[18px] pl-2 pr-7 font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+            !busy && versionId ? "play-ready" : ""
+          }`}
         >
-          <i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-play"} text-base`} />
-          <span className="text-lg tracking-wide">
+          <span className="grid h-10 w-10 place-items-center rounded-[13px] bg-black/12 transition-transform duration-300 ease-[var(--ease-out-quint)] group-hover:scale-105">
+            <Icon cls={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-play"} text-[18px]`} />
+          </span>
+          <span className="text-[17px]">
             {downloading ? t("Скачивание…") : busy ? t("Загрузка…") : t("Играть")}
           </span>
+          {}
+          <span aria-hidden className="play-sheen" />
         </button>
       )}
 
@@ -66,6 +77,7 @@ export default function PlayBar() {
 
       <div className="ml-auto flex items-center gap-3">
         <AccountMenu />
+      </div>
       </div>
 
       {addAccount && (

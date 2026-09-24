@@ -11,6 +11,7 @@ import {
 import { useToast } from "../ToastContext";
 import { wasCancelled } from "../downloadTask";
 import { t, ts } from "../i18n";
+import Icon from "./Icon";
 
 const EXPORT_TASK = "legacy";
 
@@ -109,14 +110,14 @@ export default function ExportBuildModal({
     window.dispatchEvent(
       new CustomEvent("aciron-task-start", {
         detail: {
-          name: t("Экспорт · {name}", { name: build.name }),
+          name: t("Экспорт: {name}", { name: build.name }),
           cancelLabel: t("Отменить экспорт"),
         },
       })
     );
     try {
       const size = await exportBuild(build.id, format, dest, [...picked]);
-      toast(t("Сборка экспортирована · {size}", { size: fmtSize(size) }), "success");
+      toast(t("Сборка экспортирована, {size}", { size: fmtSize(size) }), "success");
       onClose();
     } catch (e) {
 
@@ -147,24 +148,26 @@ export default function ExportBuildModal({
                 key={f.id}
                 onClick={() => !busy && setFormat(f.id)}
                 disabled={busy}
-                className={`flex flex-col gap-2 rounded-2xl border p-3.5 text-left transition-colors ${
-                  on ? "border-accent/60 bg-accent/8" : "border-border bg-card hover:border-accent/40"
+                className={`flex flex-col gap-2 rounded-[18px] p-3.5 text-left transition-colors duration-300 ${
+                  on
+                    ? "bg-accent/[0.08] shadow-[inset_0_0_0_1.5px_var(--color-accent)]"
+                    : "bg-white/[0.035] hover:bg-white/[0.06]"
                 } disabled:opacity-60`}
               >
                 <span className="flex items-center gap-2">
                   <span
-                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-                      on ? "bg-accent text-bg" : "bg-bg text-muted"
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-[12px] transition-colors ${
+                      on ? "bg-accent/15 text-accent" : "bg-white/[0.05] text-muted"
                     }`}
                   >
-                    <i className={`fa-solid ${f.icon} text-xs`} />
+                    <Icon cls={`fa-solid ${f.icon} text-[16px]`} />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-text">
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text">
                     {f.title}
                   </span>
-                  {on && <i className="fa-solid fa-check text-[10px] text-accent" />}
+                  {on && <Icon cls="fa-solid fa-check text-[11.5px] text-accent" />}
                 </span>
-                <span className="text-[11px] leading-relaxed text-muted">{t(f.desc)}</span>
+                <span className="text-[12px] leading-relaxed text-muted">{t(f.desc)}</span>
               </button>
             );
           })}
@@ -172,8 +175,8 @@ export default function ExportBuildModal({
 
         {}
         <div className="mt-4 flex items-baseline justify-between">
-          <span className="text-[13px] font-semibold text-text">{t("Что включить")}</span>
-          <span className="text-[11px] tabular-nums text-muted">
+          <span className="text-[13px] font-medium text-text">{t("Что включить")}</span>
+          <span className="text-[12px] tabular-nums text-muted">
             {t("на диске")}: {fmtSize(total)}
           </span>
         </div>
@@ -181,11 +184,11 @@ export default function ExportBuildModal({
         <div className="mt-2 max-h-[240px] space-y-1 overflow-y-auto pr-1">
           {tree === null && (
             <div className="grid place-items-center py-6 text-muted">
-              <i className="fa-solid fa-spinner fa-spin" />
+              <Icon cls="fa-solid fa-spinner fa-spin" />
             </div>
           )}
           {tree?.length === 0 && (
-            <div className="rounded-xl bg-card p-4 text-center text-xs text-muted">
+            <div className="py-6 text-center text-[13px] text-muted">
               {t("В папке сборки пока пусто")}
             </div>
           )}
@@ -196,24 +199,24 @@ export default function ExportBuildModal({
                 key={e.name}
                 onClick={() => !busy && toggle(e.name)}
                 disabled={busy}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${
-                  on ? "bg-card" : "hover:bg-card/60"
+                className={`flex w-full items-center gap-2.5 rounded-[14px] px-3 py-2 text-left transition-colors ${
+                  on ? "bg-white/[0.04]" : "hover:bg-white/[0.03]"
                 } disabled:opacity-60`}
               >
                 <span
-                  className={`grid h-[18px] w-[18px] shrink-0 place-items-center rounded-[5px] border transition-colors ${
-                    on ? "border-accent bg-accent text-bg" : "border-border text-transparent"
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-[7px] border transition-colors duration-200 ${
+                    on ? "border-accent bg-accent text-bg" : "border-line-strong text-transparent"
                   }`}
                 >
-                  <i className="fa-solid fa-check text-[9px]" />
+                  <Icon cls="fa-solid fa-check text-[12px]" />
                 </span>
-                <i
-                  className={`fa-solid ${
+                <Icon
+                  cls={`fa-solid ${
                     e.is_dir ? KNOWN_ICON[e.name] ?? "fa-folder" : "fa-file"
-                  } w-4 shrink-0 text-center text-[11px] ${on ? "text-accent" : "text-muted"}`}
+                  } w-4 shrink-0 text-center text-[12px] ${on ? "text-accent" : "text-muted"}`}
                 />
                 <span className="min-w-0 flex-1 truncate text-[13px] text-text">{e.name}</span>
-                <span className="shrink-0 text-[11px] tabular-nums text-muted">
+                <span className="shrink-0 text-[12px] tabular-nums text-muted">
                   {fmtSize(e.size)}
                 </span>
               </button>
@@ -221,7 +224,7 @@ export default function ExportBuildModal({
           })}
         </div>
 
-        <p className="mt-3 text-[11px] leading-relaxed text-muted">
+        <p className="mt-3 text-[12px] leading-relaxed text-muted">
           {t("Логи, краши и служебные папки в архив не попадают никогда.")}{" "}
           {t(
             "Моды, ресурспаки и шейдеры из репозиториев в архив не кладутся — вместо них едет ссылка, поэтому файл получится заметно легче."
@@ -232,16 +235,16 @@ export default function ExportBuildModal({
         <div className="mt-5 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
+            className="btn btn-ghost"
           >
             {busy ? t("Свернуть") : t("Отмена")}
           </button>
           <button
             onClick={run}
             disabled={busy || picked.size === 0}
-            className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-50"
+            className="btn btn-accent"
           >
-            <i className={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-file-export"}`} />
+            <Icon cls={`fa-solid ${busy ? "fa-spinner fa-spin" : "fa-file-export"}`} />
             {busy ? t("Упаковываем…") : t("Экспортировать")}
           </button>
         </div>

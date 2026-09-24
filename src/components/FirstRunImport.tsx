@@ -7,6 +7,7 @@ import {
 } from "../api";
 import { useToast } from "../ToastContext";
 import { t, ts } from "../i18n";
+import Icon from "./Icon";
 
 const loaderLabel: Record<string, string> = {
   fabric: "Fabric",
@@ -89,8 +90,8 @@ export default function FirstRunImport({
       onClose={skip}
     >
       <div className="flex max-h-[60vh] flex-col p-5">
-        <div className="mb-3 flex items-start gap-2 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-sm text-accent">
-          <i className="fa-solid fa-circle-info mt-0.5" />
+        <div className="mb-3 flex items-start gap-2 rounded-[12px] border border-accent/25 bg-accent/10 px-3 py-2 text-sm text-accent">
+          <Icon cls="fa-solid fa-circle-info mt-0.5" />
           <span>
             {t(
               "Скопируются моды, ресурспаки, шейдеры и конфиги. Оригинальные сборки в других лаунчерах не изменятся."
@@ -106,60 +107,60 @@ export default function FirstRunImport({
                 key={inst.path}
                 onClick={() => !busy && toggle(inst.path)}
                 disabled={busy}
-                className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
-                  on ? "border-accent/60 bg-accent/5" : "border-border bg-card hover:border-accent/40"
+                className={`flex w-full items-center gap-3 rounded-[16px] p-3 text-left transition-colors duration-300 ${
+                  on ? "bg-accent/[0.07]" : "bg-white/[0.03] hover:bg-white/[0.055]"
                 }`}
               >
                 <span
-                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
-                    on ? "bg-accent text-bg" : "bg-bg text-muted"
+                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-[12px] ${
+                    on ? "bg-accent/15 text-accent" : "bg-white/[0.05] text-muted"
                   }`}
                 >
-                  <i className={`fa-solid ${sourceIcon[inst.source] ?? "fa-box"}`} />
+                  <Icon cls={`fa-solid ${sourceIcon[inst.source] ?? "fa-box"}`} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-text">{inst.name}</div>
-                  <div className="truncate text-xs text-muted">
-                    {inst.source_label} · {inst.mc_version} ·{" "}
-                    {loaderLabel[inst.loader] ?? inst.loader} ·{" "}
+                  <div className="truncate text-[14.5px] font-semibold text-text">{inst.name}</div>
+                  <div className="truncate text-[12.5px] text-muted">
+                    {inst.source_label}, {inst.mc_version},{" "}
+                    {loaderLabel[inst.loader] ?? inst.loader},{" "}
                     {t("{n} мод(ов)", { n: inst.mods_count })}
                   </div>
                 </div>
                 <span
-                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${
-                    on ? "border-accent bg-accent text-bg" : "border-border text-transparent"
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-[7px] border transition-colors duration-200 ${
+                    on ? "border-accent bg-accent text-bg" : "border-line-strong text-transparent"
                   }`}
                 >
-                  <i className="fa-solid fa-check text-[10px]" />
+                  <Icon cls="fa-solid fa-check text-[12px]" />
                 </span>
               </button>
             );
           })}
         </div>
 
-        <div className="mt-4 flex items-center gap-2 border-t border-border pt-4">
+        <div className="mt-4 flex items-center gap-2 border-t border-line pt-4">
           {busy ? (
             <span className="flex items-center gap-2 text-sm text-muted">
-              <i className="fa-solid fa-spinner fa-spin" />
+              <Icon cls="fa-solid fa-spinner fa-spin" />
               {t("Импорт… {done}/{total}", { done, total })}
             </span>
           ) : (
-            <span className="text-xs text-muted">{t("Выбрано: {n}", { n: total })}</span>
+            <span className="text-[13px] font-medium text-text2">{t("Выбрано: {n}", { n: total })}</span>
           )}
           <div className="ml-auto flex items-center gap-2">
             <button
               onClick={skip}
               disabled={busy}
-              className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text disabled:opacity-50"
+              className="btn btn-ghost"
             >
               {t("Пропустить")}
             </button>
             <button
               onClick={runImport}
               disabled={busy || total === 0}
-              className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-50"
+              className="btn btn-accent"
             >
-              <i className="fa-solid fa-file-import" />
+              <Icon cls="fa-solid fa-file-import" />
               {t("Импортировать")}
               {total > 0 ? ` (${total})` : ""}
             </button>

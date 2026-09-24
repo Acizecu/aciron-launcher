@@ -3,6 +3,7 @@ import { changesFor } from "../changelog";
 import { GITHUB_URL } from "../config";
 import { openUrl } from "../api";
 import { dtf, t, useLang } from "../i18n";
+import Icon from "./Icon";
 
 export default function WhatsNew({
   version,
@@ -21,7 +22,7 @@ export default function WhatsNew({
   return (
     <Modal
       title={t("Что нового")}
-      subtitle={dateLabel ? `${t("Версия")} ${entry.version} · ${dateLabel}` : `${t("Версия")} ${entry.version}`}
+      subtitle={dateLabel ? `${t("Версия")} ${entry.version}, ${dateLabel}` : `${t("Версия")} ${entry.version}`}
       icon="fa-wand-magic-sparkles"
       width="max-w-lg"
       onClose={onClose}
@@ -29,14 +30,14 @@ export default function WhatsNew({
         <>
           <button
             onClick={() => openUrl(`${GITHUB_URL}/releases`)}
-            className="mr-auto rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-accent"
+            className="btn btn-sm btn-ghost mr-auto"
           >
-            <i className="fa-solid fa-arrow-up-right-from-square mr-2 text-xs" />
+            <Icon cls="fa-solid fa-arrow-up-right-from-square text-[14px]" />
             {t("Все версии")}
           </button>
           <button
             onClick={onClose}
-            className="rounded-lg bg-accent px-5 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+            className="btn btn-sm btn-accent px-5"
           >
             {t("Понятно")}
           </button>
@@ -58,14 +59,14 @@ export default function WhatsNew({
         })}
 
         {entry.fixed.length > 0 && (
-          <section className="rounded-xl border border-border/70 bg-panel/40 p-4">
-            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+          <section className="border-t border-line pt-4">
+            <h3 className="text-[12.5px] font-medium text-text2">
               {t("Исправлено")}
             </h3>
             <ul className="mt-2.5 space-y-1.5">
               {entry.fixed.map((f, i) => (
                 <li key={i} className="flex gap-2.5 text-[13px] leading-relaxed text-text/85">
-                  <i className="fa-solid fa-check mt-1 shrink-0 text-[10px] text-accent" />
+                  <Icon cls="fa-solid fa-check mt-1 shrink-0 text-[11.5px] text-accent" />
                   <span>{f[lang]}</span>
                 </li>
               ))}

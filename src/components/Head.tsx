@@ -19,6 +19,8 @@ export default function Head({
   const [idx, setIdx] = useState(0);
   const [ok, setOk] = useState(false);
 
+  const round = /(^|\s)rounded(-|\s|$)/.test(className) ? "" : "rounded-[10px]";
+
   const dead = idx >= sources.length;
   const src = dead ? "" : sources[idx];
 
@@ -42,12 +44,12 @@ export default function Head({
   if (dead || !ok) {
     return (
       <div
-        className={`grid place-items-center rounded-md ${className}`}
+        className={`grid place-items-center ${round} ${className}`}
         style={{ width: size, height: size, background: color }}
       >
         <span
           style={{ fontSize: Math.round(size * 0.5), lineHeight: 1 }}
-          className="font-bold text-white"
+          className="font-semibold text-white"
         >
           {(name[0] || "?").toUpperCase()}
         </span>
@@ -68,7 +70,7 @@ export default function Head({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-md ${className}`}
+      className={`relative overflow-hidden ${round} ${className}`}
       style={{ width: size, height: size }}
     >
       <div style={layer(8)} />

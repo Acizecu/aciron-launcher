@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n";
+import Icon from "./Icon";
 
 export type DropdownOption = { value: string; label: string; icon?: string; node?: ReactNode };
 
@@ -73,8 +74,8 @@ export default function Dropdown({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-10 w-full items-center gap-2.5 rounded-xl border px-3 text-sm text-text transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-          open ? "border-accent/60 bg-card" : "border-border bg-card hover:border-accent/40"
+        className={`field flex h-10 w-full items-center gap-2.5 px-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50 ${
+          open ? "!border-accent" : ""
         }`}
       >
         {}
@@ -83,14 +84,14 @@ export default function Dropdown({
         ) : (
           cur?.icon && (
             <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] bg-bg text-accent">
-              <i className={`fa-solid ${cur.icon} text-[11px]`} />
+              <Icon cls={`fa-solid ${cur.icon} text-[12px]`} />
             </span>
           )
         )}
         {}
         <span className="flex-1 truncate text-left">{cur?.label ?? placeholder ?? t("Выбрать")}</span>
-        <i
-          className={`fa-solid fa-chevron-down text-[10px] text-muted transition-transform ${
+        <Icon
+          cls={`fa-solid fa-chevron-down text-[11.5px] text-muted transition-transform ${
             open ? "rotate-180" : ""
           }`}
         />
@@ -102,7 +103,7 @@ export default function Dropdown({
           <>
             <div className="fixed inset-0 z-[9998]" onClick={() => setOpen(false)} />
             <div
-              className="dropdown-in fixed z-[9999] overflow-y-auto rounded-[14px] border-1 border-[#232427]/65 bg-panel p-1 shadow-xl shadow-black/50"
+              className="dropdown-in fixed z-[9999] overflow-y-auto rounded-[14px] bg-[color-mix(in_srgb,var(--color-bg)_93%,white)] p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)]"
               style={(() => {
 
                 const s = (window as unknown as { __acironScale?: number }).__acironScale || 1;
@@ -129,7 +130,7 @@ export default function Dropdown({
 
                   style={{ ["--i" as string]: Math.min(i, 9) }}
                   className={`dropdown-item-in flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left text-sm transition-colors ${
-                    o.value === value ? "bg-card text-accent" : "text-muted hover:bg-card hover:text-text"
+                    o.value === value ? "bg-white/[0.06] text-text" : "text-muted hover:bg-white/[0.05] hover:text-text"
                   }`}
                 >
                   {o.node ? (
@@ -141,12 +142,12 @@ export default function Dropdown({
                           o.value === value ? "bg-accent/15 text-accent" : "bg-bg text-muted"
                         }`}
                       >
-                        <i className={`fa-solid ${o.icon} text-[11px]`} />
+                        <Icon cls={`fa-solid ${o.icon} text-[12px]`} />
                       </span>
                     )
                   )}
                   <span className="flex-1 truncate pr-2">{o.label}</span>
-                  {o.value === value && <i className="fa-solid fa-check text-xs text-accent" />}
+                  {o.value === value && <Icon cls="fa-solid fa-check text-[12.5px] text-accent" />}
                 </button>
               ))}
             </div>

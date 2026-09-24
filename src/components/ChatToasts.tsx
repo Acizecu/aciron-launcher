@@ -50,23 +50,23 @@ function Toast({
         opacity: shown ? 1 : 0,
         animationDelay: `${cardInDelay(0)}ms`,
       }}
-      className="pointer-events-auto flex w-[280px] items-start gap-2.5 rounded-xl border border-border bg-panel p-2.5 text-left shadow-lg"
+      className="pointer-events-auto flex w-[280px] items-start gap-2.5 rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] p-2.5 text-left"
     >
       {}
       <ContactAvatar
         c={friend ?? { username: "?", hasSkin: false }}
         size={32}
-        className="shrink-0 rounded-lg"
+        className="shrink-0 rounded-full"
       />
       <div className="min-w-0 flex-1 leading-tight">
         <div className="flex items-center gap-1">
-          <span className="truncate text-xs font-semibold text-text">
+          <span className="truncate text-[12.5px] font-medium text-text">
             {friend?.username ?? t("Новое сообщение")}
           </span>
           {isVerified(friend) && <VerifiedMark className="text-[9px]" />}
         </div>
         {}
-        <div className="mt-0.5 line-clamp-2 text-[11px] text-muted">
+        <div className="mt-0.5 line-clamp-2 text-[12px] text-muted">
           {parseForward(item.msg.body).text}
         </div>
       </div>

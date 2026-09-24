@@ -51,7 +51,7 @@ export default function VersionPickerModal({
       onClose={onClose}
     >
       <div className="max-h-[60vh] overflow-y-auto p-4">
-        <p className="mb-3 text-xs text-muted">
+        <p className="mb-3 text-[12.5px] text-muted">
           {t("Выберите версию — она установится как отдельная сборка.")}
         </p>
         <VersionList

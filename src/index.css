@@ -4,19 +4,55 @@
 @theme {
   /* Значения по умолчанию — тема Aciron. Во время работы их перезаписывает
      ThemeProvider: теме принадлежат ВСЕ токены, включая поверхности. */
-  --color-bg: #131315; /* фон окна */
-  --color-panel: #1c1c1f; /* панели */
-  --color-card: #232327; /* карточки/инпуты */
-  --color-border: #2e2e33; /* границы */
-  --color-text: #D9D9D9; /* основной текст */
-  --color-muted: #818181; /* вторичный текст */
-  --color-accent: #f5a96b; /* акцент */
-  --color-accent-hover: #ffbc85; /* ховер */
-  --color-accent-active: #d98f52; /* нажатие */
+  --color-bg: #0a0b0d; /* фон окна */
+  --color-panel: #0f1012; /* панели */
+  --color-card: #141518; /* карточки/инпуты */
+  --color-border: #1e1f22; /* границы */
+  --color-text: #f3f4f6; /* основной текст */
+  --color-muted: #7a828f; /* вторичный текст */
+  --color-accent: #ffb367; /* акцент */
+  --color-accent-hover: #ffc085; /* ховер */
+  --color-accent-active: #ca8d5b; /* нажатие */
 
-  --color-ctrl-hover: #232327; /* заливка кнопок окна при наведении */
+  --color-ctrl-hover: #19191c; /* заливка кнопок окна при наведении */
+
+  /* Токены дизайн-системы Aciron (D:/dev/aciron-id-design-system/tokens.css).
+     Смешиваются из цветов темы, поэтому следуют за любым пресетом. */
+  --color-text2: color-mix(in srgb, var(--color-text) 62%, var(--color-muted)); /* второй текст */
+  --color-line: color-mix(in srgb, var(--color-text) 7%, transparent); /* разделители */
+  --color-line-mid: color-mix(in srgb, var(--color-text) 9%, transparent);
+  --color-line-strong: color-mix(in srgb, var(--color-text) 14%, transparent);
+  --color-raised: color-mix(in srgb, var(--color-bg) 86%, var(--color-text)); /* подложка выбранного, меню */
+  --color-popover: color-mix(in srgb, var(--color-bg) 88%, var(--color-text)); /* окна и выпадашки */
+  --color-ok: #5fd08a;
+  --color-warn: #f5b94a;
+  --color-danger: #f2705b;
+
+
+  /* Кривые движения дизайн-системы Aciron: out-quint для подложек и окон,
+     мягкая — для наведения (без рывка в начале). */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-soft: cubic-bezier(0.33, 1, 0.68, 1);
+  /* transition-* без своей длительности — 260 мс по мягкой кривой. */
+  --default-transition-duration: 260ms;
+  --default-transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
 
   --font-sans: "Geologica Variable", system-ui, sans-serif;
+
+  /* Веса полегче стандартных: Geologica плотная, и на 600 весь интерфейс
+     выглядел жирным. Шрифт переменный, поэтому промежуточные значения
+     рисуются честно, без подмены соседним начертанием. */
+  --font-weight-normal: 380;
+  --font-weight-medium: 460;
+  --font-weight-semibold: 560;
+  --font-weight-bold: 640;
+
+  /* Радиусы дизайн-системы Aciron (10/14/18): у Tailwind по умолчанию они
+     мельче, и лаунчер рядом с кабинетом выглядел угловатым. */
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
 }
 
 :root {
@@ -32,24 +68,55 @@ body,
   background: transparent;
 }
 
-/* Закруглённые углы окна (окно прозрачное — углы обрезаются) */
+/* Закруглённые углы окна (окно прозрачное — углы обрезаются). Радиус из
+   шкалы дизайн-системы: с 8 px окно выглядело угловатым рядом с плашками
+   внутри, у которых 14–22 px. */
 #root {
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: hidden;
+  /* overflow + radius в WebView2 не обрезают детей на своих GPU-слоях
+     (размытые панели, холст фона) — углы окна оставались прямыми.
+     clip-path режет всё, включая слои. */
+  clip-path: inset(0 round 16px);
 }
 
 /* Развёрнутое окно (Windows maximize) — углы прямые, фон непрозрачный.
    --win-inset ставит windowState.ts: borderless-окно в развёрнутом виде вылезает
    за экран на ширину рамки, отступ возвращает края интерфейса на экран. */
+/* Системную тень окна выключили (tauri.conf.json, shadow: false): Windows
+   рисовала под прозрачным окном прямоугольную подложку, и она торчала в
+   скруглённых углах. Край окна теперь — тонкая линия по скруглению. */
+#root::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+html.win-maximized #root::after {
+  display: none;
+}
+
 html.win-maximized #root {
   border-radius: 0;
+  clip-path: none;
   background: var(--color-bg);
   padding: var(--win-inset, 0px);
 }
 
+/* Значки lucide: линия одной толщины на экране, как в кабинете Aciron ID,
+   независимо от того, 11px значок или 24px. */
+.lucide * {
+  vector-effect: non-scaling-stroke;
+}
+
 body {
   font-family: "Geologica Variable", system-ui, "Segoe UI", Roboto, sans-serif;
+  font-weight: var(--font-weight-normal);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   user-select: none;
   color: var(--color-text);
 }
@@ -304,6 +371,408 @@ body {
 }
 
 /* ---- градиентный текст (заголовок Aciron) ---- */
+/* ---- главная кнопка: «Играть» и первичные действия ----
+   Как основная кнопка сайта и кабинета Aciron ID: тёплый градиент от акцента и
+   мягкое свечение под ней. Цвета берём из темы, чтобы кнопка перекрашивалась
+   вместе с палитрой, а не оставалась оранжевой на синей теме. */
+.play-btn {
+  background: linear-gradient(135deg, var(--color-accent-hover) 0%, var(--color-accent) 48%, var(--color-accent-active) 100%);
+  color: var(--color-bg);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--color-accent) 24%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.12);
+  transition: box-shadow 320ms var(--ease-soft), transform 160ms var(--ease-soft), filter 260ms var(--ease-soft);
+}
+.play-btn:hover:not(:disabled) {
+  box-shadow: 0 14px 38px color-mix(in srgb, var(--color-accent) 36%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 0.12);
+  filter: brightness(1.04);
+}
+.play-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Кнопки дизайн-системы: высоты 34 / 42 / 50, радиус 14, полужирный 14.
+   Заливка акцентом — только у главного действия на экране (.btn-accent). */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 280ms var(--ease-soft), border-color 280ms var(--ease-soft), color 280ms var(--ease-soft),
+    box-shadow 320ms var(--ease-soft), transform 160ms var(--ease-soft), opacity 260ms var(--ease-soft);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.btn-sm {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+  gap: 7px;
+}
+.btn-lg {
+  height: 50px;
+  padding: 0 22px;
+  font-size: 15px;
+}
+.btn-icon {
+  width: 42px;
+  padding: 0;
+}
+.btn-sm.btn-icon {
+  width: 34px;
+}
+.btn-secondary {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  border-color: var(--color-line-strong);
+  color: var(--color-text);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text2);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  color: var(--color-text);
+}
+.btn-danger {
+  background: rgb(242 112 91 / 0.12);
+  border-color: rgb(242 112 91 / 0.28);
+  color: var(--color-danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background: rgb(242 112 91 / 0.2);
+}
+
+/* Пункт боковой навигации для списков, где можно выбрать несколько
+   (категории): тот же вид, что у переезжающей подложки RailNav — нейтральная
+   заливка и акцентная полоска слева, как в сайдбаре кабинета Aciron ID. */
+.rail-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  color: var(--color-text2);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 300ms var(--ease-soft), color 300ms var(--ease-soft);
+}
+.rail-link:hover {
+  color: var(--color-text);
+}
+.rail-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  transform: translateY(-50%) scaleY(0);
+  transition: transform 360ms var(--ease-out-quint);
+}
+.rail-link[data-active="true"] {
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  color: var(--color-text);
+}
+.rail-link[data-active="true"]::before {
+  transform: translateY(-50%) scaleY(1);
+}
+
+/* Вкладка страницы: текст без плашки, выбранную отмечает акцентная полоска
+   снизу. Ряд вкладок лежит на линии (.page-tabs). */
+.page-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  border-bottom: 1px solid var(--color-line);
+}
+.page-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+  padding-bottom: 11px;
+  font-size: 15px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-muted);
+  transition: color 260ms var(--ease-soft);
+}
+.page-tab:hover,
+.page-tab[data-active="true"] {
+  color: var(--color-text);
+}
+.page-tab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition: opacity 300ms var(--ease-out-quint), transform 420ms var(--ease-out-quint);
+}
+.page-tab[data-active="true"]::after {
+  opacity: 1;
+  transform: none;
+}
+
+/* Строка списка: без коробки и рамки, подсветка только при наведении. */
+.list-row {
+  border-radius: 14px;
+  transition: background-color 260ms var(--ease-soft);
+}
+.list-row:hover {
+  background: color-mix(in srgb, var(--color-text) 3.5%, transparent);
+}
+
+/* Плитка — у вещи со своей картинкой (сборка, мод в сетке, скин):
+   мягкая заливка 3 %, тонкая линия, при наведении чуть приподнимается. */
+.tile {
+  border-radius: 18px;
+  border: 1px solid var(--color-line);
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
+  transition: background-color 260ms var(--ease-soft), border-color 260ms var(--ease-soft),
+    transform 320ms var(--ease-out-quint), box-shadow 320ms var(--ease-out-quint);
+}
+.tile:hover {
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  border-color: var(--color-line-strong);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.28);
+}
+
+/* Карточка-обложка (последние запуски, сборки, реклама): картинка сама себе
+   поверхность, поэтому без рамки. При наведении карточка приподнимается.
+   Картинку внутри не приближаем: её слой на время анимации выпадал из
+   скруглённой обрезки, и по краям мелькала картинка без вуали. */
+.cover {
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset;
+  transition: transform 420ms var(--ease-out-quint), box-shadow 420ms var(--ease-out-quint);
+}
+.cover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 0.4), 0 1px 0 rgb(255 255 255 / 0.06) inset;
+}
+
+/* Сцена с 3D-моделью — своя поверхность у вещи: мягкая заливка и тёплый
+   свет снизу, из-под ног персонажа, как в гардеробе кабинета. */
+.stage {
+  border-radius: 22px;
+  background:
+    radial-gradient(120% 70% at 50% 105%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 62%),
+    color-mix(in srgb, var(--color-text) 3%, transparent);
+}
+
+/* Смена вкладки: содержимое появляется одним движением, как страница
+   в кабинете Aciron ID. */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-in {
+  animation: page-in 0.45s var(--ease-out-quint) both;
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.pop {
+  animation: pop 0.38s var(--ease-out-quint) both;
+}
+
+/* Своё сообщение: тот же тёплый градиент, что у главной кнопки, но без тени —
+   в переписке их много, и тени слились бы в пятно. */
+.bubble-mine {
+  background: linear-gradient(135deg, var(--color-accent-hover) 0%, var(--color-accent) 60%, var(--color-accent-active) 140%);
+}
+
+/* Панель запуска: плавающее стекло с бликом сверху. */
+.dock {
+  background: color-mix(in srgb, var(--color-popover) 82%, transparent);
+  backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.42), inset 0 1px 0 rgb(255 255 255 / 0.06),
+    inset 0 0 0 1px rgb(255 255 255 / 0.03);
+}
+/* Меню из дока всплывают снизу вверх. */
+.dock-pop {
+  transform-origin: bottom center;
+  animation: dock-pop 0.32s var(--ease-out-quint) both;
+}
+@keyframes dock-pop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Кнопка «Играть», когда можно запускать: мягко дышит светом. */
+.play-ready {
+  animation: play-breathe 3.2s ease-in-out infinite;
+}
+@keyframes play-breathe {
+  0%,
+  100% {
+    box-shadow: 0 8px 26px color-mix(in srgb, var(--color-accent) 22%, transparent),
+      inset 0 1px 0 rgb(255 255 255 / 0.12);
+  }
+  50% {
+    box-shadow: 0 10px 38px color-mix(in srgb, var(--color-accent) 40%, transparent),
+      inset 0 1px 0 rgb(255 255 255 / 0.12);
+  }
+}
+.play-ready:hover {
+  animation: none;
+}
+/* Блик по кнопке при наведении. */
+.play-sheen {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.38) 50%, transparent 70%);
+  transform: translateX(-120%);
+}
+.group:hover > .play-sheen {
+  transform: translateX(120%);
+  transition: transform 900ms var(--ease-out-quint);
+}
+@media (prefers-reduced-motion: reduce) {
+  .play-ready,
+  .dock-pop {
+    animation: none;
+  }
+}
+
+/* Метка: пилюля без рамки. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.5;
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  color: var(--color-text2);
+  white-space: nowrap;
+}
+.tag-accent {
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent-hover);
+}
+.tag-ok {
+  background: rgb(95 208 138 / 0.13);
+  color: var(--color-ok);
+}
+.tag-danger {
+  background: rgb(242 112 91 / 0.13);
+  color: var(--color-danger);
+}
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+}
+.field-label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text2);
+}
+
+/* Главная кнопка — как .btn-primary в кабинете Aciron ID: тёплый градиент,
+   мягкая тень, лёгкое нажатие. Цвета берутся из темы, поэтому кнопка
+   перекрашивается вместе с акцентом. */
+.btn-accent {
+  background: linear-gradient(135deg, var(--color-accent-hover) 0%, var(--color-accent) 48%, var(--color-accent-active) 100%);
+  color: var(--color-bg);
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--color-accent) 20%, transparent);
+  transition: box-shadow 320ms var(--ease-soft), transform 160ms var(--ease-soft), filter 260ms var(--ease-soft),
+    opacity 260ms var(--ease-soft);
+}
+.btn-accent:hover:not(:disabled) {
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--color-accent) 32%, transparent);
+  filter: brightness(1.04);
+}
+.btn-accent:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Поля ввода — как .input в кабинете Aciron ID: заливка чуть светлее фона,
+   тонкая рамка, радиус 14, при фокусе рамка акцентная. Цвета смешиваются из
+   токенов темы, поэтому на светлой теме поле не превращается в чёрную дыру.
+   .field — сам <input>/<textarea>, .field-wrap — рамка вокруг поиска со значком. */
+.field,
+.field-wrap {
+  border: 1px solid color-mix(in srgb, var(--color-text) 9%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-bg) 96%, var(--color-text));
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 200ms var(--ease-out-quint), background-color 200ms var(--ease-out-quint);
+}
+.field::placeholder {
+  color: var(--color-muted);
+}
+.field:hover,
+.field-wrap:hover {
+  border-color: color-mix(in srgb, var(--color-text) 14%, transparent);
+}
+.field:focus,
+.field-wrap:focus-within {
+  border-color: var(--color-accent);
+}
+
 .text-gradient {
   background: linear-gradient(100deg, var(--color-accent), var(--color-accent-hover));
   -webkit-background-clip: text;
@@ -703,7 +1172,7 @@ body {
 .rich h5,
 .rich h6 {
   margin: 1.4em 0 0.5em;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
   line-height: 1.25;
   color: var(--color-text);
 }
@@ -805,7 +1274,7 @@ body {
 }
 .rich th {
   background: var(--color-card);
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .rich details {
   margin: 0 0 0.85em;
@@ -815,7 +1284,7 @@ body {
 }
 .rich summary {
   cursor: pointer;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 .rich center {
   display: block;
@@ -857,9 +1326,12 @@ body {
 
 .announce {
   --tone: var(--tone-info);
-  background: color-mix(in srgb, var(--tone) 12%, var(--color-panel));
-  border-bottom: 1px solid color-mix(in srgb, var(--tone) 30%, var(--color-border));
-  color: var(--color-text);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--tone) 9%, transparent), transparent 70%),
+    color-mix(in srgb, var(--color-text) 3.5%, transparent);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+  color: var(--color-text2);
+  animation: announce-in 0.45s var(--ease-out-quint) both;
 }
 .announce-warning {
   --tone: var(--tone-warning);
@@ -867,14 +1339,60 @@ body {
 .announce-danger {
   --tone: var(--tone-danger);
 }
-.announce-icon {
-  color: var(--tone);
+.announce-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--tone);
+}
+/* Мягкая волна от точки: видно, что объявление живое, но не мигает. */
+.announce-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--tone);
+  animation: announce-ping 2.6s var(--ease-out-quint) infinite;
+}
+.announce-body strong,
+.announce-body b {
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+@keyframes announce-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes announce-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .announce,
+  .announce-dot::after {
+    animation: none;
+  }
 }
 
 /* Текст объявления — одна-две строки в полосе, а не описание мода: сбиваем
    размер и снимаем отступы абзацев, которые .rich задаёт для длинных статей. */
 .announce-body {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 .announce-body p,

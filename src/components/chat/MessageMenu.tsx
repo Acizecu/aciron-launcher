@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import Icon from "../Icon";
 
 export type MenuItem = {
   icon: string;
@@ -53,7 +54,7 @@ export default function MessageMenu({
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
       style={{ left: pos.x, top: pos.y }}
-      className="fixed z-[80] min-w-[190px] overflow-hidden rounded-xl border border-border bg-panel py-1 shadow-xl"
+      className="fixed z-[80] min-w-[190px] overflow-hidden rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] py-1"
     >
       {items.map((it) => (
         <button
@@ -62,11 +63,11 @@ export default function MessageMenu({
             it.onClick();
             onClose();
           }}
-          className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors hover:bg-card ${
-            it.danger ? "text-[#f87171]" : "text-text"
+          className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors hover:bg-white/[0.05] ${
+            it.danger ? "text-danger" : "text-text"
           }`}
         >
-          <i className={`fa-solid ${it.icon} w-4 shrink-0 text-center text-xs opacity-80`} />
+          <Icon cls={`fa-solid ${it.icon} w-4 shrink-0 text-center text-[12.5px] opacity-80`} />
           {it.label}
         </button>
       ))}

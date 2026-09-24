@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { GalleryImage } from "../api";
 import { t } from "../i18n";
+import Icon from "./Icon";
 
 const MAX_ZOOM = 5;
 const MIN_ZOOM = 1;
@@ -130,7 +131,7 @@ export default function Lightbox({
         </span>
 
         <div className="ml-auto flex items-center gap-1">
-          <span className="mr-1 w-11 text-right text-[11px] tabular-nums opacity-70">
+          <span className="mr-1 w-11 text-right text-[12px] tabular-nums opacity-70">
             {Math.round(zoom * 100)}%
           </span>
           <button
@@ -138,21 +139,21 @@ export default function Lightbox({
             title={t("Уменьшить")}
             className="grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-white/10 hover:text-white"
           >
-            <i className="fa-solid fa-magnifying-glass-minus text-sm" />
+            <Icon cls="fa-solid fa-magnifying-glass-minus text-sm" />
           </button>
           <button
             onClick={() => zoomBy(0.5)}
             title={t("Увеличить (до 5×)")}
             className="grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-white/10 hover:text-white"
           >
-            <i className="fa-solid fa-magnifying-glass-plus text-sm" />
+            <Icon cls="fa-solid fa-magnifying-glass-plus text-sm" />
           </button>
           <button
             onClick={reset}
             title={t("Вернуть 100%")}
             className="grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-white/10 hover:text-white"
           >
-            <i className="fa-solid fa-compress text-sm" />
+            <Icon cls="fa-solid fa-compress text-sm" />
           </button>
           <button
             onClick={onClose}
@@ -160,7 +161,7 @@ export default function Lightbox({
             title={t("Закрыть (Esc)")}
             className="grid h-9 w-9 place-items-center rounded-full transition-colors hover:bg-[#FF3535]/50 hover:text-white"
           >
-            <i className="fa-solid fa-xmark text-lg" />
+            <Icon cls="fa-solid fa-xmark text-lg" />
           </button>
         </div>
       </div>
@@ -187,7 +188,7 @@ export default function Lightbox({
             aria-label={t("Предыдущая")}
             className={`${arrowCls} left-4`}
           >
-            <i className="fa-solid fa-chevron-left" />
+            <Icon cls="fa-solid fa-chevron-left" />
           </button>
         )}
 
@@ -213,7 +214,7 @@ export default function Lightbox({
             aria-label={t("Следующая")}
             className={`${arrowCls} right-4`}
           >
-            <i className="fa-solid fa-chevron-right" />
+            <Icon cls="fa-solid fa-chevron-right" />
           </button>
         )}
       </div>
@@ -224,7 +225,7 @@ export default function Lightbox({
           className="flex shrink-0 justify-center px-4 pb-4 pt-2"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex max-w-full gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-black/40 p-2 backdrop-blur-md">
+          <div className="flex max-w-full gap-2 overflow-x-auto rounded-[18px] border border-white/10 bg-black/40 p-2 backdrop-blur-md">
             {images.map((g, idx) => (
               <button
                 key={idx}
@@ -232,7 +233,7 @@ export default function Lightbox({
                   setI(idx);
                   reset();
                 }}
-                className={`h-12 w-20 shrink-0 overflow-hidden rounded-lg border transition ${
+                className={`h-12 w-20 shrink-0 overflow-hidden rounded-[12px] border transition ${
                   idx === i ? "border-accent" : "border-transparent opacity-60 hover:opacity-100"
                 }`}
               >

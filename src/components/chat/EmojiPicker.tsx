@@ -31,15 +31,15 @@ export default function EmojiPicker({
   return (
     <div
       ref={box}
-      className="absolute bottom-full right-0 z-50 mb-2 w-[288px] overflow-hidden rounded-xl border border-border bg-panel shadow-lg"
+      className="absolute bottom-full right-0 z-50 mb-2 w-[288px] overflow-hidden rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)]"
     >
-      <div className="flex gap-1 border-b border-border/70 px-2 py-1.5">
+      <div className="flex gap-1 border-b border-line px-2 py-1.5">
         {CATS.map(([name], i) => (
           <button
             key={name}
             onClick={() => setCat(i)}
-            className={`rounded-md px-2 py-1 text-[11px] transition-colors ${
-              i === cat ? "bg-card text-text" : "text-muted hover:text-text"
+            className={`rounded-[10px] px-2 py-1 text-[12px] transition-colors ${
+              i === cat ? "bg-raised text-text" : "text-muted hover:text-text"
             }`}
           >
             {}
@@ -56,7 +56,7 @@ export default function EmojiPicker({
               key={e}
               onClick={() => onPick(e)}
               title={e}
-              className="grid h-8 w-8 place-items-center rounded-md transition-colors hover:bg-card"
+              className="grid h-8 w-8 place-items-center rounded-[10px] transition-colors hover:bg-white/[0.05]"
             >
               {url ? (
                 <img src={url} alt={e} draggable={false} className="h-5 w-5" />

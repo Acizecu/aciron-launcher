@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Dropdown from "../Dropdown";
 import { loaderVersions, type Loader, type LoaderVersion } from "../../api";
 import { t } from "../../i18n";
+import Icon from "../Icon";
 
 export default function LoaderVersionPicker({
   loader,
@@ -48,19 +49,19 @@ export default function LoaderVersionPicker({
     const head = { value: "", label: t("Последняя (обновляется сама)") };
     const rest = (list ?? []).map((v) => ({
       value: v.version,
-      label: v.stable ? t("{version} · рекомендуется", { version: v.version }) : v.version,
+      label: v.stable ? t("{version}, рекомендуется", { version: v.version }) : v.version,
     }));
 
     if (value && !rest.some((o) => o.value === value)) {
-      rest.unshift({ value, label: t("{version} · нет в списке", { version: value }) });
+      rest.unshift({ value, label: t("{version}, нет в списке", { version: value }) });
     }
     return [head, ...rest];
   }, [list, value]);
 
   if (list === null && mcVersion) {
     return (
-      <div className="flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm text-muted">
-        <i className="fa-solid fa-spinner fa-spin text-[11px]" />
+      <div className="flex h-10 items-center gap-2 rounded-[14px] border border-line bg-white/[0.04] px-3 text-sm text-muted">
+        <Icon cls="fa-solid fa-spinner fa-spin text-[12px]" />
         {t("Загрузка версий")}
       </div>
     );
@@ -76,7 +77,7 @@ export default function LoaderVersionPicker({
         placeholder={t("Последняя (обновляется сама)")}
       />
       {failed && (
-        <p className="mt-1.5 text-[11px] text-muted">
+        <p className="mt-1.5 text-[12px] text-muted">
           {t("Список версий ядра не загрузился — будет поставлена последняя.")}
         </p>
       )}

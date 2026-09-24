@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { isTauri } from "../api";
 import { cancelTask, legacyProgress, useTasks, type DlTask } from "../downloadTask";
 import { t as tr } from "../i18n";
+import Icon from "./Icon";
 
 type Prog = { op?: string; stage: string; message: string; current: number; total: number };
 
@@ -30,16 +31,16 @@ function Ring({ pct, done, doneColor }: { pct: number; done: boolean; doneColor:
 function TaskLine({ t }: { t: DlTask }) {
   const failed = t.cancelled || (t.done && t.ok === false);
   const icon = failed
-    ? "fa-xmark text-[#ef4444]"
+    ? "fa-xmark text-danger"
     : t.done
-    ? "fa-check text-[#22c55e]"
+    ? "fa-check text-ok"
     : "fa-spinner fa-spin text-accent";
   return (
     <div className="flex items-center gap-2">
-      <i className={`fa-solid text-[10px] ${icon}`} />
+      <Icon cls={`fa-solid text-[11.5px] ${icon}`} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-medium text-text">{t.name}</div>
-        <div className="truncate text-[11px] text-muted">
+        <div className="truncate text-[12.5px] font-medium text-text">{t.name}</div>
+        <div className="truncate text-[12px] text-muted">
           {t.done
             ? t.message
             : t.total > 1
@@ -53,7 +54,7 @@ function TaskLine({ t }: { t: DlTask }) {
           title={t.cancelLabel ?? tr("Отменить загрузку")}
           className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px] text-muted transition-colors hover:bg-[#FF3535]/50 hover:text-white"
         >
-          <i className="fa-solid fa-xmark text-[10px]" />
+          <Icon cls="fa-solid fa-xmark text-[11.5px]" />
         </button>
       )}
     </div>
@@ -120,7 +121,7 @@ export default function DownloadOrb({ abovePlayBar = false }: { abovePlayBar?: b
       } ${leaving ? "orb-out" : "orb-in"}`}
     >
       {}
-      <div className="pointer-events-auto mr-2 max-w-0 overflow-hidden rounded-2xl bg-panel/95 opacity-0 shadow-xl shadow-black/50 backdrop-blur transition-all duration-300 group-hover:max-w-[300px] group-hover:opacity-100">
+      <div className="pointer-events-auto mr-2 max-w-0 overflow-hidden rounded-[16px] bg-popover/95 opacity-0 shadow-xl shadow-black/50 backdrop-blur transition-all duration-300 group-hover:max-w-[300px] group-hover:opacity-100">
         <div className="w-[300px] space-y-2 px-4 py-3">
           {tasks.map((t) => (
             <TaskLine key={t.id} t={t} />
@@ -135,18 +136,18 @@ export default function DownloadOrb({ abovePlayBar = false }: { abovePlayBar?: b
             allDone ? (bad ? "bg-[#ef4444]/30" : "bg-[#22c55e]/30") : "animate-pulse bg-accent/30"
           }`}
         />
-        <div className="relative grid h-12 w-12 place-items-center rounded-full border border-border bg-panel shadow-xl shadow-black/50">
+        <div className="relative grid h-12 w-12 place-items-center rounded-full bg-popover shadow-[0_16px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)]">
           <Ring pct={pct} done={allDone} doneColor={okColor} />
           {}
           {!allDone && total === 0 && (
             <span className="absolute inset-[3px] animate-spin rounded-full border-2 border-transparent border-t-accent/70" />
           )}
-          <i
-            className={`fa-solid text-sm transition-transform ${
+          <Icon
+            cls={`fa-solid text-sm transition-transform ${
               allDone
                 ? bad
-                  ? "fa-xmark scale-110 text-[#ef4444]"
-                  : "fa-check scale-110 text-[#22c55e]"
+                  ? "fa-xmark scale-110 text-danger"
+                  : "fa-check scale-110 text-ok"
                 : "fa-cube text-accent"
             }`}
           />
@@ -154,7 +155,7 @@ export default function DownloadOrb({ abovePlayBar = false }: { abovePlayBar?: b
 
         {}
         {tasks.length > 1 && (
-          <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold text-bg">
+          <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[11.5px] font-medium text-bg">
             {tasks.length}
           </span>
         )}

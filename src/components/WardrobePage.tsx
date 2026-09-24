@@ -8,7 +8,7 @@ import AddAccountModal from "./AddAccountModal";
 import { CapeIcon, ElytraIcon } from "./Icons";
 import { useToast } from "../ToastContext";
 import { human, type CapeEntry, type CapeOrigin, type Instant } from "./wardrobe/types";
-import { CapeCard, Loading, Notice, OutfitCard, SectionHeader, SkinCard, TileButton } from "./wardrobe/cards";
+import { CapeCard, Loading, Notice, OutfitCard, SectionHeader, SkinCard, Tile, TileButton } from "./wardrobe/cards";
 
 import { t, t as tr, ts } from "../i18n";
 import {
@@ -47,6 +47,8 @@ import {
   type WardrobeData,
   type WardrobeItem,
 } from "../api";
+import Icon from "./Icon";
+import { SaveBar, Segmented } from "./ui/ds";
 
 type Tab = "skins" | "outfits" | "capes";
 
@@ -411,6 +413,7 @@ export default function WardrobePage() {
       : !!data?.active.hasCape;
   const licenseCape = capes.find((c) => c.origin === "license" && capeActive(c));
   const noCape = !ownCapeOn && !licenseCape;
+  const wornCape = capes.find((c) => capeActive(c));
 
   const capeUrl =
     instant?.capeKey !== undefined
@@ -429,10 +432,10 @@ export default function WardrobePage() {
     return (
       <div className="grid h-full place-items-center px-6 text-center">
         <div className="max-w-sm">
-          <div className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-3xl bg-card text-3xl text-accent">
-            <i className="fa-solid fa-shirt" />
+          <div className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-full bg-accent/12 text-3xl text-accent">
+            <Icon cls="fa-solid fa-shirt" />
           </div>
-          <h2 className="text-xl font-light text-text">{t("Гардероб")}</h2>
+          <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-text">{t("Гардероб")}</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
             {error === "SESSION_EXPIRED"
               ? tr("Сессия Aciron ID истекла — войдите заново, чтобы вернуть свои скины и плащи.")
@@ -440,7 +443,7 @@ export default function WardrobePage() {
           </p>
           <button
             onClick={() => setSignIn(true)}
-            className="mt-4 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover"
+            className="btn-accent mt-4 rounded-[12px] px-5 py-2.5 text-sm font-semibold"
           >
             {t("Войти в Aciron ID")}
           </button>
@@ -458,14 +461,14 @@ export default function WardrobePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col px-8 py-6">
-      <h1 className="mb-5 text-[30px] font-light leading-none text-text">
+      <h1 className="mb-5 text-[26px] font-semibold tracking-[-0.03em] leading-none text-text">
         {t("Гардероб")}
       </h1>
 
       <div className="flex min-h-0 flex-1 gap-6">
         {}
-        <section className="flex w-[36%] min-w-[300px] max-w-[460px] shrink-0 flex-col">
-          <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-card/40">
+        <section className="flex w-[clamp(220px,26vw,320px)] shrink-0 flex-col">
+          <div className="relative min-h-0 flex-1 overflow-hidden stage">
             {skinUrl ? (
               <PlayerView
                 skinUrl={skinUrl}
@@ -480,7 +483,7 @@ export default function WardrobePage() {
 
             {}
             {skinUrl && capeUrl && (
-              <div className="absolute left-3 top-3 flex gap-1 rounded-3xl bg-bg/70 p-1 backdrop-blur">
+              <div className="absolute left-3 top-3 flex gap-1 rounded-full bg-bg/70 p-1 backdrop-blur">
                 {(
                   [
                     { id: "cape", Icon: CapeIcon, label: tr("Плащ") },
@@ -493,10 +496,8 @@ export default function WardrobePage() {
                     title={b.label}
                     aria-label={b.label}
                     aria-pressed={back === b.id}
-                    className={`grid h-8 w-8 place-items-center rounded-3xl transition-colors ${
-                      back === b.id
-                        ? "bg-accent/15 text-accent"
-                        : "text-muted hover:bg-white/5 hover:text-text"
+                    className={`grid h-8 w-8 place-items-center rounded-full transition-colors ${
+                      back === b.id ? "bg-raised text-text" : "text-muted hover:text-text"
                     }`}
                   >
                     <b.Icon size={15} />
@@ -506,77 +507,62 @@ export default function WardrobePage() {
             )}
           </div>
 
-          <div className="mt-3 flex gap-2">
-            {(["classic", "slim"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setModel(m)}
-                disabled={!data?.active.skinId}
-                className={`flex-1 rounded-3xl border py-2.5 text-sm transition-colors disabled:opacity-50 ${
-                  shownModel === m
-                    ? "border-accent bg-accent/10 font-semibold text-accent"
-                    : "border-none bg-transparent text-text hover:border-accent/40 hover:bg-accent/10"
-                }`}
-              >
-                {m === "classic" ? tr("Клаcсический") : tr("Тонкий")}
-              </button>
-            ))}
-          </div>
+          {nick && (
+            <div className="mt-4 text-center">
+              <div className="text-[16px] font-semibold text-text">{nick}</div>
+              <div className="mt-0.5 truncate text-[13px] text-muted">
+                {shownModel === "slim" ? t("Тонкие руки") : t("Широкие руки")},{" "}
+                {wornCape ? t("плащ «{name}»", { name: wornCape.name }) : t("Без плаща").toLowerCase()}
+              </div>
+            </div>
+          )}
+
+          <Segmented
+            className="mt-4"
+            options={[
+              { id: "classic" as const, label: tr("Клаcсический") },
+              { id: "slim" as const, label: tr("Тонкий") },
+            ]}
+            value={shownModel}
+            onChange={setModel}
+            disabled={!data?.active.skinId}
+          />
 
           {}
-          <button
-            onClick={() => void save()}
-            disabled={!dirty || busy === "save"}
-            className={`mt-3 w-full rounded-3xl py-3 text-sm font-bold transition-colors ${
-              dirty && busy !== "save"
-                ? "bg-accent text-bg hover:bg-accent-hover"
-                : "cursor-default bg-card text-muted"
-            }`}
-          >
-            {busy === "save" ? (
-              <>
-                <i className="fa-solid fa-spinner fa-spin mr-2" />
-                {t("Сохранение…")}
-              </>
-            ) : dirty ? (
-              <>
-                <i className="fa-solid fa-floppy-disk mr-2" />
-                {t("Сохранить")}
-              </>
-            ) : (
-              <>
-                <i className="fa-solid fa-check mr-2" />
-                {t("Сохранено")}
-              </>
-            )}
-          </button>
+          <SaveBar
+            open={dirty || busy === "save"}
+            text={t("Есть несохранённые изменения")}
+            saving={busy === "save"}
+            onCancel={() => {
+              pending.current = {};
+              setInstant(null);
+              setDirty(false);
+            }}
+            onSave={() => void save()}
+            cancelLabel={t("Отменить")}
+            saveLabel={t("Сохранить")}
+            savingLabel={t("Сохранение…")}
+          />
         </section>
 
         {}
         <section className="flex min-w-0 flex-1 flex-col">
-          <div className="mb-4 flex items-baseline justify-start gap-4">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`text-[20px] font-light transition-colors ${
-                  tab === t.id ? "text-text" : "text-muted hover:text-text"
-                }`}
-              >
-                {tr(t.label)}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            className="mb-6 max-w-[420px]"
+            options={TABS.map((x) => ({ id: x.id, label: tr(x.label) }))}
+            value={tab}
+            onChange={setTab}
+          />
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             {loading ? (
               <div className="grid h-full place-items-center text-muted">
-                <i className="fa-solid fa-spinner fa-spin text-xl" />
+                <Icon cls="fa-solid fa-spinner fa-spin text-xl" />
               </div>
             ) : error ? (
-              <div className="rounded-xl bg-card p-4 text-center text-sm text-muted">{error}</div>
+              <div className="flex items-center gap-2 text-[13px] text-danger"><span className="dot bg-danger" />{error}</div>
             ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-4 pb-2">
+              <div key={tab} className="page-in grid grid-cols-[repeat(auto-fill,minmax(138px,1fr))] gap-x-4 gap-y-7 pb-4">
                 {stale && (
                   <Notice text={t("Не удалось обновить данные — показаны сохранённые. Проверьте соединение с Aciron ID.")} />
                 )}
@@ -669,13 +655,10 @@ export default function WardrobePage() {
                     {}
                     <SectionHeader label={t("Кастом (Aciron)")} />
                     <Notice text={t("Кастомные плащи видят только игроки, зашедшие в игру через лаунчер Aciron.")} />
-                    <TileButton
-                      icon="fa-solid fa-ban"
-                      label={t("Без плаща")}
-                      index={0}
-                      active={noCape}
-                      onClick={() => void capeOff()}
-                    />
+                    <Tile name={t("Без плаща")} active={noCape} index={0} onClick={() => void capeOff()}>
+                      {}
+                      <span className="block h-[62%] w-[40%] rounded-[9px] border border-dashed border-line-strong" />
+                    </Tile>
                     <TileButton
                       icon="fa-solid fa-arrow-up-from-bracket"
                       label={t("Загрузить")}
@@ -764,10 +747,10 @@ export default function WardrobePage() {
           subtitle={t("PNG 64×64 или 64×32")}
           onClose={() => setAddSkin(null)}
         >
-          <div className="space-y-4 p-5">
+          <div className="space-y-4 pt-1">
             <div className="flex gap-4">
               {}
-              <div className="grid h-[190px] w-[140px] shrink-0 place-items-center overflow-hidden rounded-xl bg-card/60">
+              <div className="grid h-[190px] w-[140px] shrink-0 place-items-center overflow-hidden rounded-[18px] bg-white/[0.03]">
                 {addSkin.preview ? (
                   <SkinThumb
                     url={addSkin.preview}
@@ -776,23 +759,23 @@ export default function WardrobePage() {
                     className="h-[186px] w-auto"
                   />
                 ) : (
-                  <span className="px-3 text-center text-[11px] leading-snug text-muted">
+                  <span className="px-3 text-center text-[12px] leading-snug text-muted">
                     {addSkin.path ? t("Читаю файл…") : t("Выберите PNG, чтобы увидеть скин")}
                   </span>
                 )}
               </div>
 
               <div className="flex min-w-0 flex-1 flex-col justify-center">
-                <span className="mb-1.5 block text-xs text-muted">{t("Файл")}</span>
+                <span className="field-label">{t("Файл")}</span>
                 <button
                   onClick={() => void pickSkinFile()}
-                  className={`flex w-full items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                  className={`flex w-full items-center gap-2.5 rounded-[12px] border px-3 py-2.5 text-left text-sm transition-colors ${
                     addSkin.path
-                      ? "border-border bg-bg text-text hover:border-accent/60"
-                      : "border-dashed border-border bg-bg text-muted hover:border-accent/60 hover:text-accent"
+                      ? "border-line bg-bg text-text hover:border-accent/60"
+                      : "border-dashed border-line bg-bg text-muted hover:border-accent/60 hover:text-accent"
                   }`}
                 >
-                  <i className="fa-solid fa-file-image shrink-0" />
+                  <Icon cls="fa-solid fa-file-image shrink-0" />
                   <span className="truncate">
                     {addSkin.path ? addSkin.path.split(/[\\/]/).pop() : t("Выбрать PNG…")}
                   </span>
@@ -801,16 +784,16 @@ export default function WardrobePage() {
             </div>
 
             <div>
-              <span className="mb-1.5 block text-xs text-muted">{t("Тип рук")}</span>
+              <span className="field-label">{t("Тип рук")}</span>
               <div className="flex gap-2">
                 {(["classic", "slim"] as SkinModelId[]).map((m) => (
                   <button
                     key={m}
                     onClick={() => setAddSkin({ ...addSkin, model: m })}
-                    className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    className={`flex-1 rounded-[12px] border px-3 py-2 text-sm transition-colors ${
                       addSkin.model === m
                         ? "border-accent bg-accent/10 text-text"
-                        : "border-border text-muted hover:text-text"
+                        : "border-line text-muted hover:border-line-strong hover:text-text"
                     }`}
                   >
                     {m === "classic" ? tr("Стив — 4 px") : tr("Алекс — 3 px")}
@@ -820,28 +803,28 @@ export default function WardrobePage() {
             </div>
 
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">{t("Название")}</span>
+              <span className="field-label">{t("Название")}</span>
               <input
                 value={addSkin.name}
                 onChange={(e) => setAddSkin({ ...addSkin, name: e.target.value })}
                 onKeyDown={(e) => e.key === "Enter" && saveNewSkin()}
                 placeholder={t("Например: зимний")}
                 maxLength={64}
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent"
+                className="field w-full px-3.5 py-2.5 text-sm"
               />
             </label>
 
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setAddSkin(null)}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
+                className="btn btn-ghost"
               >
                 {t("Отмена")}
               </button>
               <button
                 onClick={saveNewSkin}
                 disabled={!addSkin.path || busy === "upload"}
-                className="rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
+                className="btn btn-accent"
               >
                 {t("Добавить")}
               </button>
@@ -856,31 +839,31 @@ export default function WardrobePage() {
           subtitle={t("Название видно только вам")}
           onClose={() => setEdit(null)}
         >
-          <div className="space-y-4 p-5">
+          <div className="space-y-4 pt-1">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">{t("Название")}</span>
+              <span className="field-label">{t("Название")}</span>
               <input
                 autoFocus
                 value={edit.name}
                 onChange={(e) => setEdit({ ...edit, name: e.target.value })}
                 onKeyDown={(e) => e.key === "Enter" && saveEdit()}
                 maxLength={64}
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent"
+                className="field w-full px-3.5 py-2.5 text-sm"
               />
             </label>
 
             {edit.item.kind === "skin" && (
               <div>
-                <span className="mb-1.5 block text-xs text-muted">{t("Тип рук")}</span>
+                <span className="field-label">{t("Тип рук")}</span>
                 <div className="flex gap-2">
                   {(["classic", "slim"] as SkinModelId[]).map((m) => (
                     <button
                       key={m}
                       onClick={() => setEdit({ ...edit, model: m })}
-                      className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                      className={`flex-1 rounded-[12px] border px-3 py-2 text-sm transition-colors ${
                         edit.model === m
                           ? "border-accent bg-accent/10 text-text"
-                          : "border-border text-muted hover:text-text"
+                          : "border-line text-muted hover:border-line-strong hover:text-text"
                       }`}
                     >
                       {m === "classic" ? tr("Стив — 4 px") : tr("Алекс — 3 px")}
@@ -893,14 +876,14 @@ export default function WardrobePage() {
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setEdit(null)}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
+                className="btn btn-ghost"
               >
                 {t("Отмена")}
               </button>
               <button
                 onClick={saveEdit}
                 disabled={busy === edit.item.id}
-                className="rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
+                className="btn btn-accent"
               >
                 {t("Сохранить")}
               </button>
@@ -911,9 +894,9 @@ export default function WardrobePage() {
 
       {newOutfit && (
         <Modal title={t("Новый образ")} subtitle={t("Запомнит текущий скин, плащ и модель")} onClose={() => setNewOutfit(false)}>
-          <div className="space-y-4 p-5">
+          <div className="space-y-4 pt-1">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">{t("Название")}</span>
+              <span className="field-label">{t("Название")}</span>
               <input
                 autoFocus
                 value={outfitName}
@@ -921,20 +904,20 @@ export default function WardrobePage() {
                 onKeyDown={(e) => e.key === "Enter" && saveOutfit()}
                 placeholder={t("Например: зимний")}
                 maxLength={64}
-                className="w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent"
+                className="field w-full px-3.5 py-2.5 text-sm"
               />
             </label>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setNewOutfit(false)}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
+                className="btn btn-ghost"
               >
                 {t("Отмена")}
               </button>
               <button
                 onClick={saveOutfit}
                 disabled={busy === "outfit"}
-                className="rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
+                className="btn btn-accent"
               >
                 {t("Сохранить")}
               </button>

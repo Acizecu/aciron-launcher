@@ -9,6 +9,7 @@ import {
   type Announce,
 } from "../api";
 import { t, useLang } from "../i18n";
+import Icon from "./Icon";
 
 const TONES = new Map<string, { icon: string; cls: string }>([
   ["info", { icon: "fa-circle-info", cls: "" }],
@@ -117,19 +118,20 @@ export default function AnnounceBar() {
 
       role="status"
       aria-live="polite"
-      className={`announce ${tone.cls} flex shrink-0 items-center gap-2.5 px-4 py-1.5`}
+      className={`announce ${tone.cls} mx-8 mt-4 flex shrink-0 items-center gap-3 rounded-[14px] py-2.5 pl-4 pr-2`}
     >
-      <i className={`fa-solid ${tone.icon} announce-icon shrink-0 text-[13px]`} />
+      {}
+      <span className="announce-dot" aria-hidden />
 
       <RichText source={ann.body} format="markdown" className="announce-body min-w-0 flex-1" />
 
       {link && (
         <button
           onClick={() => openUrl(link.url)}
-          className="shrink-0 rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text transition-colors hover:border-accent/60 hover:text-accent"
+          className="group flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-accent transition-colors hover:text-accent-hover"
         >
           {link.label.trim() || t("Подробнее")}
-          <i className="fa-solid fa-arrow-up-right-from-square ml-1.5 text-[9px]" />
+          <Icon cls="fa-solid fa-arrow-up-right-from-square text-[13px] transition-transform duration-300 group-hover:-translate-y-px group-hover:translate-x-px" />
         </button>
       )}
 
@@ -137,9 +139,9 @@ export default function AnnounceBar() {
         onClick={hide}
         title={t("Скрыть")}
         aria-label={t("Скрыть")}
-        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted transition-colors hover:bg-card hover:text-text"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-white/[0.06] hover:text-text"
       >
-        <i className="fa-solid fa-xmark text-[12px]" />
+        <Icon cls="fa-solid fa-xmark text-[15px]" />
       </button>
     </div>
   );

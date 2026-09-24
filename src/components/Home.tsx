@@ -6,6 +6,7 @@ import { getRecents, promoCurrent, removeRecent, type Promo, type Recent } from 
 import { CARD_FALL_MS } from "../anim";
 import { useFlip } from "../hooks/useFlip";
 import { useLang } from "../i18n";
+import Icon from "./Icon";
 
 export default function Home() {
   const { t } = useLang();
@@ -49,7 +50,7 @@ export default function Home() {
   return (
     <div className="flex h-full min-h-0 gap-6 px-8 py-6">
       <section className="flex min-w-0 flex-1 flex-col">
-        <h1 className="mb-5 text-[30px] font-light leading-none text-text">
+        <h1 className="mb-5 text-[26px] font-semibold leading-none tracking-[-0.03em] text-text">
           {t("Последние запуски")}
         </h1>
 
@@ -57,8 +58,8 @@ export default function Home() {
           {recents.length === 0 && !promo ? (
             <div className="grid h-full place-items-center text-center">
               <div className="max-w-xs">
-                <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-card text-xl text-accent">
-                  <i className="fa-solid fa-clock-rotate-left" />
+                <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-full bg-accent/12 text-xl text-accent">
+                  <Icon cls="fa-solid fa-clock-rotate-left" />
                 </div>
                 <p className="text-sm text-muted">
                   {t(

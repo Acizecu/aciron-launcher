@@ -2,6 +2,7 @@ import Head from "./Head";
 import AcironLogo from "./AcironLogo";
 import { friendSkinUrl } from "../api";
 import { useLang } from "../i18n";
+import Icon from "./Icon";
 
 export type ContactLike = {
   username: string;
@@ -39,8 +40,8 @@ export function ContactAvatar({
 export function VerifiedMark({ className = "" }: { className?: string }) {
   const { t } = useLang();
   return (
-    <i
-      className={`fa-solid fa-circle-check shrink-0 text-accent ${className}`}
+    <Icon
+      cls={`fa-solid fa-circle-check shrink-0 text-accent ${className}`}
       title={t("Проверенный аккаунт")}
     />
   );

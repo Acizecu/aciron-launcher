@@ -91,10 +91,23 @@ fn parse_server(tail: &str) -> Option<String> {
     for line in tail.lines() {
         if let Some(idx) = line.find("Connecting to ") {
             let rest = &line[idx + "Connecting to ".len()..];
-            let host = rest.split(',').next().unwrap_or("").trim();
-            if !host.is_empty() {
-                found = Some(host.to_string());
+            let mut parts = rest.split(',');
+            let host = parts.next().unwrap_or("").trim();
+            if host.is_empty() {
+                continue;
             }
+            let port: String = parts
+                .next()
+                .unwrap_or("")
+                .trim()
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            found = Some(if port.is_empty() || port == "25565" {
+                host.to_string()
+            } else {
+                format!("{host}:{port}")
+            });
         }
     }
     found
@@ -190,5 +203,33 @@ pub async fn heartbeat_loop() {
     loop {
         beat().await;
         tokio::time::sleep(HEARTBEAT_EVERY).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_keeps_non_default_port() {
+        let log = "[12:00:01] [Render thread/INFO]: Connecting to play.example.net, 25570";
+        assert_eq!(parse_server(log).as_deref(), Some("play.example.net:25570"));
+    }
+
+    #[test]
+    fn default_port_is_left_out() {
+        let log = "[12:00:01] [Render thread/INFO]: Connecting to mc.aciron.pro, 25565";
+        assert_eq!(parse_server(log).as_deref(), Some("mc.aciron.pro"));
+    }
+
+    #[test]
+    fn last_connection_wins() {
+        let log = "Connecting to first.net, 25565\nsomething else\nConnecting to second.net, 30000";
+        assert_eq!(parse_server(log).as_deref(), Some("second.net:30000"));
+    }
+
+    #[test]
+    fn no_connection_means_no_server() {
+        assert_eq!(parse_server("[Render thread/INFO]: Loaded 12 advancements"), None);
     }
 }

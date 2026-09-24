@@ -15,13 +15,14 @@ import Head from "./Head";
 import Modal from "./Modal";
 import AddAccountModal from "./AddAccountModal";
 import { t, ts } from "../i18n";
+import Icon from "./Icon";
 
 const typeLabel = (a: Account) =>
   a.type === "microsoft"
     ? "Microsoft"
     : a.type === "aciron"
     ? a.licensed
-      ? t("Aciron ID · лицензия")
+      ? t("Aciron ID, лицензия")
       : "Aciron ID"
     : t("Оффлайн");
 
@@ -74,40 +75,38 @@ export default function AccountMenu() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-14 items-center gap-2.5 rounded-xl border px-3 transition-colors ${
-          open ? "border-border bg-card" : "border-transparent bg-card hover:bg-border/50"
-        }`}
+        className={`flex h-14 items-center gap-3 rounded-[16px] px-2.5 pr-3.5 transition-colors duration-300 ${open ? "bg-white/[0.08]" : "bg-white/[0.04] hover:bg-white/[0.07]"}`}
       >
         {active ? (
-          <Head skin={headSkinUrl(active)} name={active.username} size={32} />
+          <Head skin={headSkinUrl(active)} name={active.username} size={38} className="rounded-full" />
         ) : (
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-bg text-muted">
-            <i className="fa-solid fa-user text-sm" />
+          <span className="grid h-[38px] w-[38px] place-items-center rounded-full bg-white/[0.06] text-muted">
+            <Icon cls="fa-solid fa-user text-[16px]" />
           </span>
         )}
         <div className="text-left leading-tight">
-          <div className="max-w-[120px] truncate text-sm font-semibold text-text">
+          <div className="max-w-[130px] truncate text-[14.5px] font-semibold text-text">
             {active?.username ?? t("Нет аккаунта")}
           </div>
-          <div className="text-[11px] text-muted">
+          <div className="mt-0.5 text-[12px] text-muted">
             {active ? typeLabel(active) : t("Добавьте аккаунт")}
           </div>
         </div>
-        <i
-          className={`fa-solid fa-chevron-down ml-1 text-[10px] text-muted transition-transform ${
+        <Icon
+          cls={`fa-solid fa-chevron-down ml-1 text-[14px] text-muted transition-transform duration-300 ${
             open ? "rotate-180" : ""
           }`}
         />
       </button>
 
       {open && (
-        <div className="absolute bottom-full right-0 mb-2 w-64 overflow-hidden rounded-xl border border-border bg-panel shadow-xl shadow-black/40">
-          <div className="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+        <div className="dock-pop absolute bottom-full mb-3 overflow-hidden rounded-[20px] bg-popover p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] right-0 w-80">
+          <div className="px-2.5 pb-1.5 pt-1.5 text-[12.5px] text-muted">
             {t("Аккаунты")}
           </div>
-          <div className="max-h-56 overflow-y-auto pb-1">
+          <div className="max-h-60 space-y-0.5 overflow-y-auto">
             {state.accounts.length === 0 && (
-              <div className="px-3 py-4 text-center text-xs text-muted">{t("Список пуст")}</div>
+              <div className="px-3 py-4 text-center text-[13px] text-muted">{t("Список пуст")}</div>
             )}
             {state.accounts.map((a) => {
               const isActive = a.id === active?.id;
@@ -115,19 +114,22 @@ export default function AccountMenu() {
                 <button
                   key={a.id}
                   onClick={() => pick(a.id)}
-                  className="group flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-card"
+                  className={`group flex w-full items-center gap-3 rounded-[12px] px-2.5 py-2 text-left transition-colors ${
+                    isActive ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
+                  }`}
                 >
-                  <Head skin={headSkinUrl(a)} name={a.username} size={30} />
+                  <Head skin={headSkinUrl(a)} name={a.username} size={34} className="rounded-full" />
                   <div className="min-w-0 flex-1 leading-tight">
-                    <div className="truncate text-sm font-medium text-text">{a.username}</div>
-                    <div className="text-[11px] text-muted">{typeLabel(a)}</div>
+                    <div className="truncate text-[14px] font-medium text-text">{a.username}</div>
+                    <div className="mt-0.5 text-[12px] text-muted">{typeLabel(a)}</div>
                   </div>
                   {isActive ? (
-                    <i className="fa-solid fa-circle-check text-accent" />
+                    <Icon cls="fa-solid fa-check text-[16px] text-accent" />
                   ) : (
-                    <i
+                    <Icon
                       onClick={(e) => remove(e, a.id)}
-                      className="fa-solid fa-xmark p-1 text-muted opacity-0 transition-opacity hover:text-[#ef4444] group-hover:opacity-100"
+                      title={t("Удалить")}
+                      cls="fa-solid fa-xmark p-1 text-[15px] text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
                     />
                   )}
                 </button>
@@ -135,59 +137,57 @@ export default function AccountMenu() {
             })}
           </div>
           {active?.type === "aciron" && (
-            <div className="space-y-0.5 border-t border-border p-1.5">
+            <div className="mt-1.5 space-y-0.5 border-t border-line pt-1.5">
               <button
                 onClick={() => openUrl(ACIRON_ID_WEB)}
-                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-text transition-colors hover:bg-card"
+                className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm font-medium text-text transition-colors hover:bg-white/[0.05]"
               >
-                <span className="grid h-[30px] w-[30px] place-items-center rounded-md bg-card text-accent">
-                  <i className="fa-solid fa-id-badge text-xs" />
+                <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-accent/12 text-accent">
+                  <Icon cls="fa-solid fa-id-badge text-[14px]" />
                 </span>
                 {t("Личный кабинет")}
               </button>
 
               {active.licensed ? (
-                <div className="flex items-center gap-2.5 px-2.5 py-2 text-xs text-muted">
-                  <span className="grid h-[30px] w-[30px] place-items-center rounded-md bg-card text-accent">
-                    <i className="fa-solid fa-certificate text-xs" />
+                <div className="flex items-center gap-2.5 px-2.5 py-2 text-[13px] text-muted">
+                  <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#5fd08a]/12 text-[#5fd08a]">
+                    <Icon cls="fa-solid fa-certificate text-[14px]" />
                   </span>
                   {t("Лицензия подключена")}
                 </div>
               ) : linking ? (
-                <div className="flex items-center gap-2.5 px-2.5 py-2 text-xs text-muted">
-                  <span className="grid h-[30px] w-[30px] place-items-center rounded-md bg-card text-accent">
-                    <i className="fa-solid fa-spinner fa-spin text-xs" />
+                <div className="flex items-center gap-2.5 px-2.5 py-2 text-[12.5px] text-muted">
+                  <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-accent/12 text-accent">
+                    <Icon cls="fa-solid fa-spinner fa-spin text-[14px]" />
                   </span>
                   {linkMsg || t("Ожидание входа Microsoft…")}
                 </div>
               ) : (
                 <button
                   onClick={() => setWarn(true)}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-text transition-colors hover:bg-card"
+                  className="flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-sm font-medium text-text transition-colors hover:bg-white/[0.05]"
                 >
-                  <span className="grid h-[30px] w-[30px] place-items-center rounded-md bg-card text-accent">
-                    <i className="fa-solid fa-key text-xs" />
+                  <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-accent/12 text-accent">
+                    <Icon cls="fa-solid fa-key text-[14px]" />
                   </span>
                   {t("Подключить лицензию")}
                 </button>
               )}
               {linkMsg && !linking && !active.licensed && (
-                <div className="px-2.5 pb-1 text-[11px] text-[#ef4444]">{linkMsg}</div>
+                <div className="px-2.5 pb-1 text-[12px] text-danger">{linkMsg}</div>
               )}
             </div>
           )}
 
-          <div className="border-t border-border p-1.5">
+          <div className="mt-1.5 border-t border-line pt-1.5">
             <button
               onClick={() => {
                 setOpen(false);
                 setModal(true);
               }}
-              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-accent transition-colors hover:bg-card"
+              className="btn btn-sm btn-secondary w-full"
             >
-              <span className="grid h-[30px] w-[30px] place-items-center rounded-md border border-dashed border-accent/50">
-                <i className="fa-solid fa-plus text-xs" />
-              </span>
+              <Icon cls="fa-solid fa-plus text-[14px]" />
               {t("Добавить аккаунт")}
             </button>
           </div>
@@ -202,7 +202,7 @@ export default function AccountMenu() {
           icon="fa-triangle-exclamation"
           onClose={() => setWarn(false)}
         >
-          <div className="space-y-4 p-5">
+          <div className="space-y-4 pt-1">
             <p className="text-sm text-text">
               {t("Вы привяжете лицензию Minecraft (Microsoft) к аккаунту {name} и будете играть через неё.", {
                 name: active.aciron_name || active.username,
@@ -221,15 +221,15 @@ export default function AccountMenu() {
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setWarn(false)}
-                className="flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
+                className="btn btn-ghost"
               >
                 {t("Отмена")}
               </button>
               <button
                 onClick={linkLicense}
-                className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+                className="btn btn-accent ml-auto"
               >
-                <i className="fa-brands fa-microsoft" />
+                <Icon cls="fa-brands fa-microsoft" />
                 {t("Продолжить и войти")}
               </button>
             </div>
@@ -242,8 +242,8 @@ export default function AccountMenu() {
 
 function WarnRow({ icon, children }: { icon: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2.5 text-sm text-text">
-      <i className={`fa-solid ${icon} mt-0.5 text-accent`} />
+    <div className="flex items-start gap-2.5 rounded-[12px] border border-accent/25 bg-accent/10 px-3 py-2.5 text-sm text-text">
+      <Icon cls={`fa-solid ${icon} mt-0.5 text-accent`} />
       <span className="min-w-0">{children}</span>
     </div>
   );

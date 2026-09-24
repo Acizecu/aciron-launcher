@@ -5,6 +5,7 @@ import { VerifiedMark } from "./ContactAvatar";
 import { patchFriends, refreshFriends, restoreFriends } from "../friends";
 import { useToast } from "../ToastContext";
 import { t, ts } from "../i18n";
+import Icon from "./Icon";
 
 const LIFE_MS = 5000;
 
@@ -81,26 +82,26 @@ export default function FriendRequestToast({
         transform: shown ? "translateX(0)" : "translateX(-120%)",
         opacity: shown ? 1 : 0,
       }}
-      className="pointer-events-auto w-[300px] rounded-2xl border border-border bg-panel/95 p-3 shadow-lg backdrop-blur"
+      className="pointer-events-auto w-[300px] rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] p-3 backdrop-blur"
     >
       <div className="flex items-center gap-3">
         {}
-        <Head skin={avatar} name={user.username} size={40} className="shrink-0" />
+        <Head skin={avatar} name={user.username} size={40} className="shrink-0 rounded-full" />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="line-clamp-1 text-sm font-semibold text-text">{user.username}</span>
-            {user.verified && <VerifiedMark className="text-[10px]" />}
+            {user.verified && <VerifiedMark className="text-[11.5px]" />}
           </div>
-          <div className="text-[11px] text-muted">{t("хочет добавить вас в друзья")}</div>
+          <div className="text-[12px] text-muted">{t("хочет добавить вас в друзья")}</div>
         </div>
 
         <button
           onClick={close}
           title={t("Скрыть")}
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-muted transition-colors hover:text-text"
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-[10px] text-muted transition-colors hover:text-text"
         >
-          <i className="fa-solid fa-xmark text-xs" />
+          <Icon cls="fa-solid fa-xmark text-[12.5px]" />
         </button>
       </div>
 
@@ -108,14 +109,14 @@ export default function FriendRequestToast({
         <button
           onClick={() => void respond(true)}
           disabled={busy}
-          className="flex-1 rounded-lg bg-accent py-2 text-xs font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
+          className="btn-accent flex-1 rounded-[12px] py-2 text-[12.5px] font-medium disabled:opacity-60"
         >
           {t("Принять")}
         </button>
         <button
           onClick={() => void respond(false)}
           disabled={busy}
-          className="flex-1 rounded-lg border border-border py-2 text-xs font-medium text-muted transition-colors hover:text-text disabled:opacity-60"
+          className="flex-1 rounded-[12px] border border-line py-2 text-[12.5px] font-medium text-muted transition-colors hover:text-text disabled:opacity-60"
         >
           {t("Отклонить")}
         </button>

@@ -31,6 +31,8 @@ import { DEBUG_TOOLS } from "../config";
 import { getSfxPrefs, setSfxPrefs } from "../sfx";
 import { useToast } from "./../ToastContext";
 import { LANGS, setLang, t, ts, useLang, type Lang } from "../i18n";
+import Icon from "./Icon";
+import { RailNav } from "./ui/ds";
 
 const FOLDER_FIELDS: { key: "game_dir" | "versions_dir" | "builds_dir"; label: string }[] = [
   { key: "game_dir", label: "Папка игры" },
@@ -105,7 +107,7 @@ export default function SettingsPage({
   if (!s) {
     return (
       <div className="grid h-full place-items-center text-muted">
-        <i className="fa-solid fa-spinner fa-spin text-2xl" />
+        <Icon cls="fa-solid fa-spinner fa-spin text-2xl" />
       </div>
     );
   }
@@ -182,25 +184,18 @@ export default function SettingsPage({
   return (
     <div className="flex h-full min-h-0">
       {}
-      <nav className="flex w-52 shrink-0 flex-col gap-1 border-r border-border p-3">
-        {CATS.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => setCat(c.id)}
-            className={`flex items-center gap-3 rounded-[8px] px-3 py-2 text-sm transition-colors ${
-              cat === c.id ? "bg-card text-text" : "text-muted hover:text-text"
-            }`}
-          >
-            <i className={`fa-solid ${c.icon} w-4 text-center ${cat === c.id ? "text-accent" : ""}`} />
-            {t(c.label)}
-          </button>
-        ))}
+      <nav className="flex w-52 shrink-0 flex-col gap-1 border-r border-line p-3">
+        <RailNav
+          items={CATS.map((c) => ({ id: c.id, label: t(c.label), icon: c.icon }))}
+          value={cat}
+          onChange={setCat}
+        />
         <div className="mt-auto space-y-1 pt-3">
           <button
             onClick={onReset}
-            className="flex w-full items-center gap-3 rounded-[8px] px-3 py-2 text-sm text-muted transition-colors hover:text-text"
+            className="rail-link"
           >
-            <i className="fa-solid fa-arrow-rotate-left w-4 text-center" />
+            <Icon cls="fa-solid fa-arrow-rotate-left text-[17px] text-muted" />
             {t("Сбросить")}
           </button>
         </div>
@@ -210,11 +205,19 @@ export default function SettingsPage({
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-2xl space-y-5 px-6 py-6">
-            {cat === "theme" && <ThemeSettings />}
+            {cat === "theme" && (
+              <ThemeSettings
+                anim={s.background_anim ?? hwCap}
+                onAnim={(v) => {
+                  update({ background_anim: v });
+                  showBackground(v);
+                }}
+              />
+            )}
 
             {cat === "java" && (
               <>
-                <h2 className="text-lg font-bold text-text">Java</h2>
+                <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-text">Java</h2>
                 <Card>
                   <Field column>
                     <div className="flex gap-2">
@@ -225,17 +228,17 @@ export default function SettingsPage({
                         onChange={(e) => update({ java_path: e.target.value })}
                       />
                       <button className={iconBtnCls} title={t("Обзор")} onClick={browseJava}>
-                        <i className="fa-solid fa-folder-open text-sm" />
+                        <Icon cls="fa-solid fa-folder-open text-sm" />
                       </button>
                       <button
                         className={iconBtnCls}
                         title={t("Определить автоматически")}
                         onClick={onDetectJava}
                       >
-                        <i className="fa-solid fa-wand-magic-sparkles text-sm" />
+                        <Icon cls="fa-solid fa-wand-magic-sparkles text-sm" />
                       </button>
                     </div>
-                    <p className="mt-2 text-[11px] text-muted">
+                    <p className="mt-2 text-[12px] text-muted">
                       {t("Путь к Java дирректории")}
                     </p>
                   </Field>
@@ -253,10 +256,10 @@ export default function SettingsPage({
 
             {cat === "game" && (
               <>
-                <h2 className="text-lg font-bold text-text">{t("Игра")}</h2>
+                <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-text">{t("Игра")}</h2>
                 <Card>
                   <Field label={t("Оперативная память")} hint={t("Сколько ОЗУ выделять игре")}>
-                    <span className="rounded-md bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
+                    <span className="rounded-[10px] bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
                       {ramGb} {t("ГБ")}
                     </span>
                   </Field>
@@ -277,7 +280,7 @@ export default function SettingsPage({
                         } as CSSProperties
                       }
                     />
-                    <div className="mt-1 flex justify-between text-[11px] text-muted">
+                    <div className="mt-1 flex justify-between text-[12px] text-muted">
                       <span>{t("1 ГБ")}</span>
                       <span>
                         {Math.round(ramMax / 1024)} {t("ГБ")}
@@ -294,15 +297,15 @@ export default function SettingsPage({
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        className="w-20 rounded-lg border border-border bg-bg px-2 py-1.5 text-center text-sm text-text outline-none focus:border-accent disabled:opacity-50"
+                        className="field w-20 px-2 py-1.5 text-center text-sm disabled:opacity-50"
                         value={s.window_width}
                         disabled={s.fullscreen}
                         onChange={(e) => update({ window_width: Number(e.target.value) })}
                       />
-                      <i className="fa-solid fa-xmark text-xs text-muted" />
+                      <Icon cls="fa-solid fa-xmark text-[12.5px] text-muted" />
                       <input
                         type="number"
-                        className="w-20 rounded-lg border border-border bg-bg px-2 py-1.5 text-center text-sm text-text outline-none focus:border-accent disabled:opacity-50"
+                        className="field w-20 px-2 py-1.5 text-center text-sm disabled:opacity-50"
                         value={s.window_height}
                         disabled={s.fullscreen}
                         onChange={(e) => update({ window_height: Number(e.target.value) })}
@@ -315,7 +318,7 @@ export default function SettingsPage({
 
             {cat === "behavior" && (
               <>
-                <h2 className="text-lg font-bold text-text">{t("Поведение лаунчера")}</h2>
+                <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-text">{t("Поведение лаунчера")}</h2>
                 <Card>
                   {}
                   <Field
@@ -365,7 +368,7 @@ export default function SettingsPage({
                     label={t("Размер интерфейса")}
                     hint={t("Масштаб интерфейса. Работает и в развёрнутом окне, и в полноэкранном.")}
                   >
-                    <span className="rounded-md bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
+                    <span className="rounded-[10px] bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
                       {s.ui_scale}%
                     </span>
                   </Field>
@@ -385,7 +388,7 @@ export default function SettingsPage({
                       className="aciron-range"
                       style={{ "--pct": `${((s.ui_scale - 80) / (160 - 80)) * 100}%` } as CSSProperties}
                     />
-                    <div className="mt-1 flex justify-between text-[11px] text-muted">
+                    <div className="mt-1 flex justify-between text-[12px] text-muted">
                       <span>80%</span>
                       <span>160%</span>
                     </div>
@@ -411,18 +414,6 @@ export default function SettingsPage({
                     hint={t("Пока игра открыта, лаунчер ждёт значком в трее")}
                   >
                     <Toggle value={s.hide_on_launch} onChange={(v) => update({ hide_on_launch: v })} />
-                  </Field>
-                  <Field
-                    label={t("Анимация фона")}
-                    hint={t("Живая картинка за интерфейсом. Выбрать её можно в разделе «Темы».")}
-                  >
-                    <Toggle
-                      value={s.background_anim ?? hwCap}
-                      onChange={(v) => {
-                        update({ background_anim: v });
-                        showBackground(v);
-                      }}
-                    />
                   </Field>
                   <Field
                     label="Discord Rich Presence"
@@ -474,9 +465,9 @@ export default function SettingsPage({
                             .then(setCrashPreview)
                             .catch((e) => toast(ts(String(e)), "error"))
                         }
-                        className="rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                        className="btn btn-sm btn-secondary"
                       >
-                        <i className="fa-solid fa-eye mr-2 text-[11px]" />
+                        <Icon cls="fa-solid fa-eye mr-2 text-[12px]" />
                         {t("Что отправляется")}
                       </button>
                       {}
@@ -504,10 +495,10 @@ export default function SettingsPage({
                                 setCrashBusy(false);
                               }
                             }}
-                            className="rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent disabled:opacity-50"
+                            className="btn btn-sm btn-secondary"
                           >
-                            <i
-                              className={`fa-solid mr-2 text-[11px] ${
+                            <Icon
+                              cls={`fa-solid mr-2 text-[12px] ${
                                 crashBusy ? "fa-spinner fa-spin" : "fa-paper-plane"
                               }`}
                             />
@@ -519,9 +510,9 @@ export default function SettingsPage({
                               setCrashPending(await crashReportsPending());
                               toast(t("Сохранённые отчёты удалены"), "success");
                             }}
-                            className="rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                            className="btn btn-sm btn-secondary"
                           >
-                            <i className="fa-solid fa-trash-can mr-2 text-[11px]" />
+                            <Icon cls="fa-solid fa-trash-can mr-2 text-[12px]" />
                             {t("Удалить")}
                           </button>
                         </>
@@ -535,7 +526,7 @@ export default function SettingsPage({
                         title={t("Открыть папку отчётов")}
                         className={iconBtnCls}
                       >
-                        <i className="fa-solid fa-folder-open text-sm" />
+                        <Icon cls="fa-solid fa-folder-open text-sm" />
                       </button>
                     </div>
                   </Card>
@@ -552,14 +543,14 @@ export default function SettingsPage({
                         : t("Локальная сборка: автообновление недоступно")
                     }
                   >
-                    <span className="rounded-md bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
+                    <span className="rounded-[10px] bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
                       {!bi
                         ? "…"
                         : bi.channel === "dev"
-                        ? `Dev · v${bi.version}`
+                        ? `Dev, v${bi.version}`
                         : bi.channel === "stable"
-                        ? `Stable · v${bi.version}`
-                        : t("Локальная · v{version}", { version: bi.version })}
+                        ? `Stable, v${bi.version}`
+                        : t("Локальная, v{version}", { version: bi.version })}
                     </span>
                   </Field>
                   <Field
@@ -580,7 +571,7 @@ export default function SettingsPage({
                     >
                       <button
                         onClick={() => update({ skipped_update_version: "" })}
-                        className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:text-text"
+                        className="btn btn-sm btn-ghost"
                       >
                         {t("Сбросить")}
                       </button>
@@ -593,7 +584,7 @@ export default function SettingsPage({
 
             {cat === "folders" && (
               <>
-                <h2 className="text-lg font-bold text-text">{t("Папки лаунчера")}</h2>
+                <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-text">{t("Папки лаунчера")}</h2>
                 <Card>
                   <Field label={t("Папка игры")} column>
                     <PathRow value={s.game_dir} onPick={() => pick("game_dir")} onOpen={() => openFolder(s.game_dir)} />
@@ -613,12 +604,12 @@ export default function SettingsPage({
         {}
         <div
           aria-hidden={saved}
-          className={`flex items-center gap-3 border-t border-border bg-panel px-6 py-3 transition-opacity duration-200 ${
+          className={`flex items-center gap-3 border-t border-line bg-popover px-6 py-3 transition-opacity duration-200 ${
             saved ? "pointer-events-none opacity-0" : "opacity-100"
           }`}
         >
-            <span className="flex items-center gap-2 text-sm text-muted">
-              <i className="fa-solid fa-circle-info text-accent" />
+            <span className="flex items-center gap-2 text-[13px] text-text2">
+              <span className="dot bg-accent" />
               {t("Есть несохранённые изменения")}
             </span>
             <div className="ml-auto flex items-center gap-2">
@@ -639,15 +630,14 @@ export default function SettingsPage({
                   });
                   setSaved(true);
                 }}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted transition-colors hover:text-text"
+                className="btn btn-sm btn-ghost"
               >
                 {t("Отменить")}
               </button>
               <button
                 onClick={onSave}
-                className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+                className="btn btn-sm btn-accent"
               >
-                <i className="fa-solid fa-floppy-disk" />
                 {t("Сохранить")}
               </button>
             </div>
@@ -667,7 +657,7 @@ export default function SettingsPage({
           width="max-w-xl"
           onClose={() => setCrashPreview(null)}
         >
-          <pre className="selectable max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-lg bg-card px-3 py-2 font-mono text-[11px] leading-relaxed text-muted">
+          <pre className="selectable max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-[12px] bg-white/[0.04] px-3 py-2 font-mono text-[12px] leading-relaxed text-muted">
             {crashPreview}
           </pre>
         </Modal>
@@ -675,13 +665,13 @@ export default function SettingsPage({
 
       {folderPrompt && (
         <Modal title={t("Папки изменены")} icon="fa-folder-tree" onClose={() => setFolderPrompt(null)}>
-          <div className="p-5">
+          <div className="pt-1">
             <p className="text-sm text-text">
               {t("Вы изменили расположение папок. Перенести существующие файлы в новое место?")}
             </p>
             <ul className="mt-3 space-y-1.5">
               {folderPrompt.map((m) => (
-                <li key={m.label} className="rounded-lg bg-card px-3 py-2 text-xs">
+                <li key={m.label} className="rounded-[12px] bg-white/[0.03] px-3 py-2 text-[12.5px]">
                   <div className="font-semibold text-text">{t(m.label)}</div>
                   <div className="mt-0.5 truncate text-muted" title={m.from}>
                     {t("из:")} {m.from}
@@ -695,21 +685,21 @@ export default function SettingsPage({
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button
                 onClick={() => setFolderPrompt(null)}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
+                className="btn btn-ghost"
               >
                 {t("Отмена")}
               </button>
               <button
                 onClick={() => persist(false, folderPrompt)}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-text transition-colors hover:border-accent/50"
+                className="btn btn-secondary"
               >
                 {t("Просто сохранить")}
               </button>
               <button
                 onClick={() => persist(true, folderPrompt)}
-                className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+                className="btn btn-accent"
               >
-                <i className="fa-solid fa-truck-fast" />
+                <Icon cls="fa-solid fa-truck-fast" />
                 {t("Перенести и сохранить")}
               </button>
             </div>

@@ -151,14 +151,14 @@ export default function ColorPicker({
         height={250}
         width={220}
         align="right"
-        className="rounded-2xl border border-border bg-panel p-3 shadow-xl"
+        className="rounded-[18px] bg-popover p-3 shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)]"
       >
         <div>
           {}
           <div
             ref={field.ref}
             onPointerDown={field.onPointerDown}
-            className="relative h-[120px] w-full cursor-crosshair rounded-xl"
+            className="relative h-[120px] w-full cursor-crosshair rounded-[14px]"
             style={{
               background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${hue} 100% 50%))`,
             }}
@@ -194,7 +194,7 @@ export default function ColorPicker({
               if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
               if (e.key === "Escape") setDraft(null);
             }}
-            className="mt-3 w-full rounded-lg border border-border bg-bg px-2 py-1.5 text-center font-mono text-[11px] uppercase text-text outline-none transition-colors focus:border-accent"
+            className="mt-3 w-full rounded-[12px] border border-line bg-bg px-2 py-1.5 text-center font-mono text-[12px] uppercase text-text outline-none transition-colors focus:border-accent"
           />
         </div>
       </AnchoredPanel>

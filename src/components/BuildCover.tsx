@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getBuildImage, type Build } from "../api";
+import Icon from "./Icon";
 
 const loaderIcon: Record<string, string> = {
   fabric: "fa-scroll",
@@ -11,7 +12,7 @@ const loaderIcon: Record<string, string> = {
 export default function BuildCover({
   build,
   className = "h-12 w-12",
-  rounded = "rounded-lg",
+  rounded = "rounded-[12px]",
 }: {
   build: Build;
   className?: string;
@@ -43,7 +44,7 @@ export default function BuildCover({
     <span
       className={`grid shrink-0 place-items-center bg-accent/15 text-accent ${rounded} ${className}`}
     >
-      <i className={`fa-solid ${loaderIcon[build.loader] ?? "fa-cube"} text-lg`} />
+      <Icon cls={`fa-solid ${loaderIcon[build.loader] ?? "fa-cube"} text-lg`} />
     </span>
   );
 }

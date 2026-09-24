@@ -121,7 +121,7 @@ export default function Splash() {
   return (
     <div
       data-tauri-drag-region
-      className="flex h-screen w-screen flex-col items-center justify-center gap-5 overflow-hidden border border-border bg-bg px-5"
+      className="flex h-screen w-screen flex-col items-center justify-center gap-5 overflow-hidden border border-line bg-bg px-5"
     >
       <AcironLogo size={92} className="logo-glow" />
 
@@ -134,7 +134,7 @@ export default function Splash() {
 
         {busy && (
           <>
-            <div className="h-1 w-full overflow-hidden rounded-full bg-card">
+            <div className="h-1 w-full overflow-hidden rounded-full bg-white/[0.04]">
               {}
               <div
                 className={
@@ -146,7 +146,7 @@ export default function Splash() {
               />
             </div>
             {phase === "downloading" && (
-              <span className="text-[11px] tabular-nums text-muted">{pct}%</span>
+              <span className="text-[12px] tabular-nums text-muted">{pct}%</span>
             )}
           </>
         )}

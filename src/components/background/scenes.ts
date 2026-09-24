@@ -8,12 +8,14 @@ import { makeRain } from "./rain";
 import { makeHex } from "./hex";
 import { makeWarp } from "./warp";
 import { makeEmbers } from "./embers";
+import { makeGlow } from "./glow";
 
 export const BACKGROUNDS: {
   id: string;
   icon: string;
   make: () => Scene;
 }[] = [
+  { id: "glow", icon: "fa-solid fa-sun", make: makeGlow },
   { id: "cubes", icon: "fa-solid fa-cubes", make: makeCubes },
   { id: "aurora", icon: "fa-solid fa-wand-magic-sparkles", make: makeAurora },
   { id: "stars", icon: "fa-solid fa-star", make: makeStars },
@@ -26,6 +28,7 @@ export const BACKGROUNDS: {
 ];
 
 export type BackgroundId =
+  | "glow"
   | "cubes"
   | "aurora"
   | "stars"
@@ -36,7 +39,7 @@ export type BackgroundId =
   | "hex"
   | "warp";
 
-export const DEFAULT_BACKGROUND: BackgroundId = "cubes";
+export const DEFAULT_BACKGROUND: BackgroundId = "glow";
 
 export function backgroundId(raw: string | null | undefined): BackgroundId {
   return isBackgroundId(raw) ? raw : DEFAULT_BACKGROUND;

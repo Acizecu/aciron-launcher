@@ -12,6 +12,7 @@ import {
   type Account,
   type PresenceStatus,
 } from "../api";
+import Icon from "./Icon";
 
 export type { PresenceStatus };
 
@@ -73,21 +74,21 @@ function Toggle({
   return (
     <button
       onClick={() => onChange(!value)}
-      className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left transition-colors hover:border-accent/40"
+      role="switch"
+      aria-checked={value}
+      className="flex w-full items-center gap-4 py-3.5 text-left first:pt-0 last:pb-0"
     >
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-text">{label}</div>
-        <div className="text-[11px] text-muted">{hint}</div>
+        <div className="text-[14px] font-medium text-text">{label}</div>
+        <div className="mt-0.5 text-[12.5px] leading-relaxed text-muted">{hint}</div>
       </div>
       <span
-        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-          value ? "bg-accent" : "bg-border"
-        }`}
+        className="relative h-[26px] w-[44px] shrink-0 rounded-full transition-colors duration-300"
+        style={{ background: value ? "var(--color-accent)" : "var(--color-line-strong)" }}
       >
         <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
-            value ? "left-[22px]" : "left-0.5"
-          }`}
+          className="absolute left-[3px] top-[3px] size-5 rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.3)] transition-transform duration-300 ease-[var(--ease-out-quint)]"
+          style={{ transform: value ? "translateX(18px)" : "none" }}
         />
       </span>
     </button>
@@ -162,40 +163,40 @@ export default function FriendSettingsModal({
 
   return (
     <Modal title={t("Профиль")} subtitle={t("Статус и приватность в разделе друзей")} onClose={onClose}>
-      <div className="space-y-5 p-5">
+      <div className="space-y-6 pt-1">
         {}
-        <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
+        <div className="flex items-center gap-3.5">
           {account ? (
-            <Head skin={headSkinUrl(account)} name={nick} size={44} className="rounded-lg" />
+            <span
+              className="shrink-0 rounded-full transition-shadow duration-500"
+              style={{ boxShadow: `0 0 0 2px var(--color-bg), 0 0 0 3.5px ${STATUS_META[status].color}` }}
+            >
+              <Head skin={headSkinUrl(account)} name={nick} size={46} className="rounded-full" />
+            </span>
           ) : (
-            <span className="grid h-11 w-11 place-items-center rounded-lg bg-bg text-muted">
-              <i className="fa-solid fa-user" />
+            <span className="grid h-11 w-11 place-items-center rounded-full bg-bg text-muted">
+              <Icon cls="fa-solid fa-user" />
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold text-text">{nick}</div>
-            <div className="flex items-center gap-1.5 text-[11px] text-muted">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ background: STATUS_META[status].color }}
-              />
+            <div className="truncate text-[16px] font-semibold text-text">{nick}</div>
+            <div className="mt-0.5 text-[13px] text-muted">
               {t(STATUS_META[status].label)}
             </div>
           </div>
           <button
             onClick={copyNick}
             title={t("Скопировать ник — по нему вас добавят в друзья")}
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-bg text-muted transition-colors hover:text-accent"
+            className="btn btn-sm btn-secondary shrink-0"
           >
-            <i className={`fa-solid ${copied ? "fa-check text-accent" : "fa-copy"} text-sm`} />
+            <Icon cls={`fa-solid ${copied ? "fa-check text-accent" : "fa-copy"} text-[14px]`} />
+            {copied ? t("Скопировано") : t("Ник")}
           </button>
         </div>
 
         {}
         <div>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            {t("Статус")}
-          </div>
+          <div className="mb-3 text-[14px] font-semibold text-text">{t("Статус")}</div>
           <div className="grid grid-cols-2 gap-2">
             {(Object.keys(STATUS_META) as PresenceStatus[]).map((id) => {
               const m = STATUS_META[id];
@@ -205,19 +206,16 @@ export default function FriendSettingsModal({
                   key={id}
                   onClick={() => pickStatus(id)}
                   title={t(m.hint)}
-                  className={`flex items-center gap-2.5 rounded-xl border p-3 text-left transition-colors ${
+                  className={`flex h-11 items-center gap-2.5 rounded-[14px] px-3.5 text-left transition-colors duration-300 ${
                     active
-                      ? "border-accent bg-accent/10"
-                      : "border-border bg-card hover:border-accent/40"
+                      ? "bg-white/[0.07] shadow-[inset_0_0_0_1.5px_var(--color-accent)]"
+                      : "bg-white/[0.035] hover:bg-white/[0.06]"
                   }`}
                 >
+                  <span className="dot" style={{ background: m.color }} />
                   <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ background: m.color }}
-                  />
-                  <span
-                    className={`truncate text-sm ${
-                      active ? "font-semibold text-accent" : "text-text"
+                    className={`truncate text-[14px] ${
+                      active ? "font-semibold text-text" : "text-text2"
                     }`}
                   >
                     {t(m.label)}
@@ -226,15 +224,13 @@ export default function FriendSettingsModal({
               );
             })}
           </div>
-          <p className="mt-2 text-[11px] text-muted">{t(STATUS_META[status].hint)}</p>
+          <p className="mt-2.5 text-[12.5px] text-muted">{t(STATUS_META[status].hint)}</p>
         </div>
 
         {}
-        <div>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            {t("Приватность")}
-          </div>
-          <div className="space-y-2">
+        <div className="border-t border-line pt-5">
+          <div className="mb-3 text-[14px] font-semibold text-text">{t("Приватность")}</div>
+          <div className="divide-y divide-line">
             <Toggle
               value={prefs.showGame}
               onChange={(v) => patch({ showGame: v })}
@@ -256,7 +252,7 @@ export default function FriendSettingsModal({
           </div>
         </div>
 
-        <p className="text-[11px] leading-relaxed text-muted">
+        <p className="text-[12.5px] leading-relaxed text-muted">
           {t(
             "Статус и приём заявок хранятся в Aciron ID — их видят друзья. Скрытые версия, сборка и сервер вообще не отправляются на сервис."
           )}

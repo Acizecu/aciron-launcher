@@ -13,6 +13,7 @@ import Modal from "./Modal";
 import { LANGS, setLang, t, useLang, type Lang } from "../i18n";
 import { useClickOutside } from "../hooks/useClickOutside";
 import { LangFlag } from "./FlagIcons";
+import Icon from "./Icon";
 
 const appWindow = (() => {
   try {
@@ -40,13 +41,13 @@ function LangPicker() {
       <button
         onClick={() => setOpen((v) => !v)}
         title={`${cur.label} — ${t("сменить язык")}`}
-        className={`flex h-6 items-center gap-1.5 rounded-md px-1.5 transition-colors ${
-          open ? "bg-card" : "opacity-70 hover:opacity-100"
+        className={`flex h-6 items-center gap-1.5 rounded-[10px] px-1.5 transition-colors ${
+          open ? "bg-white/[0.04]" : "opacity-70 hover:opacity-100"
         }`}
       >
         <LangFlag lang={cur.id} size={18} />
-        <i
-          className={`fa-solid fa-chevron-down text-[8px] text-muted transition-transform ${
+        <Icon
+          cls={`fa-solid fa-chevron-down text-[8px] text-muted transition-transform ${
             open ? "rotate-180" : ""
           }`}
         />
@@ -54,20 +55,20 @@ function LangPicker() {
 
       {open && (
         <div className="absolute left-0 top-full z-50 pt-1.5">
-          <div className="dropdown-in w-[150px] overflow-hidden rounded-xl border border-border bg-panel p-1 shadow-xl shadow-black/50">
+          <div className="dropdown-in w-[150px] overflow-hidden rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] p-1">
             {LANGS.map((l) => (
               <button
                 key={l.id}
                 onClick={() => pick(l.id)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12px] transition-colors ${
+                className={`flex w-full items-center gap-2.5 rounded-[12px] px-2.5 py-2 text-left text-[12px] transition-colors ${
                   l.id === lang
                     ? "bg-accent/12 text-accent"
-                    : "text-muted hover:bg-card hover:text-text"
+                    : "text-muted hover:bg-white/[0.05] hover:text-text"
                 }`}
               >
                 <LangFlag lang={l.id} size={18} />
                 <span className="min-w-0 flex-1 truncate">{l.label}</span>
-                {l.id === lang && <i className="fa-solid fa-check text-[9px]" />}
+                {l.id === lang && <Icon cls="fa-solid fa-check text-[9px]" />}
               </button>
             ))}
           </div>
@@ -220,12 +221,12 @@ export default function TitleBar() {
                 ? t("Обновление устанавливается…")
                 : t("Доступно обновление v{version}", { version: update.version })
             }
-            className="mr-1 flex h-6 items-center gap-1.5 rounded-md bg-[#22c55e] px-2 text-xs font-bold text-black transition-colors hover:bg-[#16a34a] disabled:opacity-80"
+            className="mr-1 flex h-6 items-center gap-1.5 rounded-[10px] bg-ok px-2 text-[12.5px] font-medium text-black transition-colors hover:bg-[#16a34a] disabled:opacity-80"
           >
-            <i
-              className={`fa-solid ${
+            <Icon
+              cls={`fa-solid ${
                 busy ? "fa-spinner fa-spin" : "fa-download"
-              } text-[11px]`}
+              } text-[12px]`}
             />
             {label}
           </button>
@@ -235,14 +236,14 @@ export default function TitleBar() {
         <div className="mx-3 flex items-center gap-2">
           {}
           <LangPicker />
-          <p className="text-sm font-light text-muted opacity-45">{versionText}</p>
+          <p className="text-sm text-muted opacity-45">{versionText}</p>
         </div>
         {}
         <div className="flex h-full items-center">
         <button
           onClick={() => appWindow?.minimize()}
           aria-label={t("Свернуть")}
-          className="grid h-9 w-9 place-items-center text-[#676767] transition-colors hover:bg-ctrl-hover rounded-md hover:text-text"
+          className="grid h-9 w-9 place-items-center text-[#676767] transition-colors hover:bg-ctrl-hover rounded-[10px] hover:text-text"
         >
           <svg width="15" height="2" viewBox="0 0 15 2" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M1 1H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -252,7 +253,7 @@ export default function TitleBar() {
           onClick={toggleMaximize}
           aria-label={maximized ? t("Восстановить") : t("Развернуть")}
           title={maximized ? t("Восстановить") : t("Развернуть")}
-          className="grid h-9 w-9 place-items-center text-[#676767] transition-colors hover:bg-ctrl-hover rounded-md hover:text-text"
+          className="grid h-9 w-9 place-items-center text-[#676767] transition-colors hover:bg-ctrl-hover rounded-[10px] hover:text-text"
         >
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M11 1H4C2.34315 1 1 2.34315 1 4V11C1 12.6569 2.34315 14 4 14H11C12.6569 14 14 12.6569 14 11V4C14 2.34315 12.6569 1 11 1Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -262,7 +263,7 @@ export default function TitleBar() {
         <button
           onClick={() => appWindow?.close()}
           aria-label={t("Закрыть")}
-          className="grid h-9 w-9 place-items-center text-[#676767] transition-colors hover:bg-[#FF3535]/50 rounded-md hover:text-[#CDCDCD]"
+          className="grid h-9 w-9 place-items-center text-[#676767] transition-colors hover:bg-[#FF3535]/50 rounded-[10px] hover:text-[#CDCDCD]"
         >
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M1 1L14 14M1 14L14 1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -283,28 +284,28 @@ export default function TitleBar() {
               {t("Обновление перезапустит лаунчер. Убедитесь, что игра не запущена.")}
             </p>
             {typeof update.body === "string" && update.body.trim() && (
-              <div className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-card px-3 py-2 text-xs text-muted">
+              <div className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-[12px] bg-white/[0.04] px-3 py-2 text-[12.5px] text-muted">
                 {update.body}
               </div>
             )}
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button
                 onClick={skipVersion}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
+                className="btn btn-ghost"
               >
                 {t("Не спрашивать про эту версию")}
               </button>
               <button
                 onClick={deferUpdate}
-                className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-text transition-colors hover:border-accent/50"
+                className="btn btn-secondary"
               >
                 {t("Отложить")}
               </button>
               <button
                 onClick={runUpdate}
-                className="flex items-center gap-2 rounded-lg bg-[#22c55e] px-5 py-2.5 text-sm font-bold text-black transition-colors hover:bg-[#16a34a]"
+                className="flex items-center gap-2 rounded-[12px] bg-ok px-5 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-[#16a34a]"
               >
-                <i className="fa-solid fa-download" />
+                <Icon cls="fa-solid fa-download" />
                 {t("Обновить")}
               </button>
             </div>

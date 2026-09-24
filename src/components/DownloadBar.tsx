@@ -1,5 +1,6 @@
 import { useLauncherCtx } from "../LauncherContext";
 import { t, ts } from "../i18n";
+import Icon from "./Icon";
 
 const STAGE: Record<string, { icon: string; title: string }> = {
   java: { icon: "fa-mug-hot", title: "Среда Java" },
@@ -50,20 +51,20 @@ export default function DownloadBar() {
 
   return (
     <div
-      className={`overflow-hidden border-t border-border bg-panel transition-all duration-300 ${
+      className={`overflow-hidden border-t border-line bg-popover transition-all duration-300 ${
         show ? "h-[52px] opacity-100" : "h-0 opacity-0"
       }`}
     >
       <div className="flex h-[52px] items-center gap-3 px-4">
         {}
         <div
-          className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-[14px] ${
             isError
-              ? "bg-[#ef4444]/15 text-[#ef4444]"
+              ? "bg-danger/15 text-danger"
               : "bg-accent/15 text-accent"
           }`}
         >
-          <i className={`fa-solid ${isError ? "fa-triangle-exclamation" : meta.icon} text-sm`} />
+          <Icon cls={`fa-solid ${isError ? "fa-triangle-exclamation" : meta.icon} text-sm`} />
         </div>
 
         {}
@@ -71,15 +72,15 @@ export default function DownloadBar() {
           <div className="mb-1 flex items-center gap-2">
             {!isError && <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-accent" />}
             <span
-              className={`shrink-0 text-[13px] font-bold ${
-                isError ? "text-[#ef4444]" : "text-text"
+              className={`shrink-0 text-[13px] font-medium ${
+                isError ? "text-danger" : "text-text"
               }`}
             >
               {title}
             </span>
-            <span className="truncate text-[11px] text-muted">{sub}</span>
+            <span className="truncate text-[12px] text-muted">{sub}</span>
             {!isError && (
-              <span className="ml-auto shrink-0 text-[13px] font-bold tabular-nums text-accent">
+              <span className="ml-auto shrink-0 text-[13px] font-medium tabular-nums text-accent">
                 {indeterminate ? "" : `${pct}%`}
               </span>
             )}

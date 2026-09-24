@@ -131,7 +131,8 @@ export function useLauncher() {
       }
       try {
         if (target.startsWith("build:")) {
-          await invoke("launch_build", { buildId: target.slice(6) });
+
+          await invoke("launch_build", { buildId: target.slice(6), server: server ?? null });
         } else {
 
           await invoke("launch_game", { version: target, server: server ?? null });

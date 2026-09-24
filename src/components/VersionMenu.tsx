@@ -9,6 +9,7 @@ import {
   getBuilds,
   type InstalledVersion,
 } from "../api";
+import Icon from "./Icon";
 
 export type Version = {
   id: string;
@@ -61,34 +62,34 @@ function Row({
   return (
     <button
       onClick={onClick}
-      className="group relative flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-card"
+      className={`group relative flex w-full items-center gap-3 rounded-[12px] px-2.5 py-2 text-left transition-colors ${
+        active ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
+      }`}
     >
       <span
-        className={`grid h-8 w-8 shrink-0 place-items-center rounded-md ${
-          active ? "bg-accent/15 text-accent" : "bg-bg text-muted"
+        className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] transition-colors ${
+          active ? "bg-accent/15 text-accent" : "bg-white/[0.05] text-muted"
         }`}
       >
-        <i className={`fa-solid ${v.icon} text-sm`} />
+        <Icon cls={`fa-solid ${v.icon} text-[16px]`} />
       </span>
       <div className="min-w-0 flex-1 leading-tight">
-        <div className={`truncate text-sm font-medium ${active ? "text-accent" : "text-text"}`}>
-          {v.name}
-        </div>
-        <div className="text-[11px] text-muted">{v.tag}</div>
+        <div className="truncate text-[14px] font-medium text-text">{v.name}</div>
+        <div className="mt-0.5 text-[12px] text-muted">{v.tag}</div>
       </div>
       {active && (
-        <i
-          className={`fa-solid fa-circle-check text-accent transition-opacity ${
+        <Icon
+          cls={`fa-solid fa-check text-[16px] text-accent transition-opacity ${
             onRemove ? "group-hover:opacity-0" : ""
           }`}
         />
       )}
       {onRemove && (
-        <i
+        <Icon
           onClick={onRemove}
           title={t("Удалить версию")}
-          className={`fa-solid fa-trash-can p-1 text-muted opacity-0 transition-opacity hover:text-[#ef4444] group-hover:opacity-100 ${
-            active ? "absolute right-3" : ""
+          cls={`fa-solid fa-trash-can p-1 text-[15px] text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100 ${
+            active ? "absolute right-2.5" : ""
           }`}
         />
       )}
@@ -117,7 +118,7 @@ export default function VersionMenu({
     const blist: Version[] = bs.map((b) => ({
       id: `build:${b.id}`,
       name: b.name,
-      tag: `${b.mc_version} · ${loaderLabel[b.loader] ?? b.loader}`,
+      tag: `${b.mc_version}, ${loaderLabel[b.loader] ?? b.loader}`,
       icon: loaderIcon[b.loader] ?? "fa-cubes-stacked",
       launchId: b.mc_version,
       isBuild: true,
@@ -167,36 +168,34 @@ export default function VersionMenu({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-14 min-w-[180px] items-center gap-3 rounded-xl border px-3 transition-colors ${
-          open ? "border-border bg-card" : "border-transparent bg-card hover:bg-border/50"
-        }`}
+        className={`flex h-14 items-center gap-3 rounded-[16px] px-2.5 pr-3.5 transition-colors duration-300 min-w-[190px] ${open ? "bg-white/[0.08]" : "bg-white/[0.04] hover:bg-white/[0.07]"}`}
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-accent/15 text-accent">
-          <i className={`fa-solid ${selected?.icon ?? "fa-cube"} text-sm`} />
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-accent/12 text-accent">
+          <Icon cls={`fa-solid ${selected?.icon ?? "fa-cube"} text-[18px]`} />
         </span>
         <div className="flex-1 text-left leading-tight">
-          <div className="text-[11px] font-medium uppercase tracking-wide text-muted">
+          <div className="text-[12px] text-muted">
             {selected?.isBuild ? t("Сборка") : t("Версия")}
           </div>
-          <div className="truncate text-sm font-semibold text-text">
+          <div className="mt-0.5 truncate text-[14.5px] font-semibold text-text">
             {selected?.name ?? t("Нет версий")}
           </div>
         </div>
-        <i
-          className={`fa-solid fa-chevron-down text-[10px] text-muted transition-transform ${
+        <Icon
+          cls={`fa-solid fa-chevron-down text-[14px] text-muted transition-transform duration-300 ${
             open ? "rotate-180" : ""
           }`}
         />
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-0 mb-2 w-72 overflow-hidden rounded-xl border border-border bg-panel shadow-xl shadow-black/40">
+        <div className="dock-pop absolute bottom-full mb-3 overflow-hidden rounded-[20px] bg-popover p-1.5 shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] left-0 w-80">
           <div className="max-h-72 overflow-y-auto">
-            <div className="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            <div className="px-2.5 pb-1.5 pt-1.5 text-[12.5px] text-muted">
               {t("Установленные версии")}
             </div>
             {installed.length === 0 && (
-              <div className="px-3 py-3 text-center text-xs text-muted">
+              <div className="px-3 py-4 text-center text-[13px] text-muted">
                 {t("Пока ничего не установлено")}
               </div>
             )}
@@ -212,7 +211,7 @@ export default function VersionMenu({
 
             {builds.length > 0 && (
               <>
-                <div className="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                <div className="px-2.5 pb-1.5 pt-3 text-[12.5px] text-muted">
                   {t("Сборки")}
                 </div>
                 {builds.map((v) => (
@@ -222,15 +221,15 @@ export default function VersionMenu({
             )}
           </div>
 
-          <div className="border-t border-border p-1.5">
+          <div className="mt-1.5 border-t border-line pt-1.5">
             <button
               onClick={() => {
                 setOpen(false);
                 setInstallModal(true);
               }}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-card px-3 py-2 text-sm font-semibold text-accent transition-colors hover:bg-border/60"
+              className="btn btn-sm btn-secondary w-full"
             >
-              <i className="fa-solid fa-download text-xs" />
+              <Icon cls="fa-solid fa-download text-[14px]" />
               {t("Установить больше")}
             </button>
           </div>

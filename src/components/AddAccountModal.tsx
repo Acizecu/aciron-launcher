@@ -17,6 +17,7 @@ import {
 import { MicrosoftIcon } from "./Icons";
 import { ACIRON_LOGIN_ENABLED } from "../config";
 import { t, ts, useLang } from "../i18n";
+import Icon from "./Icon";
 
 type Step = "choose" | "offline" | "aciron" | "twofa" | "register" | "verify" | "microsoft";
 
@@ -28,7 +29,7 @@ const RESEND_COOLDOWN = 30;
 const TELEGRAM_COOLDOWN = 60;
 
 const inputCls =
-  "w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent";
+  "field h-11 w-full px-4 text-[14.5px]";
 
 export default function AddAccountModal({
   onClose,
@@ -267,9 +268,9 @@ export default function AddAccountModal({
 
   return (
     <Modal title={title} icon="fa-user-plus" onClose={onClose}>
-      <div className="p-5">
+      <div className="pt-1">
         {step === "choose" && (
-          <div className="space-y-2.5">
+          <div className="-mx-3 space-y-1">
             <TypeButton
               icon="fa-user-secret"
               iconBg="bg-bg text-accent"
@@ -285,7 +286,7 @@ export default function AddAccountModal({
               onClick={startMicrosoft}
             />
             <TypeButton
-              node={<i className="fa-solid fa-key"></i>}
+              node={<Icon cls="fa-solid fa-key" />}
               iconBg="bg-bg text-accent"
               title={t("Аккаунт Aciron")}
               desc={t("Единый аккаунт Aciron ID")}
@@ -306,7 +307,7 @@ export default function AddAccountModal({
         {step === "offline" && (
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">{t("Ник игрока")}</span>
+              <span className="field-label">{t("Ник игрока")}</span>
               <input
                 autoFocus
                 className={inputCls}
@@ -329,7 +330,7 @@ export default function AddAccountModal({
           <div className="space-y-4">
             {!authUrl && !error && (
               <div className="flex flex-col items-center gap-3 py-6 text-muted">
-                <i className="fa-solid fa-spinner fa-spin text-2xl" />
+                <Icon cls="fa-solid fa-spinner fa-spin text-2xl" />
                 <span className="text-sm">{t("Открываем вход Microsoft…")}</span>
               </div>
             )}
@@ -337,25 +338,25 @@ export default function AddAccountModal({
             {authUrl && !error && (
               <>
                 <div className="flex flex-col items-center gap-3 py-2 text-center">
-                  <div className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/15 text-accent">
-                    <i className="fa-brands fa-microsoft text-2xl" />
+                  <div className="grid h-14 w-14 place-items-center rounded-full bg-accent/12 text-accent">
+                    <Icon cls="fa-brands fa-microsoft text-2xl" />
                   </div>
                   <p className="text-sm text-text">
                     {t("Мы открыли вход Microsoft в браузере.")}
                   </p>
-                  <p className="text-xs text-muted">
+                  <p className="text-[12.5px] text-muted">
                     {t("Войдите там — окно закроется, а вход завершится здесь автоматически.")}
                   </p>
                 </div>
                 <button
                   onClick={() => openUrl(authUrl)}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-bg px-5 py-2.5 text-sm font-medium text-text transition-colors hover:border-accent/50"
+                  className="btn btn-secondary w-full"
                 >
-                  <i className="fa-solid fa-arrow-up-right-from-square" />
+                  <Icon cls="fa-solid fa-arrow-up-right-from-square" />
                   {t("Браузер не открылся? Открыть вручную")}
                 </button>
-                <div className="flex items-center justify-center gap-2 text-xs text-muted">
-                  <i className="fa-solid fa-spinner fa-spin" />
+                <div className="flex items-center justify-center gap-2 text-[12.5px] text-muted">
+                  <Icon cls="fa-solid fa-spinner fa-spin" />
                   {t("Ожидание входа…")}
                 </div>
               </>
@@ -378,7 +379,7 @@ export default function AddAccountModal({
         {step === "aciron" && (
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">{t("Ник или e-mail")}</span>
+              <span className="field-label">{t("Ник или e-mail")}</span>
               <input
                 autoFocus
                 className={inputCls}
@@ -391,7 +392,7 @@ export default function AddAccountModal({
               />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">{t("Пароль")}</span>
+              <span className="field-label">{t("Пароль")}</span>
               <input
                 type="password"
                 className={inputCls}
@@ -410,7 +411,7 @@ export default function AddAccountModal({
               <BackBtn onClick={() => setStep("choose")} />
               <PrimaryBtn onClick={submitAciron} busy={busy} label={t("Войти")} />
             </div>
-            <div className="pt-1 text-center text-xs text-muted">
+            <div className="pt-1 text-center text-[12.5px] text-muted">
               {t("Нет аккаунта?")}{" "}
               <button
                 onClick={() => {
@@ -431,15 +432,15 @@ export default function AddAccountModal({
         {step === "twofa" && (
           <div className="space-y-3">
             <div className="flex flex-col items-center gap-2 py-2 text-center">
-              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/15 text-accent">
-                <i
-                  className={`text-2xl ${
+              <div className="grid h-14 w-14 place-items-center rounded-full bg-accent/12 text-accent">
+                <Icon
+                  cls={`text-2xl ${
                     method === "telegram" ? "fa-brands fa-telegram" : "fa-solid fa-shield-halved"
                   }`}
                 />
               </div>
               <p className="text-sm text-text">{t("У аккаунта включён второй фактор")}</p>
-              <p className="text-xs text-muted">
+              <p className="text-[12.5px] text-muted">
                 {method === "telegram"
                   ? t("Пришлём 6-значный код в привязанный Telegram")
                   : t("Введите код из приложения-аутентификатора или резервный код")}
@@ -453,14 +454,14 @@ export default function AddAccountModal({
                   <button
                     key={m}
                     onClick={() => pickMethod(m)}
-                    className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                    className={`flex h-11 items-center justify-center gap-2 rounded-[14px] border text-[14px] font-medium transition-colors duration-300 ${
                       method === m
-                        ? "border-accent bg-accent/10 text-accent"
-                        : "border-border text-muted hover:text-text"
+                        ? "border-accent/60 bg-accent/[0.08] text-accent-hover"
+                        : "border-line text-text2 hover:border-line-strong hover:text-text"
                     }`}
                   >
-                    <i
-                      className={
+                    <Icon
+                      cls={
                         m === "telegram" ? "fa-brands fa-telegram" : "fa-solid fa-mobile-screen"
                       }
                     />
@@ -474,15 +475,15 @@ export default function AddAccountModal({
               <button
                 onClick={sendTelegram}
                 disabled={busy}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
+                className="btn btn-accent w-full"
               >
-                <i className={busy ? "fa-solid fa-spinner fa-spin" : "fa-brands fa-telegram"} />
+                <Icon cls={busy ? "fa-solid fa-spinner fa-spin" : "fa-brands fa-telegram"} />
                 {t("Прислать код")}
               </button>
             ) : (
               <>
                 <label className="block">
-                  <span className="mb-1.5 block text-xs text-muted">
+                  <span className="field-label">
                     {method === "telegram" ? t("Код из Telegram") : t("Код 2FA")}
                   </span>
                   <input
@@ -505,7 +506,7 @@ export default function AddAccountModal({
                   <button
                     onClick={sendTelegram}
                     disabled={busy || cooldown > 0}
-                    className="w-full rounded-lg border border-border bg-bg px-4 py-2.5 text-sm text-muted transition-colors hover:text-text disabled:opacity-50"
+                    className="btn btn-secondary w-full"
                   >
                     {cooldown > 0
                       ? t("Отправить код снова через {n} с", { n: cooldown })
@@ -529,7 +530,7 @@ export default function AddAccountModal({
         {step === "register" && (
           <div className="space-y-3">
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">{t("Ник")}</span>
+              <span className="field-label">{t("Ник")}</span>
               <input
                 autoFocus
                 className={inputCls}
@@ -538,12 +539,12 @@ export default function AddAccountModal({
                 maxLength={16}
                 onChange={(e) => setRegNick(e.target.value.replace(/[^A-Za-z0-9_]/g, ""))}
               />
-              <span className="mt-1 block text-[11px] text-muted">
+              <span className="mt-1 block text-[12px] text-muted">
                 {t("Под этим ником вас будут находить друзья и видеть в игре")}
               </span>
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-xs text-muted">E-mail</span>
+              <span className="field-label">E-mail</span>
               <input
                 className={inputCls}
                 value={email}
@@ -553,7 +554,7 @@ export default function AddAccountModal({
             </label>
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
-                <span className="mb-1.5 block text-xs text-muted">{t("Пароль")}</span>
+                <span className="field-label">{t("Пароль")}</span>
                 <input
                   type="password"
                   className={inputCls}
@@ -563,7 +564,7 @@ export default function AddAccountModal({
                 />
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-xs text-muted">{t("Повтор пароля")}</span>
+                <span className="field-label">{t("Повтор пароля")}</span>
                 <input
                   type="password"
                   className={inputCls}
@@ -585,8 +586,8 @@ export default function AddAccountModal({
         {step === "verify" && (
           <div className="space-y-3">
             <div className="flex flex-col items-center gap-2 py-2 text-center">
-              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/15 text-accent">
-                <i className="fa-solid fa-envelope-open-text text-2xl" />
+              <div className="grid h-14 w-14 place-items-center rounded-full bg-accent/12 text-accent">
+                <Icon cls="fa-solid fa-envelope-open-text text-2xl" />
               </div>
               <p className="text-sm text-text">{t("Мы отправили 6-значный код на")}</p>
               <p className="break-all text-sm font-semibold text-accent">{email}</p>
@@ -605,7 +606,7 @@ export default function AddAccountModal({
             <button
               onClick={resend}
               disabled={cooldown > 0}
-              className="w-full rounded-lg border border-border bg-bg px-4 py-2.5 text-sm text-muted transition-colors hover:text-text disabled:opacity-50"
+              className="btn btn-secondary w-full"
             >
               {cooldown > 0
                 ? t("Отправить код снова через {n} с", { n: cooldown })
@@ -621,7 +622,7 @@ export default function AddAccountModal({
               />
               <PrimaryBtn onClick={submitVerify} busy={busy} label={t("Подтвердить")} />
             </div>
-            <p className="text-center text-[11px] leading-relaxed text-muted">
+            <p className="text-center text-[12px] leading-relaxed text-muted">
               {t("Письмо не пришло? Проверьте папку «Спам» или")}{" "}
               <button
                 onClick={() => openUrl(ACIRON_ID_WEB)}
@@ -660,34 +661,36 @@ function TypeButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex w-full items-center gap-3 rounded-xl border border-border bg-card p-3 text-left transition-colors ${
-        disabled ? "cursor-not-allowed opacity-50" : "hover:border-accent/50"
+      className={`group flex w-full items-center gap-3.5 rounded-[16px] px-3 py-3 text-left transition-colors duration-300 ${
+        disabled ? "cursor-not-allowed opacity-50" : "hover:bg-white/[0.05]"
       }`}
     >
-      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg text-lg ${iconBg}`}>
-        {node ?? <i className={`${brand ? "fa-brands" : "fa-solid"} ${icon}`} />}
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-[19px] ${iconBg}`}>
+        {node ?? <Icon cls={`${brand ? "fa-brands" : "fa-solid"} ${icon}`} />}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-sm font-semibold text-text">
+        <div className="flex items-center gap-2 text-[14.5px] font-semibold text-text">
           {title}
           {disabled && (
-            <span className="rounded bg-bg px-1.5 py-0.5 text-[10px] font-medium text-muted">
-              <i className="fa-solid fa-lock mr-1" />
+            <span className="tag">
+              <Icon cls="fa-solid fa-lock text-[11px]" />
               {t("скоро")}
             </span>
           )}
         </div>
-        <div className="text-xs text-muted">{desc}</div>
+        <div className="mt-0.5 text-[13px] text-muted">{desc}</div>
       </div>
-      {!disabled && <i className="fa-solid fa-chevron-right text-xs text-muted" />}
+      {!disabled && (
+        <Icon cls="fa-solid fa-chevron-right text-[16px] text-muted transition-transform duration-300 ease-[var(--ease-out-quint)] group-hover:translate-x-0.5 group-hover:text-text" />
+      )}
     </button>
   );
 }
 
 function Err({ msg }: { msg: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg bg-[#ef4444]/10 px-3 py-2 text-sm text-[#ef4444]">
-      <i className="fa-solid fa-circle-exclamation mt-0.5" />
+    <div role="alert" className="flex items-start gap-2 text-[13px] text-danger">
+      <span className="dot mt-[6px] bg-danger" />
       <span className="min-w-0 break-words">{msg}</span>
     </div>
   );
@@ -695,8 +698,8 @@ function Err({ msg }: { msg: string }) {
 
 function Notice({ msg }: { msg: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-sm text-accent">
-      <i className="fa-solid fa-circle-info mt-0.5" />
+    <div role="status" className="flex items-start gap-2 text-[13px] text-text2">
+      <span className="dot mt-[6px] bg-accent" />
       <span className="min-w-0 break-words">{msg}</span>
     </div>
   );
@@ -706,9 +709,9 @@ function BackBtn({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
+      className="btn btn-ghost"
     >
-      <i className="fa-solid fa-arrow-left text-xs" />
+      <Icon cls="fa-solid fa-arrow-left text-[12.5px]" />
       {t("Назад")}
     </button>
   );
@@ -719,9 +722,9 @@ function PrimaryBtn({ onClick, busy, label }: { onClick: () => void; busy: boole
     <button
       onClick={onClick}
       disabled={busy}
-      className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-60"
+      className="btn btn-accent ml-auto"
     >
-      {busy && <i className="fa-solid fa-spinner fa-spin" />}
+      {busy && <Icon cls="fa-solid fa-spinner fa-spin" />}
       {label}
     </button>
   );

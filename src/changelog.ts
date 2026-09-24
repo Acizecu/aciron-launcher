@@ -14,6 +14,102 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.2.0",
+    date: "2026-09-24",
+    added: [
+      {
+        ru: {
+          title: "Новый вид",
+          body:
+            "Лаунчер теперь выглядит как сайт и кабинет Aciron ID. Те же значки и шрифт, списки строками вместо " +
+            "карточек в рамках, настройки строками с переключателями. Выбранный раздел отмечает подложка, " +
+            "которая переезжает от пункта к пункту.",
+        },
+        en: {
+          title: "New look",
+          body:
+            "The launcher now looks like the website and the Aciron ID account page. Same icons and font, lists " +
+            "as plain rows instead of framed cards, settings as rows with switches. A highlight slides to the " +
+            "selected section.",
+        },
+        tr: {
+          title: "Yeni görünüm",
+          body:
+            "Başlatıcı artık site ve Aciron ID hesap sayfası gibi görünüyor. Aynı simgeler ve yazı tipi, " +
+            "çerçeveli kartlar yerine düz satırlar, anahtarlı satırlar halinde ayarlar. Seçili bölüme kayan bir " +
+            "vurgu gidiyor.",
+        },
+      },
+      {
+        ru: {
+          title: "Страница мода как на сайте",
+          body:
+            "У мода и сборки из каталога теперь одна длинная страница: обложка из скриншотов, вкладки " +
+            "«Описание», «Галерея» и «Версии», справа лицензия, загрузчики и ссылки.",
+        },
+        en: {
+          title: "Mod pages like on the web",
+          body:
+            "Mods and modpacks from the catalog now open as one long page: a cover from the screenshots, " +
+            "Description, Gallery and Versions tabs, and the license, loaders and links on the right.",
+        },
+        tr: {
+          title: "Web sitesi gibi mod sayfası",
+          body:
+            "Katalogdaki mod ve paketler artık tek uzun sayfada açılıyor: ekran görüntülerinden kapak, " +
+            "Açıklama, Galeri ve Sürümler sekmeleri, sağda lisans, yükleyiciler ve bağlantılar.",
+        },
+      },
+      {
+        ru: {
+          title: "Друзья",
+          body:
+            "Головы друзей круглые, статус показывает цветная обводка: зелёная, если друг в сети, серая, если нет. " +
+            "На главной друзья стали строками, так в список влезает больше людей.",
+        },
+        en: {
+          title: "Friends",
+          body:
+            "Friend heads are round now, and a coloured ring shows the status: green when online, grey when " +
+            "offline. Friends on the home screen are plain rows, so more people fit.",
+        },
+        tr: {
+          title: "Arkadaşlar",
+          body:
+            "Arkadaş kafaları artık yuvarlak, durumu renkli halka gösteriyor: çevrimiçiyse yeşil, değilse gri. " +
+            "Ana ekranda arkadaşlar düz satır oldu, listeye daha çok kişi sığıyor.",
+        },
+      },
+      {
+        ru: {
+          title: "Фон «Свечение»",
+          body:
+            "Новый фон по умолчанию: тёплый свет в углу, который медленно дышит. Кубики и остальные фоны " +
+            "остались в настройках темы.",
+        },
+        en: {
+          title: "«Glow» background",
+          body:
+            "The new default background is a warm light in the corner that slowly breathes. The cubes and the " +
+            "other backgrounds are still in the theme settings.",
+        },
+        tr: {
+          title: "«Işıltı» arka planı",
+          body:
+            "Yeni varsayılan arka plan: köşede yavaşça nefes alan sıcak bir ışık. Küpler ve diğer arka planlar " +
+            "tema ayarlarında duruyor.",
+        },
+      },
+    ],
+    fixed: [
+      {
+        ru: "Уже скачанная версия запускается, даже если серверы Mojang недоступны. Раньше при каждом запуске лаунчер заново спрашивал Mojang о версии, и без связи игра не стартовала.",
+        en: "A version you already downloaded now starts even when Mojang's servers are unreachable. Before, the launcher asked Mojang about the version on every launch, and without a connection the game would not start.",
+        tr: "Önceden indirilmiş bir sürüm, Mojang sunucularına ulaşılamasa da artık açılıyor. Eskiden başlatıcı her açılışta sürümü Mojang'a yeniden soruyordu ve bağlantı yoksa oyun başlamıyordu.",
+      },
+    ],
+  },
+  {
     version: "1.1.4",
     date: "2026-09-16",
     added: [

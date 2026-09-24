@@ -1,5 +1,6 @@
 import { setViewMode, useViewMode, type ViewMode } from "../hooks/useViewMode";
 import { t } from "../i18n";
+import Icon from "./Icon";
 
 const MODES: { id: ViewMode; icon: string; label: string }[] = [
   { id: "list", icon: "fa-list", label: "Списком" },
@@ -17,10 +18,10 @@ export default function ViewToggle({ className = "" }: { className?: string }) {
           title={t(m.label)}
           aria-pressed={mode === m.id}
           className={`grid h-7 w-8 place-items-center rounded-[8px] text-[12px] transition-colors ${
-            mode === m.id ? "bg-card text-accent" : "text-muted hover:text-text"
+            mode === m.id ? "bg-white/[0.04] text-accent" : "text-muted hover:text-text"
           }`}
         >
-          <i className={`fa-solid ${m.icon}`} />
+          <Icon cls={`fa-solid ${m.icon}`} />
         </button>
       ))}
     </div>

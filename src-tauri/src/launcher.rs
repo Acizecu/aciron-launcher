@@ -70,7 +70,10 @@ pub fn stop_game(id: Option<String>) -> Result<(), String> {
     Ok(())
 }
 
-const MANIFEST: &str = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
+const MANIFEST_URLS: [&str; 2] = [
+    "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
+    "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json",
+];
 const RESOURCES: &str = "https://resources.download.minecraft.net";
 const JAVA_RUNTIME_MANIFEST: &str =
     "https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
@@ -235,14 +238,94 @@ fn log_tail(path: &Path, max: usize) -> String {
 }
 
 pub(crate) async fn get_json(client: &reqwest::Client, url: &str) -> Result<Value, String> {
-    client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
+    crate::net::send(client.get(url))
+        .await?
         .json::<Value>()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| crate::net::net_error(&e))
+}
+
+async fn fetch_manifest(client: &reqwest::Client) -> Result<Value, String> {
+    let cache = settings::launcher_root().join("cache").join("version_manifest_v2.json");
+    fetch_manifest_cached(client, &cache).await
+}
+
+async fn fetch_manifest_cached(client: &reqwest::Client, cache: &Path) -> Result<Value, String> {
+    let mut last_err = String::new();
+    for url in MANIFEST_URLS {
+        match get_json(client, url).await {
+            Ok(v) if v["versions"].is_array() => {
+                if let Ok(text) = serde_json::to_string(&v) {
+                    let _ = crate::atomic::write(cache, &text);
+                }
+                return Ok(v);
+            }
+            Ok(_) => {
+                let host = reqwest::Url::parse(url)
+                    .ok()
+                    .and_then(|u| u.host_str().map(str::to_string))
+                    .unwrap_or_default();
+                last_err = format!("The server sent a response that could not be read: {host}");
+            }
+            Err(e) => last_err = e,
+        }
+    }
+    if let Ok(bytes) = tokio::fs::read(cache).await {
+        if let Ok(v) = serde_json::from_slice::<Value>(&bytes) {
+            if v["versions"].is_array() {
+                return Ok(v);
+            }
+        }
+    }
+    Err(last_err)
+}
+
+async fn read_version_json(path: &Path) -> Option<Value> {
+    let bytes = tokio::fs::read(path).await.ok()?;
+    let v: Value = serde_json::from_slice(&bytes).ok()?;
+    (v["libraries"].is_array() && v["downloads"]["client"]["url"].is_string()).then_some(v)
+}
+
+async fn download_version_json(
+    app: Option<&AppHandle>,
+    client: &reqwest::Client,
+    version: &str,
+    json_path: &Path,
+) -> Result<Value, String> {
+    if let Some(app) = app {
+        emit(app, "manifest", "Fetching version list", 0, 1);
+    }
+    let manifest = fetch_manifest(client).await?;
+    let ver_url = manifest["versions"]
+        .as_array()
+        .and_then(|arr| {
+            arr.iter()
+                .find(|v| v["id"].as_str() == Some(version))
+                .and_then(|v| v["url"].as_str())
+        })
+        .ok_or_else(|| format!("Version not found in the manifest: {version}"))?
+        .to_string();
+    if let Some(app) = app {
+        emit(app, "manifest", "Version list ready", 1, 1);
+        emit(app, "version", "Fetching version manifest", 0, 1);
+    }
+    let vj = get_json(client, &ver_url).await?;
+    if let Ok(text) = serde_json::to_string_pretty(&vj) {
+        let _ = crate::atomic::write(json_path, &text);
+    }
+    Ok(vj)
+}
+
+async fn refresh_version_json(version: String, json_path: PathBuf) {
+    let Ok(client) = reqwest::Client::builder()
+        .user_agent("AcironLauncher/0.1")
+        .connect_timeout(Duration::from_secs(8))
+        .timeout(Duration::from_secs(20))
+        .build()
+    else {
+        return;
+    };
+    let _ = download_version_json(None, &client, &version, &json_path).await;
 }
 
 async fn download_to(
@@ -720,27 +803,17 @@ async fn prepare_and_launch(
         serde_json::from_slice(&tokio::fs::read(&json_path).await.map_err(|e| e.to_string())?)
             .map_err(|e| format!("Can't read the custom version description: {e}"))?
     } else {
-        emit(app, "manifest", "Fetching version list", 0, 1);
-        let manifest = get_json(&client, MANIFEST).await?;
-        let ver_url = manifest["versions"]
-            .as_array()
-            .and_then(|arr| {
-                arr.iter()
-                    .find(|v| v["id"].as_str() == Some(version))
-                    .and_then(|v| v["url"].as_str())
-            })
-            .ok_or_else(|| format!("Version not found in the manifest: {version}"))?
-            .to_string();
-        emit(app, "manifest", "Version list ready", 1, 1);
 
-        emit(app, "version", "Fetching version manifest", 0, 1);
-        let vj = get_json(&client, &ver_url).await?;
-        if let Some(p) = json_path.parent() {
-            tokio::fs::create_dir_all(p).await.ok();
-        }
-        tokio::fs::write(&json_path, serde_json::to_vec_pretty(&vj).unwrap_or_default())
-            .await
-            .ok();
+        let vj = match read_version_json(&json_path).await {
+            Some(vj) => {
+                tauri::async_runtime::spawn(refresh_version_json(
+                    version.to_string(),
+                    json_path.clone(),
+                ));
+                vj
+            }
+            None => download_version_json(Some(app), &client, version, &json_path).await?,
+        };
         emit(app, "version", "Version manifest loaded", 1, 1);
         vj
     };
@@ -1091,7 +1164,7 @@ async fn prepare_and_launch(
 
     args.extend(loader_game_args);
 
-    if let Some(addr) = server.filter(|s| !s.is_empty()) {
+    if let Some(addr) = server.filter(|s| is_server_address(s)) {
         let (host, port) = split_host_port(addr);
         if version_ge_1_20(version) {
             args.push("--quickPlayMultiplayer".into());
@@ -1268,6 +1341,18 @@ async fn resolve_identity(app: &AppHandle, settings: &Settings) -> Result<Identi
             user_type: "msa".into(),
         }),
     }
+}
+
+fn is_server_address(addr: &str) -> bool {
+    let (host, port) = match addr.rsplit_once(':') {
+        Some((h, p)) => (h, Some(p)),
+        None => (addr, None),
+    };
+    !host.is_empty()
+        && host.len() <= 253
+        && !host.starts_with('-')
+        && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+        && port.is_none_or(|p| !p.is_empty() && p.len() <= 5 && p.chars().all(|c| c.is_ascii_digit()))
 }
 
 fn split_host_port(addr: &str) -> (String, u16) {
@@ -1492,7 +1577,8 @@ pub async fn list_versions() -> Result<Vec<VersionInfo>, String> {
         .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
-    let manifest = get_json(&client, MANIFEST).await?;
+
+    let manifest = fetch_manifest(&client).await?;
     let arr = manifest["versions"].as_array().cloned().unwrap_or_default();
     Ok(arr
         .iter()
@@ -1525,8 +1611,16 @@ pub async fn launch_game(
 }
 
 #[tauri::command]
-pub async fn launch_build(app: AppHandle, build_id: String) -> Result<(), String> {
+pub async fn launch_build(
+    app: AppHandle,
+    build_id: String,
+
+    server: Option<String>,
+) -> Result<(), String> {
     let build = crate::builds::get_build(&build_id).ok_or("Instance not found")?;
+    let server = server
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| Some(build.server.clone()).filter(|s| !s.is_empty()));
     let loader = match build.loader.as_str() {
         "fabric" | "quilt" | "forge" | "neoforge" => build.loader.clone(),
         other => {
@@ -1547,7 +1641,7 @@ pub async fn launch_build(app: AppHandle, build_id: String) -> Result<(), String
 
         Some(build.loader_version.as_str()).filter(|s| !s.is_empty()),
 
-        Some(build.server.as_str()).filter(|s| !s.is_empty()),
+        server.as_deref(),
         Some(build_id.clone()),
         Some(&build.name),
     )
@@ -1560,4 +1654,86 @@ pub async fn launch_build(app: AppHandle, build_id: String) -> Result<(), String
         Err(e) => emit(&app, "error", e, 0, 1),
     }
     res
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unreachable_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+            .connect_timeout(Duration::from_secs(2))
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap()
+    }
+
+    fn scratch_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("aciron-test-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn manifest_falls_back_to_cache_when_mojang_is_unreachable() {
+        let dir = scratch_dir("manifest-cache");
+        let cache = dir.join("version_manifest_v2.json");
+        std::fs::write(
+            &cache,
+            r#"{"versions":[{"id":"1.21.1","url":"https://example.invalid/1.21.1.json"}]}"#,
+        )
+        .unwrap();
+
+        let got = tauri::async_runtime::block_on(fetch_manifest_cached(&unreachable_client(), &cache));
+
+        let manifest = got.expect("the cached manifest must be used");
+        assert_eq!(manifest["versions"][0]["id"], "1.21.1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unreachable_mojang_without_cache_gives_a_readable_error() {
+        let dir = scratch_dir("manifest-nocache");
+        let missing = dir.join("version_manifest_v2.json");
+
+        let err = tauri::async_runtime::block_on(fetch_manifest_cached(&unreachable_client(), &missing))
+            .expect_err("without network and cache there is nothing to return");
+
+        assert!(!err.contains("error sending request"), "{err}");
+        assert!(err.contains("mojang.com"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn version_json_is_used_only_when_complete() {
+        let dir = scratch_dir("version-json");
+        let good = dir.join("good.json");
+        let cut = dir.join("cut.json");
+        let foreign = dir.join("foreign.json");
+        std::fs::write(&good, r#"{"libraries":[],"downloads":{"client":{"url":"https://x/client.jar"}}}"#).unwrap();
+        std::fs::write(&cut, r#"{"libraries":[{"name":"a"#).unwrap();
+        std::fs::write(&foreign, r#"{"id":"something else"}"#).unwrap();
+
+        let read = |p: &Path| tauri::async_runtime::block_on(read_version_json(p));
+        assert!(read(&good).is_some());
+        assert!(read(&cut).is_none());
+        assert!(read(&foreign).is_none());
+        assert!(read(&dir.join("missing.json")).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn server_address_accepts_only_host_and_port() {
+        assert!(is_server_address("mc.aciron.pro"));
+        assert!(is_server_address("mc.aciron.pro:25565"));
+        assert!(is_server_address("127.0.0.1:1234"));
+        assert!(!is_server_address(""));
+        assert!(!is_server_address("--demo"));
+        assert!(!is_server_address("host --server evil"));
+        assert!(!is_server_address("host:"));
+        assert!(!is_server_address("host:123456"));
+        assert!(!is_server_address("host:12a"));
+    }
 }

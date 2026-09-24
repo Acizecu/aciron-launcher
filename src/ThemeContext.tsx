@@ -116,18 +116,21 @@ export type ThemeSeed = {
   text?: string;
 
   muted?: string;
+
+  surfaces?: [panel: number, card: number, border: number, hover: number];
 };
 
 export function buildPalette(seed: ThemeSeed): Palette {
   const dark = luminance(seed.base) < 0.5;
   const step = (k: number) => shade(seed.base, dark ? k : -k);
   const text = seed.text ?? (dark ? "#d9d9d9" : "#1b1b1e");
+  const [sp, sc, sb, sh] = seed.surfaces ?? [0.05, 0.09, 0.15, 0.09];
   return {
     bg: seed.base,
-    panel: step(0.05),
-    card: step(0.09),
-    border: step(0.15),
-    ctrlHover: step(0.09),
+    panel: step(sp),
+    card: step(sc),
+    border: step(sb),
+    ctrlHover: step(sh),
     text,
     muted: seed.muted ?? shade(text, dark ? -0.42 : 0.42),
     accent: seed.accent,
@@ -151,7 +154,13 @@ export type PresetId =
 export type ThemeId = PresetId | "custom";
 
 export const PRESET_LIST: { id: PresetId; label: string; seed: ThemeSeed; bg: BackgroundId }[] = [
-  { id: "standard", label: "Aciron", seed: { accent: "#f5a96b", base: "#131315" }, bg: "cubes" },
+
+  {
+    id: "standard",
+    label: "Aciron",
+    seed: { accent: "#ffb367", base: "#0a0b0d", text: "#f3f4f6", muted: "#7a828f", surfaces: [0.02, 0.045, 0.085, 0.06] },
+    bg: "glow",
+  },
   { id: "amethyst", label: "Amethyst", seed: { accent: "#a855f7", base: "#141019" }, bg: "aurora" },
   { id: "ocean", label: "Ocean", seed: { accent: "#38bdf8", base: "#0e161d" }, bg: "waves" },
   { id: "dracula", label: "Dracula", seed: { accent: "#bd93f9", base: "#191a26" }, bg: "constellation" },
@@ -194,7 +203,7 @@ const STORAGE_KEY = "aciron:theme";
 
 const DEFAULT_STATE: ThemeState = {
   id: "standard",
-  seed: { accent: "#6366f1", base: "#131315" },
+  seed: { accent: "#ffb367", base: "#0a0b0d" },
   overrides: {},
   saved: [],
   activeSavedId: null,

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { DEV } from "./config";
 import { t as tr } from "./i18n";
+import Icon from "./components/Icon";
 
 export type ToastType = "success" | "error" | "info" | "warning";
 type Toast = { id: number; message: string; type: ToastType; leaving?: boolean };
@@ -57,7 +58,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={t.id}
-              className={`pointer-events-auto relative flex items-center gap-3 overflow-hidden rounded-[16px] border-1 border-[#232427]/65 bg-panel py-3 pl-4 pr-3 shadow-xl shadow-black/50 ${
+              className={`pointer-events-auto relative flex items-center gap-3 overflow-hidden rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] py-3 pl-4 pr-3 ${
                 t.leaving ? "toast-out" : "animate-[float-in_.22s_ease]"
               }`}
             >
@@ -68,7 +69,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
                 style={{ background: `color-mix(in srgb, ${st.color} 15%, transparent)`, color: st.color }}
               >
-                <i className={`fa-solid ${st.icon} text-sm`} />
+                <Icon cls={`fa-solid ${st.icon} text-sm`} />
               </span>
 
               <span className="min-w-0 flex-1 break-words text-[13px] leading-snug text-text">
@@ -78,9 +79,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <button
                 onClick={() => drop(t.id)}
                 title={tr("Закрыть")}
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] text-muted transition-colors hover:text-text"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-[10px] text-muted transition-colors hover:text-text"
               >
-                <i className="fa-solid fa-xmark text-xs" />
+                <Icon cls="fa-solid fa-xmark text-[12.5px]" />
               </button>
             </div>
           );

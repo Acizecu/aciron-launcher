@@ -42,6 +42,8 @@ import Pagination from "./Pagination";
 import { useToast } from "../ToastContext";
 import { useLauncherCtx } from "../LauncherContext";
 import { useDownloadActive, startTask, endTask, wasCancelled } from "../downloadTask";
+import Icon from "./Icon";
+import { RailNav } from "./ui/ds";
 
 const loaderLabel: Record<string, string> = {
   fabric: "Fabric",
@@ -109,11 +111,11 @@ const TOGGLE_TOAST: Record<ContentKind, string> = {
 function Check({ on }: { on: boolean }) {
   return (
     <span
-      className={`grid h-[18px] w-[18px] place-items-center rounded-[5px] border transition-colors ${
-        on ? "border-accent bg-accent text-bg" : "border-border bg-bg text-transparent"
+      className={`grid h-5 w-5 place-items-center rounded-[7px] border transition-colors duration-200 ${
+        on ? "border-accent bg-accent text-bg" : "border-line-strong text-transparent"
       }`}
     >
-      <i className="fa-solid fa-check text-[9px]" />
+      <Icon cls="fa-solid fa-check text-[12px]" />
     </span>
   );
 }
@@ -163,18 +165,18 @@ const ModRow = memo(function ModRow({
     return (
       <div
         style={leaving ? undefined : cardInDelay(i)}
-        className={`group relative flex flex-col rounded-[16px] border-1 p-3 transition-colors ${
-          picked ? "border-accent bg-accent/8" : "border-[#232427]/65 bg-card hover:border-accent/40"
+        className={`tile group relative flex flex-col p-3.5 ${
+          picked ? "!border-accent/60 !bg-accent/[0.08]" : ""
         } ${leaving ? "row-out" : "card-in"} ${m.enabled ? "" : "opacity-60"}`}
       >
         <div className="flex min-w-0 items-start gap-3">
           {}
           <div className="relative shrink-0">
-            <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-[12px] bg-bg">
+            <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-[14px] bg-raised">
               {m.icon_url ? (
                 <img src={m.icon_url} alt="" className="h-full w-full object-cover" />
               ) : (
-                <i className={`fa-solid ${metaIcon} text-lg text-muted`} />
+                <Icon cls={`fa-solid ${metaIcon} text-lg text-muted`} />
               )}
             </div>
             <button
@@ -203,7 +205,7 @@ const ModRow = memo(function ModRow({
               {m.name}
             </div>
             <div
-              className="selectable mt-1 truncate text-[12px] text-[#818181]"
+              className="selectable mt-1 truncate text-[12px] text-muted"
               title={m.filename}
             >
               {m.filename || "—"}
@@ -216,19 +218,19 @@ const ModRow = memo(function ModRow({
                 onClick={() => onUpdate(m.project_id, m.name)}
                 disabled={updating}
                 title={t("Доступно обновление — скачать")}
-                className="grid h-7 w-7 place-items-center rounded-[8px] text-accent transition-colors hover:bg-accent hover:text-bg disabled:opacity-60"
+                className="grid h-7 w-7 place-items-center rounded-[10px] text-accent transition-colors hover:bg-accent hover:text-bg disabled:opacity-60"
               >
-                <i
-                  className={`fa-solid ${updating ? "fa-spinner fa-spin" : "fa-download"} text-[11px]`}
+                <Icon
+                  cls={`fa-solid ${updating ? "fa-spinner fa-spin" : "fa-download"} text-[12px]`}
                 />
               </button>
             )}
             <button
               onClick={() => onRemove(m)}
               title={t("Удалить")}
-              className="grid h-7 w-7 place-items-center rounded-[8px] text-muted opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
+              className="grid h-7 w-7 place-items-center rounded-[10px] text-muted opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
             >
-              <i className="fa-solid fa-trash-can text-[11px]" />
+              <Icon cls="fa-solid fa-trash-can text-[12px]" />
             </button>
           </div>
         </div>
@@ -236,7 +238,7 @@ const ModRow = memo(function ModRow({
         <div className="mt-3 flex items-center justify-between gap-2">
           {}
           {manual ? (
-            <span className="rounded-full bg-bg px-2 py-1 text-[11px] leading-none text-muted">
+            <span className="tag">
               {t("вручную")}
             </span>
           ) : (
@@ -264,9 +266,9 @@ const ModRow = memo(function ModRow({
   return (
     <div
       style={leaving ? undefined : cardInDelay(i)}
-      className={`group flex items-center gap-3 rounded-[16px] border-1 border-[#232427]/65 bg-card p-3 transition-colors hover:border-accent/40 ${
-        leaving ? "row-out" : "card-in"
-      } ${m.enabled ? "" : "opacity-60"}`}
+      className={`list-row group flex items-center gap-3 px-3 py-2.5 ${
+        picked ? "bg-accent/[0.07]" : ""
+      } ${leaving ? "row-out" : "card-in"} ${m.enabled ? "" : "opacity-60"}`}
     >
       {}
       <button onClick={() => onTogglePick(m.project_id)} title={t("Выделить")} className="shrink-0">
@@ -281,17 +283,17 @@ const ModRow = memo(function ModRow({
           target ? "cursor-pointer" : "cursor-default"
         }`}
       >
-        <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-bg">
+        <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-raised">
           {m.icon_url ? (
             <img src={m.icon_url} alt="" className="h-full w-full object-cover" />
           ) : (
-            <i className={`fa-solid ${metaIcon} text-muted`} />
+            <Icon cls={`fa-solid ${metaIcon} text-muted`} />
           )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span
-              className={`truncate text-sm font-medium text-text ${
+              className={`truncate text-[14px] font-semibold text-text transition-colors ${
                 target ? "group-hover:text-accent" : ""
               }`}
               title={m.name}
@@ -299,12 +301,12 @@ const ModRow = memo(function ModRow({
               {m.name}
             </span>
             {manual && (
-              <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-[10px] text-muted">
+              <span className="tag shrink-0">
                 {t("вручную")}
               </span>
             )}
           </div>
-          <div className="truncate text-[10px] text-[#818181]" title={m.filename}>
+          <div className="truncate text-[12px] text-muted" title={m.filename}>
             {m.filename || "—"}
           </div>
         </div>
@@ -316,9 +318,9 @@ const ModRow = memo(function ModRow({
           onClick={() => onUpdate(m.project_id, m.name)}
           disabled={updating}
           title={t("Доступно обновление — скачать")}
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-accent transition-colors hover:bg-accent hover:text-bg disabled:opacity-60"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-accent transition-colors hover:bg-accent hover:text-bg disabled:opacity-60"
         >
-          <i className={`fa-solid ${updating ? "fa-spinner fa-spin" : "fa-download"} text-xs`} />
+          <Icon cls={`fa-solid ${updating ? "fa-spinner fa-spin" : "fa-download"} text-[12.5px]`} />
         </button>
       )}
 
@@ -340,9 +342,9 @@ const ModRow = memo(function ModRow({
       <button
         onClick={() => onRemove(m)}
         title={t("Удалить")}
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-muted opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-muted opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100"
       >
-        <i className="fa-solid fa-trash-can text-xs" />
+        <Icon cls="fa-solid fa-trash-can text-[12.5px]" />
       </button>
     </div>
   );
@@ -703,7 +705,7 @@ export default function BuildsPage() {
     async (projectId: string, name: string) => {
       if (!selectedId || updatingRef.current.has(projectId)) return;
       setUpdatingMod((prev) => new Set(prev).add(projectId));
-      startTask(`mod:${projectId}`, t("Обновление · {name}", { name }));
+      startTask(`mod:${projectId}`, t("Обновление: {name}", { name }));
       try {
 
         const updated = await installContent(
@@ -820,7 +822,7 @@ export default function BuildsPage() {
         {dropping && (
           <div className="drop-overlay pointer-events-none absolute inset-3 z-40 grid place-items-center rounded-[20px] border-2 border-dashed border-accent/70 bg-bg/70">
             <div className="text-center">
-              <i className="fa-solid fa-download mb-3 block text-3xl text-accent" />
+              <Icon cls="fa-solid fa-download mb-3 block text-3xl text-accent" />
               <div className="text-sm font-semibold text-text">
                 {t("Отпустите — разложим по папкам")}
               </div>
@@ -842,13 +844,13 @@ export default function BuildsPage() {
           >
             <BuildCover build={selected} className="h-[72px] w-[72px]" rounded="rounded-[16px]" />
             <span className="absolute inset-0 grid place-items-center rounded-[16px] bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-              <i className="fa-solid fa-camera text-sm text-white" />
+              <Icon cls="fa-solid fa-camera text-sm text-white" />
             </span>
           </button>
           <div className="min-w-0 flex-1">
             {}
             <div className="flex min-w-0 items-center gap-2.5">
-              <h1 className="truncate text-[30px] font-light leading-none text-text">
+              <h1 className="truncate text-[26px] font-semibold tracking-[-0.03em] leading-none text-text">
                 {selected.name}
               </h1>
               <button
@@ -858,15 +860,15 @@ export default function BuildsPage() {
                   selected.favorite ? "text-accent" : "text-muted hover:text-accent"
                 }`}
               >
-                <i
-                  className={`${selected.favorite ? "fa-solid" : "fa-regular"} fa-star text-[18px]`}
+                <Icon
+                  cls={`${selected.favorite ? "fa-solid" : "fa-regular"} fa-star text-[18px]`}
                 />
               </button>
             </div>
-            <div className="mt-2 truncate text-[12px] text-[#818181]">
-              {loaderLabel[selected.loader] ?? selected.loader} · {selected.mc_version} ·{" "}
+            <div className="mt-2 truncate text-[12px] text-muted">
+              {loaderLabel[selected.loader] ?? selected.loader}, {selected.mc_version},{" "}
               {selected.mods.length} {t("элементов")}
-              {selected.playtime_secs > 0 && ` · ${fmtPlaytime(selected.playtime_secs)}`}
+              {selected.playtime_secs > 0 && `, ${fmtPlaytime(selected.playtime_secs)}`}
             </div>
           </div>
           {}
@@ -874,37 +876,37 @@ export default function BuildsPage() {
             <button
               onClick={doRefresh}
               title={t("Обновить список (подхватить ручные файлы)")}
-              className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-accent"
+              className="btn btn-secondary btn-icon"
             >
-              <i className="fa-solid fa-arrows-rotate text-sm" />
+              <Icon cls="fa-solid fa-arrows-rotate text-sm" />
             </button>
             <button
               onClick={() => setExportModal(true)}
               title={t("Экспорт сборки")}
-              className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-accent"
+              className="btn btn-secondary btn-icon"
             >
-              <i className="fa-solid fa-file-export text-sm" />
+              <Icon cls="fa-solid fa-file-export text-sm" />
             </button>
             <button
               onClick={() => setSettingsModal(true)}
               title={t("Настройка сборки")}
-              className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-accent"
+              className="btn btn-secondary btn-icon"
             >
-              <i className="fa-solid fa-gear text-sm" />
+              <Icon cls="fa-solid fa-gear text-sm" />
             </button>
             <button
               onClick={() => openBuildFolder(selected.id)}
               title={t("Открыть папку сборки")}
-              className="grid h-11 w-11 place-items-center rounded-[8px] bg-card text-muted transition-colors hover:text-accent"
+              className="btn btn-secondary btn-icon"
             >
-              <i className="fa-solid fa-folder-open text-sm" />
+              <Icon cls="fa-solid fa-folder-open text-sm" />
             </button>
           </div>
 
           {isRunning(`build:${selected.id}`) ? (
             <button
               onClick={() => stop(`build:${selected.id}`)}
-              className="h-11 shrink-0 rounded-[8px] bg-[#ef4444] px-7 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
+              className="h-11 shrink-0 rounded-[10px] bg-[#ef4444] px-7 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
             >
               {t("Закрыть")}
             </button>
@@ -912,12 +914,12 @@ export default function BuildsPage() {
             <button
               onClick={() => startLaunch(selected.id, selected.name)}
               disabled={launching.has(`build:${selected.id}`)}
-              className="flex h-11 shrink-0 items-center gap-2 rounded-[8px] bg-accent px-7 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn-accent flex h-11 shrink-0 items-center gap-2 rounded-[10px] px-7 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <i
-                className={`fa-solid ${
+              <Icon
+                cls={`fa-solid ${
                   launching.has(`build:${selected.id}`) ? "fa-spinner fa-spin" : "fa-play"
-                } text-xs`}
+                } text-[12.5px]`}
               />
               {t("Играть")}
             </button>
@@ -958,7 +960,7 @@ export default function BuildsPage() {
         )}
 
         {}
-        <div className="mb-4 flex items-baseline gap-4">
+        <div className="page-tabs mb-5">
           {CONTENT_TABS.map((ct) => {
             const count = selected.mods.filter((m) => m.kind === ct.id).length;
             const active = contentTab === ct.id;
@@ -970,17 +972,14 @@ export default function BuildsPage() {
                   setModFilter("all");
                   setPicked([]);
                 }}
-                className={`flex items-baseline gap-1.5 text-[20px] font-light leading-none transition-colors ${
-                  active ? "text-text" : "text-muted hover:text-text"
-                }`}
+                data-active={active}
+            className="page-tab"
               >
                 <div className="flex items-center gap-[5px]">
                   {t(ct.label)}
                   {count > 0 && (
                     <span
-                      className={`grid h-[18px] min-w-[18px] place-items-center rounded-full px-1.5 text-[10px] font-semibold leading-none ${
-                        active ? "bg-accent/15 text-accent" : "bg-card text-muted"
-                      }`}
+                      className={`tag ${active ? "tag-accent" : ""}`}
                     >
                       {count}
                     </span>
@@ -993,14 +992,13 @@ export default function BuildsPage() {
           {}
           <button
             onClick={() => setContentTab("console")}
-            className={`flex items-baseline gap-1.5 text-[20px] font-light leading-none transition-colors ${
-              contentTab === "console" ? "text-text" : "text-muted hover:text-text"
-            }`}
+            data-active={contentTab === "console"}
+            className="page-tab"
           >
             <span className="flex items-center gap-[6px]">
               {t("Консоль")}
               {isRunning(`build:${selected.id}`) && (
-                <span className="h-2 w-2 rounded-full bg-[#4ade80]" title={t("Игра запущена")} />
+                <span className="h-2 w-2 rounded-full bg-ok" title={t("Игра запущена")} />
               )}
             </span>
           </button>
@@ -1022,16 +1020,16 @@ export default function BuildsPage() {
             return (
               <div className="grid min-h-0 flex-1 place-items-center text-center">
                 <div className="max-w-xs">
-                  <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-card text-xl text-accent">
-                    <i className={`fa-solid ${meta.icon}`} />
+                  <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-full bg-accent/12 text-xl text-accent">
+                    <Icon cls={`fa-solid ${meta.icon}`} />
                   </div>
                   <p className="mb-4 text-sm text-muted">{t(meta.empty)}</p>
                   <button
                     onClick={() => goBrowse("", contentTab)}
-                    className="mx-auto flex h-10 items-center gap-2 rounded-[8px] bg-accent px-5 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+                    className="btn-accent mx-auto flex h-10 items-center gap-2 rounded-[10px] px-5 text-sm font-semibold"
                   >
-                    <i className="fa-solid fa-plus text-xs" />
-                    {t("Добавить")} · {t(meta.label).toLowerCase()}
+                    <Icon cls="fa-solid fa-plus text-[12.5px]" />
+                    {t("Добавить")}, {t(meta.label).toLowerCase()}
                   </button>
                 </div>
               </div>
@@ -1051,33 +1049,17 @@ export default function BuildsPage() {
             <div className="flex min-h-0 flex-1 gap-5">
               {}
               <aside className="flex w-[180px] shrink-0 flex-col">
-                <div className="space-y-1">
-                  {FILTERS.map((f) => {
-                    const active = modFilter === f.id;
-                    return (
-                      <button
-                        key={f.id}
-                        onClick={() => setModFilter(f.id)}
-                        className={`flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-left text-sm transition-colors ${
-                          active ? "bg-card text-text" : "text-muted hover:text-text"
-                        }`}
-                      >
-                        <span className="min-w-0 flex-1 truncate">{t(f.label)}</span>
-                        <span
-                          className={`shrink-0 text-[11px] ${active ? "text-accent" : "text-muted"}`}
-                        >
-                          {f.count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <RailNav
+                  items={FILTERS.map((f) => ({ id: f.id, label: t(f.label), count: f.count }))}
+                  value={modFilter}
+                  onChange={setModFilter}
+                />
 
                 <button
                   onClick={goList}
-                  className="mt-auto flex h-10 items-center gap-2 rounded-[8px] px-3 text-sm text-muted transition-colors hover:text-text"
+                  className="mt-auto flex h-10 items-center gap-2 rounded-[10px] px-3 text-sm text-muted transition-colors hover:text-text"
                 >
-                  <i className="fa-solid fa-arrow-left text-xs" />
+                  <Icon cls="fa-solid fa-arrow-left text-[12.5px]" />
                   {t("Все сборки")}
                 </button>
               </aside>
@@ -1085,11 +1067,11 @@ export default function BuildsPage() {
               {}
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                 <div className="mb-3 flex items-center gap-2">
-                  <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3">
-                    <i className="fa-solid fa-magnifying-glass text-xs text-muted" />
+                  <div className="field-wrap flex h-10 min-w-0 flex-1 items-center gap-2 px-3.5">
+                    <Icon cls="fa-solid fa-magnifying-glass text-[12.5px] text-muted" />
                     <input
                       className="w-full bg-transparent text-sm text-text outline-none placeholder:text-muted"
-                      placeholder={`${t("Поиск")} · ${t(meta.label).toLowerCase()}`}
+                      placeholder={`${t("Поиск")}, ${t(meta.label).toLowerCase()}`}
                       value={modSearch}
                       onChange={(e) => setModSearch(e.target.value)}
                     />
@@ -1099,15 +1081,15 @@ export default function BuildsPage() {
                         title={t("Очистить")}
                         className="shrink-0 text-muted transition-colors hover:text-text"
                       >
-                        <i className="fa-solid fa-xmark text-xs" />
+                        <Icon cls="fa-solid fa-xmark text-[12.5px]" />
                       </button>
                     )}
                   </div>
                   <button
                     onClick={() => goBrowse(modSearch, contentTab)}
-                    className="flex h-10 shrink-0 items-center gap-2 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+                    className="btn-accent flex h-10 shrink-0 items-center gap-2 rounded-[10px] px-4 text-sm font-semibold"
                   >
-                    <i className="fa-solid fa-plus text-xs" />
+                    <Icon cls="fa-solid fa-plus text-[12.5px]" />
                     {t("Добавить")}
                   </button>
                 </div>
@@ -1129,12 +1111,12 @@ export default function BuildsPage() {
                   </button>
                   {picked.length > 0 && (
                     <>
-                      <span className="text-[12px] text-[#818181]">{t("выбрано")} {picked.length}</span>
+                      <span className="text-[12px] text-muted">{t("выбрано")} {picked.length}</span>
                       <button
                         onClick={() => setConfirmMods(items.filter((m) => picked.includes(m.project_id)))}
-                        className="flex h-8 items-center gap-2 rounded-[8px] bg-[#ef4444] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
+                        className="flex h-8 items-center gap-2 rounded-[10px] bg-[#ef4444] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
                       >
-                        <i className="fa-solid fa-trash-can text-xs" />
+                        <Icon cls="fa-solid fa-trash-can text-[12.5px]" />
                         {t("Удалить")}
                       </button>
                     </>
@@ -1152,7 +1134,7 @@ export default function BuildsPage() {
                   }`}
                 >
                   {items.length === 0 && (
-                    <div className="rounded-[16px] bg-card p-4 text-center text-xs text-muted">
+                    <div className="py-8 text-center text-[13px] text-muted">
                       {t("Ничего не нашлось")}
                     </div>
                   )}
@@ -1189,7 +1171,7 @@ export default function BuildsPage() {
       {dropping && (
         <div className="drop-overlay pointer-events-none absolute inset-3 z-40 grid place-items-center rounded-[20px] border-2 border-dashed border-accent/70 bg-bg/70">
           <div className="text-center">
-            <i className="fa-solid fa-file-arrow-down mb-3 block text-3xl text-accent" />
+            <Icon cls="fa-solid fa-file-arrow-down mb-3 block text-3xl text-accent" />
             <div className="text-sm font-semibold text-text">
               {t("Отпустите — импортируем сборку")}
             </div>
@@ -1201,7 +1183,7 @@ export default function BuildsPage() {
       )}
       {}
       <div className="flex justify-between">
-        <h1 className="mb-5 text-[30px] font-light leading-none text-text">
+        <h1 className="mb-5 text-[26px] font-semibold leading-[1.1] tracking-[-0.03em] text-text">
           {t("Сборки")}
         </h1>
         {tab === "mine" && (
@@ -1210,22 +1192,22 @@ export default function BuildsPage() {
               onClick={importPack}
               disabled={importing}
               title={t("Импортировать сборку .acpack или модпак .mrpack")}
-              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-secondary"
             >
+              <Icon cls={`fa-solid ${importing ? "fa-spinner fa-spin" : "fa-file-import"} text-[16px]`} />
               {t("Импорт")}
-              <i className={`fa-solid ${importing ? "fa-spinner fa-spin" : "fa-file-zipper"}`} />
             </button>
             <button
               onClick={() => setCreateModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+              className="btn btn-accent"
             >
-              <i className="fa-solid fa-plus" />
+              <Icon cls="fa-solid fa-plus text-[16px]" />
               {t("Создать сборку")}
             </button>
           </div>
         )}
       </div>
-      <div className="mb-5 flex items-baseline gap-4">
+      <div className="page-tabs mb-6">
         {(
           [
             { id: "mine", label: "Мои сборки" },
@@ -1235,9 +1217,8 @@ export default function BuildsPage() {
           <button
             key={x.id}
             onClick={() => setTab(x.id)}
-            className={`text-[20px] font-light leading-none transition-colors ${
-              tab === x.id ? "text-text" : "text-muted hover:text-text"
-            }`}
+            data-active={tab === x.id}
+            className="page-tab"
           >
             {t(x.label)}
           </button>
@@ -1256,8 +1237,8 @@ export default function BuildsPage() {
         {builds.length === 0 ? (
           <div className="grid h-full place-items-center text-center">
             <div>
-              <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-card text-2xl text-muted">
-                <i className="fa-solid fa-cubes-stacked" />
+              <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-full bg-white/[0.05] text-2xl text-muted">
+                <Icon cls="fa-solid fa-cubes-stacked" />
               </div>
               <h2 className="font-semibold text-text">{t("Сборок пока нет")}</h2>
               <p className="mt-1 text-sm text-muted">
@@ -1288,7 +1269,7 @@ export default function BuildsPage() {
                         data-flip-id={b.id}
                         onClick={() => !isDying && openBuild(b.id)}
                         style={isDying ? undefined : cardInDelay(i)}
-                        className={`group relative h-[150px] w-full max-w-[285px] cursor-pointer overflow-hidden rounded-[16px] border-1 border-[#232427]/65 bg-card ${
+                        className={`cover group relative h-[150px] w-full max-w-[285px] cursor-pointer overflow-hidden ${
                           isDying ? "card-fall" : "card-in"
                         }`}
                       >
@@ -1315,14 +1296,14 @@ export default function BuildsPage() {
                             void toggleFavorite(b);
                           }}
                           title={b.favorite ? t("Открепить") : t("Закрепить")}
-                          className={`absolute left-2 top-2 grid h-7 w-7 place-items-center rounded-lg transition ${
+                          className={`absolute left-2 top-2 grid h-7 w-7 place-items-center rounded-[12px] transition ${
                             b.favorite
                               ? "text-accent opacity-100"
                               : "text-[var(--veil-text-dim)] opacity-0 hover:text-accent group-hover:opacity-100"
                           }`}
                         >
-                          <i
-                            className={`${b.favorite ? "fa-solid" : "fa-regular"} fa-star text-sm`}
+                          <Icon
+                            cls={`${b.favorite ? "fa-solid" : "fa-regular"} fa-star text-sm`}
                           />
                         </button>
 
@@ -1336,9 +1317,9 @@ export default function BuildsPage() {
                             }}
                             disabled={running || downloading}
                             title={running ? t("Сборка запущена") : t("Удалить сборку")}
-                            className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--veil-btn)] text-[var(--veil-text-dim)] opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100 disabled:cursor-not-allowed"
+                            className="grid h-7 w-7 place-items-center rounded-[12px] bg-[var(--veil-btn)] text-[var(--veil-text-dim)] opacity-0 transition hover:bg-[#FF3535]/50 hover:text-white group-hover:opacity-100 disabled:cursor-not-allowed"
                           >
-                            <i className="fa-solid fa-trash-can text-xs" />
+                            <Icon cls="fa-solid fa-trash-can text-[12.5px]" />
                           </button>
                         </div>
 
@@ -1347,9 +1328,9 @@ export default function BuildsPage() {
                             <div className="truncate text-[15px] font-medium text-[var(--veil-text)]">
                               {b.name}
                             </div>
-                            <div className="truncate text-[10px] text-[var(--veil-text-dim)]">
-                              {b.mc_version} · {loaderLabel[b.loader] ?? b.loader} · {b.mods.length} {t("модов")}
-                              {b.playtime_secs > 0 && ` · ${fmtPlaytime(b.playtime_secs)}`}
+                            <div className="truncate text-[11.5px] text-[var(--veil-text-dim)]">
+                              {b.mc_version}, {loaderLabel[b.loader] ?? b.loader}, {b.mods.length} {t("модов")}
+                              {b.playtime_secs > 0 && `, ${fmtPlaytime(b.playtime_secs)}`}
                             </div>
                           </div>
                           {running ? (
@@ -1358,7 +1339,7 @@ export default function BuildsPage() {
                                 e.stopPropagation();
                                 stop(`build:${b.id}`);
                               }}
-                              className="h-9 shrink-0 rounded-[8px] bg-[#ef4444] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
+                              className="h-9 shrink-0 rounded-[10px] bg-[#ef4444] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#dc2626]"
                             >
                               {t("Закрыть")}
                             </button>
@@ -1370,10 +1351,10 @@ export default function BuildsPage() {
                               }}
                               disabled={launching.has(`build:${b.id}`)}
                               title={t("Запустить сборку")}
-                              className="h-9 shrink-0 rounded-[8px] bg-accent px-4 text-sm font-semibold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-60"
+                              className="btn-accent h-9 shrink-0 rounded-[10px] px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {launching.has(`build:${b.id}`) ? (
-                                <i className="fa-solid fa-spinner fa-spin" />
+                                <Icon cls="fa-solid fa-spinner fa-spin" />
                               ) : (
                                 t("Играть")
                               )}

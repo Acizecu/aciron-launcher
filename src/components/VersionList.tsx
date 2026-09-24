@@ -3,6 +3,7 @@ import { contentVersions, type ModVersion, type SourceId } from "../api";
 import Dropdown from "./Dropdown";
 import LoadingDots from "./LoadingDots";
 import { dtf, t } from "../i18n";
+import Icon from "./Icon";
 
 const typeMeta: Record<string, { label: string; color: string }> = {
   release: { label: "Релиз", color: "#4ade80" },
@@ -69,7 +70,7 @@ export default function VersionList({
   if (versions === null) {
     return (
       <div className="p-8 text-center text-sm text-muted">
-        <i className="fa-solid fa-spinner fa-spin mr-2" />
+        <Icon cls="fa-solid fa-spinner fa-spin mr-2" />
         {t("Загрузка версий")}
         <LoadingDots className="ml-1" />
       </div>
@@ -99,7 +100,7 @@ export default function VersionList({
             ]}
             className="w-40"
           />
-          <span className="ml-auto text-[11px] text-muted">{t("{n} версий", { n: filtered.length })}</span>
+          <span className="ml-auto text-[12px] text-muted">{t("{n} версий", { n: filtered.length })}</span>
         </div>
       )}
 
@@ -114,13 +115,13 @@ export default function VersionList({
           return (
             <div
               key={v.id}
-              className="flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-2.5"
+              className="flex items-center gap-3 rounded-[14px] border border-line bg-white/[0.04] px-3.5 py-2.5"
             >
               <span
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-[12px]"
                 style={{ background: `color-mix(in srgb, ${meta.color} 16%, transparent)`, color: meta.color }}
               >
-                <i className="fa-solid fa-file-zipper text-xs" />
+                <Icon cls="fa-solid fa-file-zipper text-[12.5px]" />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -128,33 +129,32 @@ export default function VersionList({
                     {v.version_number || v.name}
                   </span>
                   <span
-                    className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold"
+                    className="shrink-0 rounded px-1.5 py-0.5 text-[11.5px] font-medium"
                     style={{ color: meta.color, background: `color-mix(in srgb, ${meta.color} 14%, transparent)` }}
                   >
                     {t(meta.label)}
                   </span>
                 </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted">
-                  <span>
-                    {gv.slice(0, 4).join(", ")}
-                    {gv.length > 4 ? "…" : ""}
-                  </span>
-                  {v.loaders?.length > 0 && <span className="capitalize">· {v.loaders.join(", ")}</span>}
-                  {v.date_published && (
-                    <span>· {dtf().format(new Date(v.date_published))}</span>
-                  )}
+                <div className="mt-0.5 truncate text-[11.5px] text-muted">
+                  {[
+                    gv.slice(0, 4).join(", ") + (gv.length > 4 ? "…" : ""),
+                    v.loaders?.length > 0 ? v.loaders.map((l) => l[0].toUpperCase() + l.slice(1)).join(", ") : "",
+                    v.date_published ? dtf().format(new Date(v.date_published)) : "",
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
                 </div>
               </div>
               <button
                 onClick={() => !isCurrent && !isBusy && onPick(v)}
                 disabled={isCurrent || isBusy}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+                className={`flex shrink-0 items-center gap-1.5 rounded-[12px] px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
                   isCurrent
                     ? "cursor-default bg-bg text-text"
-                    : "bg-accent text-bg hover:bg-accent-hover active:bg-accent-active disabled:opacity-60"
+                    : "btn-accent disabled:opacity-60"
                 }`}
               >
-                <i className={`fa-solid ${isBusy ? "fa-spinner fa-spin" : isCurrent ? "fa-check" : "fa-download"}`} />
+                <Icon cls={`fa-solid ${isBusy ? "fa-spinner fa-spin" : isCurrent ? "fa-check" : "fa-download"}`} />
                 {isBusy ? "…" : isCurrent ? t("Текущая") : t(actionLabel)}
               </button>
             </div>
@@ -165,7 +165,7 @@ export default function VersionList({
       {!showAll && filtered.length > 40 && (
         <button
           onClick={() => setShowAll(true)}
-          className="w-full rounded-lg border border-border py-2 text-xs text-muted transition-colors hover:text-text"
+          className="btn btn-sm btn-ghost w-full"
         >
           {t("Показать все ({n})", { n: filtered.length })}
         </button>

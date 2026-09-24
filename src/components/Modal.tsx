@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { t } from "../i18n";
+import Icon from "./Icon";
 
 const CLOSE_MS = 180;
 
@@ -62,7 +64,7 @@ export default function Modal({
     return () => document.removeEventListener("keydown", onKey);
   }, [close]);
 
-  return (
+  return createPortal(
 
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-6 ${
@@ -77,7 +79,7 @@ export default function Modal({
       />
 
       <div
-        className={`relative flex max-h-[84vh] w-full ${width} flex-col overflow-hidden rounded-[20px] border-1 border-[#232427]/65 bg-panel shadow-2xl shadow-black/60 ${
+        className={`relative flex max-h-[84vh] w-full ${width} flex-col overflow-hidden rounded-[22px] bg-[color-mix(in_srgb,var(--color-bg)_93%,white)] shadow-[0_28px_70px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] ${
           closing ? "modal-panel-out" : "modal-panel"
         }`}
       >
@@ -86,29 +88,29 @@ export default function Modal({
           <button
             onClick={close}
             aria-label={t("Закрыть")}
-            className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-[10px] bg-card text-muted transition-colors hover:bg-[#FF3535]/50 hover:text-white"
+            className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/[0.05] text-muted transition-colors hover:bg-white/[0.1] hover:text-text"
           >
-            <i className="fa-solid fa-xmark" />
+            <Icon cls="fa-solid fa-xmark" />
           </button>
         )}
 
         <div className="flex items-center gap-3 px-6 pb-4 pt-6 pr-16">
           {icon && (
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-card text-accent">
-              <i className={`fa-solid ${icon}`} />
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent/12 text-accent">
+              <Icon cls={`fa-solid ${icon}`} />
             </div>
           )}
           <div className="min-w-0">
-            <h3 className="truncate text-[22px] font-light leading-none text-text">{title}</h3>
+            <h3 className="truncate text-[20px] font-semibold leading-none tracking-[-0.02em] text-text">{title}</h3>
             {subtitle && (
-              <p className="mt-1.5 truncate text-[12px] font-light text-[#818181]">{subtitle}</p>
+              <p className="mt-1.5 truncate text-[12px] text-muted">{subtitle}</p>
             )}
           </div>
         </div>
 
         {}
         <div
-          className={`relative min-h-0 flex-1 overflow-y-auto font-light ${
+          className={`relative min-h-0 flex-1 overflow-y-auto ${
             bare ? "" : "px-6 pb-6"
           }`}
         >
@@ -116,11 +118,12 @@ export default function Modal({
         </div>
 
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
+          <div className="flex items-center justify-end gap-2 border-t border-white/[0.06] px-6 py-4">
             {footer}
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

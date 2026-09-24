@@ -10,6 +10,7 @@ import {
 } from "../api";
 import { t, ts } from "../i18n";
 import { useToast } from "../ToastContext";
+import Icon from "./Icon";
 
 const loaderLabel: Record<string, string> = {
   fabric: "Fabric",
@@ -76,7 +77,7 @@ export default function ModsPage() {
         >
           {ask.list === null ? (
             <div className="grid h-24 place-items-center text-muted">
-              <i className="fa-solid fa-spinner fa-spin" />
+              <Icon cls="fa-solid fa-spinner fa-spin" />
             </div>
           ) : ask.list.length === 0 ? (
             <div className="px-1 py-2 text-sm leading-relaxed text-muted">
@@ -90,18 +91,18 @@ export default function ModsPage() {
                 <button
                   key={b.id}
                   onClick={() => close(b)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-colors hover:border-accent/60"
+                  className="flex w-full items-center gap-3 rounded-[14px] border border-line bg-white/[0.04] px-3 py-2.5 text-left transition-colors hover:border-accent/60"
                 >
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-bg text-accent">
-                    <i className="fa-solid fa-cube text-sm" />
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] bg-bg text-accent">
+                    <Icon cls="fa-solid fa-cube text-sm" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-text">{b.name}</div>
-                    <div className="truncate text-[11px] text-muted">
-                      {b.mc_version} · {loaderLabel[b.loader] ?? b.loader}
+                    <div className="truncate text-[12px] text-muted">
+                      {b.mc_version}, {loaderLabel[b.loader] ?? b.loader}
                     </div>
                   </div>
-                  <i className="fa-solid fa-chevron-right text-xs text-muted" />
+                  <Icon cls="fa-solid fa-chevron-right text-[12.5px] text-muted" />
                 </button>
               ))}
             </div>

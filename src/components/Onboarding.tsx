@@ -18,6 +18,7 @@ import AddAccountModal from "./AddAccountModal";
 import Head from "./Head";
 import { LangFlag } from "./FlagIcons";
 import { THEME_GRID_CLS, ThemeCard } from "./settings/ThemeSettings";
+import Icon from "./Icon";
 
 const appWindow = (() => {
   try {
@@ -150,7 +151,7 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
           <button
             onClick={() => appWindow?.minimize()}
             aria-label={t("Свернуть")}
-            className="grid h-9 w-9 place-items-center rounded-md text-[#676767] transition-colors hover:bg-ctrl-hover hover:text-text"
+            className="grid h-9 w-9 place-items-center rounded-[10px] text-[#676767] transition-colors hover:bg-ctrl-hover hover:text-text"
           >
             <svg width="15" height="2" viewBox="0 0 15 2" fill="none">
               <path d="M1 1H14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -159,7 +160,7 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
           <button
             onClick={() => appWindow?.close()}
             aria-label={t("Закрыть")}
-            className="grid h-9 w-9 place-items-center rounded-md text-[#676767] transition-colors hover:bg-[#FF3535]/50 hover:text-[#CDCDCD]"
+            className="grid h-9 w-9 place-items-center rounded-[10px] text-[#676767] transition-colors hover:bg-[#FF3535]/50 hover:text-[#CDCDCD]"
           >
             <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
               <path
@@ -182,7 +183,7 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                 <div className="rise-in mx-auto mb-7 grid place-items-center" style={rise(0)}>
                   <AcironLogo size={116} className="logo-glow" />
                 </div>
-                <h1 className="rise-in text-[34px] font-light leading-tight" style={rise(1)}>
+                <h1 className="rise-in text-[32px] font-semibold tracking-[-0.03em] leading-tight" style={rise(1)}>
                   {t("Настроим лаунчер под вас")}
                 </h1>
                 <p
@@ -195,7 +196,7 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                 </p>
                 <button
                   onClick={next}
-                  className="rise-in mt-8 h-12 rounded-xl bg-accent px-8 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+                  className="btn-accent rise-in mt-8 h-12 rounded-[14px] px-8 text-sm font-semibold"
                   style={rise(3)}
                 >
                   {t("Начать настройку")}
@@ -231,10 +232,10 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                 title={t("Папка игры")}
                 desc={t("Куда складывать версии, сборки и файлы игры")}
               >
-                <div className="rise-in rounded-2xl border border-border bg-card/60 p-4" style={rise(0)}>
+                <div className="rise-in rounded-[18px] bg-white/[0.03] p-4" style={rise(0)}>
                   <div className="flex items-center gap-3">
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-bg text-accent">
-                      <i className="fa-solid fa-folder" />
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-bg text-accent">
+                      <Icon cls="fa-solid fa-folder" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div
@@ -243,20 +244,20 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                       >
                         {settings?.game_dir || "…"}
                       </div>
-                      <div className="mt-0.5 text-[11px] text-muted">
+                      <div className="mt-0.5 text-[12px] text-muted">
                         {t("versions и builds будут внутри этой папки")}
                       </div>
                     </div>
                     <button
                       onClick={chooseFolder}
-                      className="h-10 shrink-0 rounded-lg border border-border px-4 text-sm text-muted transition-colors hover:border-accent/50 hover:text-accent"
+                      className="h-10 shrink-0 rounded-[12px] border border-line px-4 text-sm text-muted transition-colors hover:border-line-strong hover:text-accent"
                     >
                       {t("Выбрать папку")}
                     </button>
                   </div>
                 </div>
 
-                <div className="rise-in mt-3 rounded-2xl border border-border bg-card/60 p-4" style={rise(1)}>
+                <div className="rise-in mt-3 rounded-[18px] bg-white/[0.03] p-4" style={rise(1)}>
                   <div className="flex items-baseline justify-between">
                     <span className="text-sm text-text">{t("Память для игры")}</span>
                     <span className="text-sm tabular-nums text-accent">
@@ -285,7 +286,7 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                       />
                     );
                   })()}
-                  <div className="mt-1 flex justify-between text-[11px] text-muted">
+                  <div className="mt-1 flex justify-between text-[12px] text-muted">
                     <span>{t("1 ГБ")}</span>
                     <span>{t("всего в системе: {n} ГБ", { n: (maxRam / 1024).toFixed(0) })}</span>
                   </div>
@@ -317,9 +318,9 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                 {state.id !== themeBefore && (
                   <button
                     onClick={() => setTheme(themeBefore)}
-                    className="mt-3 text-[11px] text-muted transition-colors hover:text-text"
+                    className="mt-3 text-[12px] text-muted transition-colors hover:text-text"
                   >
-                    <i className="fa-solid fa-rotate-left mr-1.5 text-[10px]" />
+                    <Icon cls="fa-solid fa-rotate-left mr-1.5 text-[11.5px]" />
                     {t("Вернуть прежнюю тему")}
                   </button>
                 )}
@@ -336,41 +337,41 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
               >
                 {account ? (
                   <div
-                    className="rise-in flex items-center gap-3 rounded-2xl border border-accent/40 bg-accent/8 p-4"
+                    className="rise-in flex items-center gap-3 rounded-[18px] border border-accent/40 bg-accent/8 p-4"
                     style={rise(0)}
                   >
                     <Head
                       skin={headSkinUrl(account)}
                       name={account.aciron_name || account.username}
                       size={44}
-                      className="shrink-0 rounded-xl"
+                      className="shrink-0 rounded-full"
                     />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold text-text">
                         {account.aciron_name || account.username}
                       </div>
-                      <div className="text-[11px] text-muted">{t("Вы вошли — всё готово")}</div>
+                      <div className="text-[12px] text-muted">{t("Вы вошли — всё готово")}</div>
                     </div>
-                    <i className="fa-solid fa-circle-check text-lg text-accent" />
+                    <Icon cls="fa-solid fa-circle-check text-lg text-accent" />
                   </div>
                 ) : (
                   <button
                     onClick={() => setSignIn(true)}
-                    className="rise-in flex w-full items-center gap-3 rounded-2xl border border-border bg-card/60 p-4 text-left transition-colors hover:border-accent/50"
+                    className="rise-in flex w-full items-center gap-3 rounded-[18px] border border-line bg-white/[0.03] p-4 text-left transition-colors hover:border-line-strong"
                     style={rise(0)}
                   >
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-bg text-accent">
-                      <i className="fa-solid fa-right-to-bracket" />
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-bg text-accent">
+                      <Icon cls="fa-solid fa-right-to-bracket" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold text-text">
                         {t("Войти в Aciron ID")}
                       </span>
-                      <span className="block text-[11px] text-muted">
+                      <span className="block text-[12px] text-muted">
                         {t("Или создать новый аккаунт — это бесплатно")}
                       </span>
                     </span>
-                    <i className="fa-solid fa-chevron-right text-xs text-muted" />
+                    <Icon cls="fa-solid fa-chevron-right text-[12.5px] text-muted" />
                   </button>
                 )}
               </StepShell>
@@ -382,9 +383,9 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                   className="pop-in mx-auto mb-6 grid h-24 w-24 place-items-center rounded-full bg-accent/15 text-4xl text-accent"
                   style={{ animationDelay: "60ms" }}
                 >
-                  <i className="fa-solid fa-check" />
+                  <Icon cls="fa-solid fa-check" />
                 </div>
-                <h1 className="rise-in text-[32px] font-light" style={rise(1)}>
+                <h1 className="rise-in text-[30px] font-semibold tracking-[-0.03em]" style={rise(1)}>
                   {t("Всё готово")}
                 </h1>
                 <p className="rise-in mt-3 text-sm text-muted" style={rise(2)}>
@@ -393,10 +394,10 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
                 <button
                   onClick={finish}
                   disabled={saving}
-                  className="rise-in mt-8 h-12 rounded-xl bg-accent px-9 text-sm font-bold text-bg transition-colors hover:bg-accent-hover disabled:opacity-60"
+                  className="btn-accent rise-in mt-8 h-12 rounded-[14px] px-9 text-sm font-semibold disabled:opacity-60"
                   style={rise(3)}
                 >
-                  {saving ? <i className="fa-solid fa-spinner fa-spin" /> : t("Играть")}
+                  {saving ? <Icon cls="fa-solid fa-spinner fa-spin" /> : t("Играть")}
                 </button>
               </div>
             )}
@@ -408,9 +409,9 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
           <div className="flex shrink-0 items-center gap-4 px-8 pb-7">
             <button
               onClick={back}
-              className="flex h-11 items-center gap-2 rounded-xl px-4 text-sm text-muted transition-colors hover:text-text"
+              className="flex h-11 items-center gap-2 rounded-[14px] px-4 text-sm text-muted transition-colors hover:text-text"
             >
-              <i className="fa-solid fa-arrow-left text-xs" />
+              <Icon cls="fa-solid fa-arrow-left text-[12.5px]" />
               {t("Назад")}
             </button>
 
@@ -433,10 +434,10 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
             ) : (
               <button
                 onClick={next}
-                className="flex h-11 items-center gap-2 rounded-xl bg-accent px-6 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active"
+                className="btn-accent flex h-11 items-center gap-2 rounded-[14px] px-6 text-sm font-semibold"
               >
                 {id === "account" && !account ? t("Пропустить") : t("Далее")}
-                <i className="fa-solid fa-arrow-right text-xs" />
+                <Icon cls="fa-solid fa-arrow-right text-[12.5px]" />
               </button>
             )}
           </div>
@@ -469,13 +470,13 @@ function StepShell({
     <div>
       <div className="mb-6 flex items-center gap-3">
         <span
-          className="rise-in grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-accent/12 text-lg text-accent"
+          className="rise-in grid h-12 w-12 shrink-0 place-items-center rounded-[18px] bg-accent/12 text-lg text-accent"
           style={rise(0)}
         >
-          <i className={`fa-solid ${icon}`} />
+          <Icon cls={`fa-solid ${icon}`} />
         </span>
         <div className="min-w-0">
-          <h1 className="rise-in text-[26px] font-light leading-tight" style={rise(1)}>
+          <h1 className="rise-in text-[26px] font-semibold tracking-[-0.03em] leading-tight" style={rise(1)}>
             {title}
           </h1>
           <p className="rise-in mt-1 text-[13px] leading-relaxed text-muted" style={rise(2)}>
@@ -507,10 +508,10 @@ function Choice({
     <button
       onClick={onClick}
       style={rise(i)}
-      className={`rise-in flex items-center gap-3 rounded-2xl border p-4 text-left transition-all ${
+      className={`rise-in flex items-center gap-3 rounded-[18px] border p-4 text-left transition-all ${
         on
           ? "border-accent/60 bg-accent/8"
-          : "border-border bg-card/50 hover:border-accent/40 hover:bg-card"
+          : "border-line bg-card/50 hover:border-line-strong hover:bg-white/[0.05]"
       }`}
     >
       {}
@@ -519,9 +520,9 @@ function Choice({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-text">{title}</span>
-        <span className="block truncate text-[11px] text-muted">{sub}</span>
+        <span className="block truncate text-[12px] text-muted">{sub}</span>
       </span>
-      {on && <i className="fa-solid fa-check text-xs text-accent" />}
+      {on && <Icon cls="fa-solid fa-check text-[12.5px] text-accent" />}
     </button>
   );
 }

@@ -130,7 +130,7 @@ export default function Tooltip() {
         transform: `translate(-50%, ${tip.below ? "0" : "-100%"})`,
       }}
     >
-      <div className="tooltip-pop rounded-lg border border-border/80 bg-card px-2.5 py-1.5 text-[11px] leading-snug text-text shadow-lg shadow-black/40">
+      <div className="tooltip-pop rounded-[10px] bg-popover px-2.5 py-1.5 text-[12px] leading-snug text-text shadow-[0_12px_30px_rgba(0,0,0,0.5)]">
         {tip.text}
       </div>
     </div>,

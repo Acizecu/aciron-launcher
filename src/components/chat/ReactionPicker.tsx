@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import EmojiPicker from "./EmojiPicker";
 import Twemoji from "./Twemoji";
 import { t } from "../../i18n";
+import Icon from "../Icon";
 
 const QUICK = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👀"];
 
@@ -52,10 +53,10 @@ export default function ReactionPicker({
         onClick={() => setOpen((v) => !v)}
         title={t("Реакция")}
         className={`grid h-7 w-7 shrink-0 place-items-center self-center rounded-full text-muted transition ${
-          open ? "bg-card text-accent opacity-100" : "opacity-0 group-hover:opacity-100"
-        } hover:bg-card hover:text-accent`}
+          open ? "bg-white/[0.04] text-accent opacity-100" : "opacity-0 group-hover:opacity-100"
+        } hover:bg-white/[0.05] hover:text-accent`}
       >
-        <i className="fa-regular fa-face-smile text-[13px]" />
+        <Icon cls="fa-regular fa-face-smile text-[13px]" />
       </button>
 
       {open &&
@@ -81,7 +82,7 @@ export default function ReactionPicker({
                   <EmojiPicker onPick={pick} onClose={close} />
                 </div>
               ) : (
-                <div className="dropdown-in absolute bottom-0 left-0 mb-1 flex items-center gap-0.5 rounded-full border border-border bg-panel px-1.5 py-1 shadow-xl shadow-black/50">
+                <div className="dropdown-in absolute bottom-0 left-0 mb-1 flex items-center gap-0.5 rounded-full bg-popover px-1.5 py-1 shadow-[0_16px_40px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)]">
                   {QUICK.map((e) => (
                     <button
                       key={e}
@@ -96,9 +97,9 @@ export default function ReactionPicker({
                   <button
                     onClick={() => setFull(true)}
                     title={t("Ещё эмодзи")}
-                    className="grid h-8 w-8 place-items-center rounded-full text-muted transition-colors hover:bg-card hover:text-text"
+                    className="grid h-8 w-8 place-items-center rounded-full text-muted transition-colors hover:bg-white/[0.05] hover:text-text"
                   >
-                    <i className="fa-solid fa-plus text-[11px]" />
+                    <Icon cls="fa-solid fa-plus text-[12px]" />
                   </button>
                 </div>
               )}

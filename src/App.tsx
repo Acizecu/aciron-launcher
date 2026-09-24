@@ -39,6 +39,7 @@ import {
   pendingPack,
   type ExternalInstance,
 } from "./api";
+import Icon from "./components/Icon";
 
 const DEBUG_INSTANCES: ExternalInstance[] = [
   {
@@ -313,9 +314,9 @@ function AppInner() {
           <button
             onClick={() => setOnboarding(true)}
             title={t("Открыть мастер настройки (F7)")}
-            className="absolute bottom-3 left-3 z-30 grid h-8 w-8 place-items-center rounded-lg border border-border bg-card/80 text-[11px] text-muted opacity-40 backdrop-blur transition hover:opacity-100 hover:text-accent"
+            className="absolute bottom-3 left-3 z-30 grid h-8 w-8 place-items-center rounded-[12px] border border-line bg-card/80 text-[12px] text-muted opacity-40 backdrop-blur transition hover:opacity-100 hover:text-accent"
           >
-            <i className="fa-solid fa-wand-magic-sparkles" />
+            <Icon cls="fa-solid fa-wand-magic-sparkles" />
           </button>
         )}
         <div className="relative z-10 flex h-full w-full flex-col">
@@ -327,32 +328,35 @@ function AppInner() {
               <AnnounceBar />
               {}
               <main className="min-h-0 flex-1 overflow-hidden">
-                {active === "home" && <Home />}
-                {active === "builds" && <BuildsPage />}
-                {active === "mods" && (
-                  <Suspense
-                    fallback={
-                      <div className="grid h-full place-items-center text-muted">
-                        <i className="fa-solid fa-spinner fa-spin text-xl" />
-                      </div>
-                    }
-                  >
-                    <ModsPage />
-                  </Suspense>
-                )}
-                {active === "wardrobe" && (
-                  <Suspense
-                    fallback={
-                      <div className="grid h-full place-items-center text-muted">
-                        <i className="fa-solid fa-spinner fa-spin text-xl" />
-                      </div>
-                    }
-                  >
-                    <WardrobePage />
-                  </Suspense>
-                )}
-                {active === "friends" && <FriendsPage />}
-                {active === "servers" && <ServersPage />}
+                {}
+                <div key={active} className="page-in h-full">
+                  {active === "home" && <Home />}
+                  {active === "builds" && <BuildsPage />}
+                  {active === "mods" && (
+                    <Suspense
+                      fallback={
+                        <div className="grid h-full place-items-center text-muted">
+                          <Icon cls="fa-solid fa-spinner fa-spin text-xl" />
+                        </div>
+                      }
+                    >
+                      <ModsPage />
+                    </Suspense>
+                  )}
+                  {active === "wardrobe" && (
+                    <Suspense
+                      fallback={
+                        <div className="grid h-full place-items-center text-muted">
+                          <Icon cls="fa-solid fa-spinner fa-spin text-xl" />
+                        </div>
+                      }
+                    >
+                      <WardrobePage />
+                    </Suspense>
+                  )}
+                  {active === "friends" && <FriendsPage />}
+                  {active === "servers" && <ServersPage />}
+                </div>
               </main>
               {}
               {showBottomBar && (

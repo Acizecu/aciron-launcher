@@ -19,9 +19,10 @@ import {
 import { useToast } from "../ToastContext";
 import LoadingDots from "./LoadingDots";
 import { t, ts } from "../i18n";
+import Icon from "./Icon";
 
 const inputCls =
-  "w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-text outline-none transition-colors focus:border-accent";
+  "field h-11 w-full px-4 text-[14.5px]";
 
 const loaderLabel: Record<string, string> = {
   fabric: "Fabric",
@@ -133,7 +134,7 @@ export default function BuildSettingsModal({
         toast(
           t("Версия изменена на {v}", { v: version }) +
 
-            (off ? t(" · выключено: {n} (нет под эту версию)", { n: off }) : ""),
+            (off ? t(", выключено: {n} (нет под эту версию)", { n: off }) : ""),
           "success"
         );
       }
@@ -173,25 +174,25 @@ export default function BuildSettingsModal({
       icon="fa-gear"
       onClose={onClose}
     >
-      <div className="space-y-5 p-5">
+      <div className="space-y-5 pt-1">
         {}
         <div className="flex gap-4">
           <button
             onClick={changeCover}
             title={t("Изменить обложку")}
-            className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-border"
+            className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-[20px] bg-white/[0.04]"
           >
             <BuildCover build={build} className="h-24 w-24" />
             <span className="absolute inset-0 grid place-items-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
               <span className="flex flex-col items-center gap-1 text-white">
-                <i className="fa-solid fa-camera" />
-                <span className="text-[10px] font-medium">{t("Обложка")}</span>
+                <Icon cls="fa-solid fa-camera" />
+                <span className="text-[11.5px] font-medium">{t("Обложка")}</span>
               </span>
             </span>
           </button>
 
           <div className="flex min-w-0 flex-1 flex-col justify-center">
-            <label className="mb-1.5 block text-xs text-muted">{t("Название сборки")}</label>
+            <label className="field-label">{t("Название сборки")}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -200,20 +201,20 @@ export default function BuildSettingsModal({
               placeholder={t("Моя сборка")}
               className={inputCls}
             />
-            <p className="mt-1.5 text-[11px] text-muted">{t("Папка сборки на диске не изменится.")}</p>
+            <p className="mt-1.5 text-[12px] text-muted">{t("Папка сборки на диске не изменится.")}</p>
           </div>
         </div>
 
         {}
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs text-muted">{t("Баннер карточки")}</span>
+            <span className="text-[13px] font-medium text-text2">{t("Баннер карточки")}</span>
             {banner && (
               <button
                 onClick={dropBanner}
-                className="text-[11px] font-medium text-muted transition-colors hover:text-[#ef4444]"
+                className="text-[12px] font-medium text-muted transition-colors hover:text-danger"
               >
-                <i className="fa-solid fa-trash-can mr-1" />
+                <Icon cls="fa-solid fa-trash-can mr-1" />
                 {t("Убрать")}
               </button>
             )}
@@ -221,28 +222,30 @@ export default function BuildSettingsModal({
           <button
             onClick={changeBanner}
             title={banner ? t("Сменить баннер") : t("Выбрать картинку")}
-            className="group relative h-28 w-full overflow-hidden rounded-[16px] border border-border bg-bg"
+            className={`group relative h-28 w-full overflow-hidden rounded-[18px] transition-colors ${
+              banner ? "" : "border border-dashed border-line-strong hover:border-accent/60 hover:bg-accent/[0.04]"
+            }`}
           >
             {banner ? (
               <img src={banner} alt="" className="h-full w-full object-cover" />
             ) : (
               <span className="grid h-full w-full place-items-center text-muted">
                 <span className="flex flex-col items-center gap-1">
-                  <i className="fa-solid fa-image" />
-                  <span className="text-[11px]">{t("Добавить баннер")}</span>
+                  <Icon cls="fa-solid fa-image" />
+                  <span className="text-[12px]">{t("Добавить баннер")}</span>
                 </span>
               </span>
             )}
             {banner && (
               <span className="absolute inset-0 grid place-items-center bg-black/55 opacity-0 transition-opacity group-hover:opacity-100">
                 <span className="flex flex-col items-center gap-1 text-white">
-                  <i className="fa-solid fa-camera" />
-                  <span className="text-[10px] font-medium">{t("Сменить")}</span>
+                  <Icon cls="fa-solid fa-camera" />
+                  <span className="text-[11.5px] font-medium">{t("Сменить")}</span>
                 </span>
               </span>
             )}
           </button>
-          <p className="mt-1.5 text-[11px] text-muted">
+          <p className="mt-1.5 text-[12px] text-muted">
             {t("Показывается на карточке сборки. Рекомендуемый размер — 570×300.")}
           </p>
         </div>
@@ -250,20 +253,20 @@ export default function BuildSettingsModal({
         {}
         <div>
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-xs text-muted">{t("Версия Minecraft")}</span>
+            <span className="text-[13px] font-medium text-text2">{t("Версия Minecraft")}</span>
             <button
               onClick={() => setShowSnapshots((s) => !s)}
-              className={`text-[11px] font-medium transition-colors ${
+              className={`text-[12px] font-medium transition-colors ${
                 showSnapshots ? "text-accent" : "text-muted hover:text-text"
               }`}
             >
-              <i className="fa-solid fa-flask mr-1" />
+              <Icon cls="fa-solid fa-flask mr-1" />
               {t("Снапшоты")}
             </button>
           </div>
           {versions === null ? (
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2.5 text-sm text-muted">
-              <i className="fa-solid fa-spinner fa-spin" />
+            <div className="field flex items-center gap-2 px-3.5 py-2.5 text-sm text-muted">
+              <Icon cls="fa-solid fa-spinner fa-spin" />
               {t("Загрузка версий")}<LoadingDots className="ml-1" />
             </div>
           ) : (
@@ -277,8 +280,8 @@ export default function BuildSettingsModal({
             />
           )}
           {versionChanged && (
-            <p className="mt-2 flex items-start gap-1.5 text-[11px] text-muted">
-              <i className="fa-solid fa-circle-info mt-0.5 text-accent" />
+            <p className="mt-2 flex items-start gap-1.5 text-[12px] text-muted">
+              <Icon cls="fa-solid fa-circle-info mt-0.5 text-accent" />
               {t("Моды будут пере-подобраны под {v}; те, которых под неё нет, — выключены.", {
                 v: version,
               })}
@@ -288,26 +291,26 @@ export default function BuildSettingsModal({
 
         {}
         <div>
-          <span className="mb-1.5 block text-xs text-muted">{t("Ядро (загрузчик модов)")}</span>
+          <span className="field-label">{t("Ядро (загрузчик модов)")}</span>
           <div className="grid grid-cols-4 gap-2">
             {LOADERS.map((l) => (
               <button
                 key={l.id}
                 onClick={() => setLoader(l.id)}
-                className={`flex flex-col items-center gap-1.5 rounded-lg border p-2.5 transition-colors ${
+                className={`flex flex-col items-center gap-2 rounded-[14px] py-3 transition-colors duration-300 ${
                   loader === l.id
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-border bg-card text-muted hover:border-accent/40 hover:text-text"
+                    ? "bg-accent/[0.08] text-accent-hover shadow-[inset_0_0_0_1.5px_var(--color-accent)]"
+                    : "bg-white/[0.035] text-text2 hover:bg-white/[0.06] hover:text-text"
                 }`}
               >
-                <i className={`fa-solid ${l.icon} text-sm`} />
-                <span className="text-[11px] font-medium">{l.label}</span>
+                <Icon cls={`fa-solid ${l.icon} text-[18px]`} />
+                <span className="text-[13px] font-medium">{l.label}</span>
               </button>
             ))}
           </div>
           {loaderChanged && (
-            <p className="mt-2 flex items-start gap-1.5 text-[11px] text-[#fbbf24]">
-              <i className="fa-solid fa-triangle-exclamation mt-0.5" />
+            <p className="mt-2 flex items-start gap-1.5 text-[12px] text-warn">
+              <Icon cls="fa-solid fa-triangle-exclamation mt-0.5" />
               {t(
                 "Моды пишут под конкретное ядро: установленные под {from} на {to} скорее всего не заработают. Файлы останутся на месте — их можно выключить или удалить вручную.",
                 { from: loaderLabel[build.loader] ?? build.loader, to: loaderLabel[loader] ?? loader }
@@ -317,7 +320,7 @@ export default function BuildSettingsModal({
         </div>
 
         <div>
-          <span className="mb-1.5 block text-xs text-muted">
+          <span className="field-label">
             {t("Версия {loader}", { loader: loaderLabel[loader] ?? loader })}
           </span>
           <LoaderVersionPicker
@@ -329,8 +332,8 @@ export default function BuildSettingsModal({
         </div>
 
         {error && (
-          <div className="flex items-start gap-2 rounded-lg bg-[#ef4444]/10 px-3 py-2 text-sm text-[#ef4444]">
-            <i className="fa-solid fa-circle-exclamation mt-0.5" />
+          <div role="alert" className="flex items-start gap-2 text-[13px] text-danger">
+            <span className="dot mt-[6px] bg-danger" />
             <span className="min-w-0 break-words">{error}</span>
           </div>
         )}
@@ -338,16 +341,16 @@ export default function BuildSettingsModal({
         <div className="flex justify-end gap-2 pt-1">
           <button
             onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-text"
+            className="btn btn-ghost"
           >
             {t("Закрыть")}
           </button>
           <button
             onClick={apply}
             disabled={busy}
-            className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-bold text-bg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:opacity-60"
+            className="btn btn-accent"
           >
-            {busy && <i className="fa-solid fa-spinner fa-spin" />}
+            {busy && <Icon cls="fa-solid fa-spinner fa-spin" />}
             {busy ? t("Сохранение…") : t("Сохранить")}
           </button>
         </div>
