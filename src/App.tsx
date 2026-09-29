@@ -12,6 +12,7 @@ import FriendsPage from "./components/FriendsPage";
 
 const WardrobePage = lazy(() => import("./components/WardrobePage"));
 import ServersPage from "./components/ServersPage";
+import ScreenshotsPage from "./components/ScreenshotsPage";
 const ModsPage = lazy(() => import("./components/ModsPage"));
 import SettingsModal from "./components/SettingsModal";
 import Background from "./components/background";
@@ -37,8 +38,7 @@ import {
   scanExternalInstances,
   dataMigrationPending,
   pendingPack,
-  type ExternalInstance,
-} from "./api";
+  type ExternalInstance, ACCOUNTS_CHANGED, getAccounts, refreshPlus } from "./api";
 import Icon from "./components/Icon";
 
 const DEBUG_INSTANCES: ExternalInstance[] = [
@@ -80,6 +80,7 @@ function AppInner() {
     active !== "builds" &&
     active !== "mods" &&
     active !== "servers" &&
+    active !== "screenshots" &&
     active !== "wardrobe" &&
     active !== "friends";
 
@@ -102,6 +103,18 @@ function AppInner() {
 
     }
   };
+
+  useEffect(() => {
+    void getAccounts()
+      .then((st) => {
+        const me = st.accounts.find((a) => a.id === st.active);
+        if (!me || me.type !== "aciron") return;
+        return refreshPlus(me.id).then((plus) => {
+          if (plus !== !!me.plus) window.dispatchEvent(new Event(ACCOUNTS_CHANGED));
+        });
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -356,6 +369,7 @@ function AppInner() {
                   )}
                   {active === "friends" && <FriendsPage />}
                   {active === "servers" && <ServersPage />}
+                  {active === "screenshots" && <ScreenshotsPage />}
                 </div>
               </main>
               {}

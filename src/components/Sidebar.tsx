@@ -5,13 +5,22 @@ import { useChat } from "../chat";
 import { t as tr, useLang } from "../i18n";
 import Icon from "./Icon";
 
-export type NavId = "home" | "builds" | "mods" | "wardrobe" | "friends" | "settings" | "servers";
+export type NavId =
+  | "home"
+  | "builds"
+  | "mods"
+  | "wardrobe"
+  | "screenshots"
+  | "friends"
+  | "settings"
+  | "servers";
 
 const topItems: { id: NavId; label: string; icon: string }[] = [
   { id: "home", label: "Главная", icon: "fa-house" },
   { id: "builds", label: "Сборки", icon: "fa-cubes" },
   { id: "mods", label: "Моды", icon: "fa-puzzle-piece" },
   { id: "wardrobe", label: "Гардероб", icon: "fa-shirt" },
+  { id: "screenshots", label: "Скриншоты", icon: "fa-images" },
   { id: "servers", label: "Сервера", icon: "fa-server" },
   { id: "friends", label: "Друзья", icon: "fa-comments" },
 ];

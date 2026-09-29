@@ -5,10 +5,10 @@ const VOLUME = { click: 0.35, hover: 0.18 };
 
 const HOVER_THROTTLE = 60;
 
-export type SfxPrefs = { click: boolean; hover: boolean };
+export type SfxPrefs = { click: boolean; hover: boolean; volume: number };
 
 const PREFS_KEY = "aciron:sfx";
-const DEFAULT_PREFS: SfxPrefs = { click: true, hover: true };
+const DEFAULT_PREFS: SfxPrefs = { click: true, hover: true, volume: 100 };
 
 let prefs: SfxPrefs = (() => {
   try {
@@ -22,6 +22,11 @@ let prefs: SfxPrefs = (() => {
 
 export function getSfxPrefs(): SfxPrefs {
   return prefs;
+}
+
+export function masterVolume(): number {
+  const v = Number(prefs.volume);
+  return Number.isFinite(v) ? Math.min(100, Math.max(0, v)) / 100 : 1;
 }
 
 export function setSfxPrefs(patch: Partial<SfxPrefs>) {
@@ -59,13 +64,14 @@ async function load(key: string, url: string) {
 function play(key: string, volume: number) {
   const c = audioCtx();
   const buf = c && buffers.get(key);
-  if (!c || !buf) return;
+  const level = volume * masterVolume();
+  if (!c || !buf || level <= 0) return;
 
   if (c.state === "suspended") void c.resume().catch(() => {});
   const src = c.createBufferSource();
   src.buffer = buf;
   const gain = c.createGain();
-  gain.gain.value = volume;
+  gain.gain.value = level;
   src.connect(gain).connect(c.destination);
   src.start();
 }

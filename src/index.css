@@ -235,6 +235,31 @@ body {
   animation: dropdown-in 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Всплывающие панели у кнопки (реакции, эмодзи): появляются с лёгким сдвигом
+   от кнопки. Сдвиг — через свойство translate, чтобы не спорить с
+   transform: scale(), которым корень панели подгоняется под масштаб окна. */
+@keyframes floating-in {
+  from {
+    opacity: 0;
+    translate: 0 var(--float-shift, 4px);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+.floating-in {
+  animation: floating-in 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.floating-in[data-side="bottom"] {
+  --float-shift: -4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .floating-in {
+    animation: none;
+  }
+}
+
 /* Строки списка выезжают по одной: панель уже открыта, а пункты догоняют её с
    небольшим сдвигом друг за другом. Задержку каждой строке ставит Dropdown
    инлайном (--i), потолок задержки — там же, чтобы длинный список вроде версий

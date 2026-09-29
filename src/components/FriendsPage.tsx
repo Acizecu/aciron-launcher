@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ContactAvatar, isVerified, VerifiedMark } from "./ContactAvatar";
+import { ContactAvatar, isVerified, PlusMark, VerifiedMark } from "./ContactAvatar";
 import BotRow from "./BotRow";
 import ChatPanel from "./ChatPanel";
 import TypingDots from "./chat/TypingDots";
@@ -67,6 +67,7 @@ function ChatRow({
         <div className="flex items-center gap-1.5">
           <span className="truncate text-[14px] font-semibold text-text">{f.username}</span>
           {isVerified(f) && <VerifiedMark className="text-[11.5px]" />}
+          {f.plus && <PlusMark />}
           {at > 0 && <span className="ml-auto shrink-0 pl-2 text-[11.5px] text-muted">{shortTime(at)}</span>}
         </div>
         <div className="mt-0.5 flex items-center gap-2 truncate text-[12.5px]">

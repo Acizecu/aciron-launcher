@@ -19,7 +19,14 @@ export default function DataMigrationModal() {
       window.dispatchEvent(new CustomEvent("aciron-task-end"));
     }
 
-    setTimeout(() => window.location.reload(), 800);
+    setTimeout(async () => {
+      try {
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        await relaunch();
+      } catch {
+        window.location.reload();
+      }
+    }, 800);
   };
 
   return (

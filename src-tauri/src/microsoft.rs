@@ -416,7 +416,7 @@ async fn finish_login(
                 .or_else(|| arr.first())
         })
         .and_then(|s| s["url"].as_str())
-        .map(|s| s.to_string())
+        .map(crate::mojang::secure_texture_url)
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| format!("https://crafatar.com/skins/{uuid}"));
 
@@ -441,6 +441,7 @@ async fn finish_login(
         mojang_look: String::new(),
         mojang_skin: String::new(),
         mojang_cape: String::new(),
+        plus: false,
     };
     Ok(acc)
 }

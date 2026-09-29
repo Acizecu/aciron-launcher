@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import RecentCard from "./RecentCard";
 import PromoCard from "./PromoCard";
 import FriendsPanel from "./FriendsPanel";
-import { getRecents, promoCurrent, removeRecent, type Promo, type Recent } from "../api";
+import { getAccounts, getRecents, promoCurrent, removeRecent, type Promo, type Recent } from "../api";
 import { CARD_FALL_MS } from "../anim";
 import { useFlip } from "../hooks/useFlip";
 import { useLang } from "../i18n";
@@ -31,7 +31,11 @@ export default function Home() {
 
   useEffect(() => {
     let alive = true;
-    void promoCurrent().then((p) => alive && setPromo(p));
+
+    void Promise.all([promoCurrent(), getAccounts().catch(() => null)]).then(([p, acc]) => {
+      const me = acc?.accounts.find((a) => a.id === acc.active);
+      if (alive) setPromo(me?.plus ? null : p);
+    });
     return () => {
       alive = false;
     };

@@ -120,6 +120,8 @@ struct IdUser {
     has_skin: bool,
     #[serde(default)]
     license: Option<License>,
+    #[serde(default)]
+    plus: bool,
 }
 
 #[derive(Deserialize)]
@@ -152,6 +154,10 @@ pub struct LoginStart {
     pub ticket: String,
 
     pub methods: Vec<String>,
+
+    pub code_sent_to: Option<String>,
+
+    pub resend_in_secs: u64,
 }
 
 #[tauri::command]
@@ -187,6 +193,8 @@ pub async fn aciron_login_start(login: String, password: String) -> Result<Login
             twofa_required: true,
             ticket,
             methods,
+            code_sent_to: body["codeSentTo"].as_str().map(String::from),
+            resend_in_secs: body["resendInSecs"].as_u64().unwrap_or(0),
         });
     }
 
@@ -196,6 +204,8 @@ pub async fn aciron_login_start(login: String, password: String) -> Result<Login
         twofa_required: false,
         ticket: String::new(),
         methods: Vec::new(),
+        code_sent_to: None,
+        resend_in_secs: 0,
     })
 }
 
@@ -254,6 +264,7 @@ fn account_from(data: AuthResp) -> Account {
         mojang_look: String::new(),
         mojang_skin: String::new(),
         mojang_cape: String::new(),
+        plus: data.user.plus,
     };
     accounts::save_account(acc)
 }
@@ -348,4 +359,26 @@ pub async fn add_playtime(token: String, secs: u64) {
             .send()
             .await;
     }
+}
+
+#[tauri::command]
+pub async fn aciron_refresh_plus(account_id: String) -> Result<bool, String> {
+    let acc = accounts::get_account(&account_id).ok_or("NO_ACCOUNT")?;
+    if acc.kind != "aciron" || acc.aciron_token.is_empty() {
+        return Ok(false);
+    }
+    let resp = get("/api/me")?
+        .header("Authorization", format!("Bearer {}", acc.aciron_token))
+        .send()
+        .await
+        .map_err(|_| OFFLINE.to_string())?;
+    if !resp.status().is_success() {
+        return Ok(acc.plus);
+    }
+    let body: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let plus = body["plus"].as_bool().or_else(|| body["user"]["plus"].as_bool()).unwrap_or(false);
+    if plus != acc.plus {
+        accounts::update_account(&account_id, |a| a.plus = plus);
+    }
+    Ok(plus)
 }

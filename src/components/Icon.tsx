@@ -190,6 +190,7 @@ const MAP: Record<string, LucideIcon> = {
   gem: Gem,
   hammer: Hammer,
   "hand-fist": Hand,
+  hand: Hand,
   heart: Heart,
   house: House,
   "id-badge": IdCard,

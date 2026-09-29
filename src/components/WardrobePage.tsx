@@ -13,6 +13,7 @@ import { CapeCard, Loading, Notice, OutfitCard, SectionHeader, SkinCard, Tile, T
 import { t, t as tr, ts } from "../i18n";
 import {
   ACIRON_ID_API,
+  capeAnimationOf,
   activeCapeUrl,
   activeSkinUrl,
   cachePeek,
@@ -261,8 +262,13 @@ export default function WardrobePage() {
     setDirty(true);
   };
 
-  const wearCape = (key: string, url: string | null, apply: () => Promise<unknown>) => {
-    setInstant((s) => ({ ...s, capeKey: key, capeUrl: url }));
+  const wearCape = (
+    key: string,
+    url: string | null,
+    apply: () => Promise<unknown>,
+    animation: CapeEntry["animation"] = null
+  ) => {
+    setInstant((s) => ({ ...s, capeKey: key, capeUrl: url, capeAnimation: animation }));
     pending.current.cape = apply;
     setDirty(true);
   };
@@ -360,6 +366,7 @@ export default function WardrobePage() {
         origin: byOrigin(c),
         active: data?.active.capeCatalogId === c.id,
         apply: () => capeCatalogApply(c.id),
+        animation: capeAnimationOf(c.animation),
       });
 
     return out;
@@ -473,6 +480,11 @@ export default function WardrobePage() {
               <PlayerView
                 skinUrl={skinUrl}
                 capeUrl={capeUrl}
+                capeAnimation={
+                  instant?.capeKey !== undefined
+                    ? instant.capeAnimation ?? null
+                    : capeAnimationOf(data?.active.capeAnimation)
+                }
                 model={shownModel}
                 back={back}
                 className="h-full w-full"
@@ -645,7 +657,7 @@ export default function WardrobePage() {
                           active={capeActive(c)}
                           badge={ownCapeOn ? t("на лицензии") : undefined}
                           index={i}
-                          onApply={() => wearCape(c.key, c.url, c.apply)}
+                          onApply={() => wearCape(c.key, c.url, c.apply, c.animation)}
                         />
                       ))}
                     {lic?.linked && !licError && !capes.some((c) => c.origin === "license") && (
@@ -673,7 +685,7 @@ export default function WardrobePage() {
                           entry={c}
                           active={capeActive(c)}
                           index={i + 2}
-                          onApply={() => wearCape(c.key, c.url, c.apply)}
+                          onApply={() => wearCape(c.key, c.url, c.apply, c.animation)}
                         />
                       ))}
                     {catalog === null && <Loading />}

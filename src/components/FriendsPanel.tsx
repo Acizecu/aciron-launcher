@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import ProfileModal from "./ProfileModal";
 import Head from "./Head";
-import { ContactAvatar, isVerified, VerifiedMark } from "./ContactAvatar";
+import { ContactAvatar, isVerified, PlusMark, VerifiedMark } from "./ContactAvatar";
 import ConfirmModal from "./ConfirmModal";
 import AddAccountModal from "./AddAccountModal";
 import FriendSettingsModal, {
@@ -112,6 +112,7 @@ const FriendRow = memo(function FriendRow({
               {f.username}
             </span>
             {isVerified(f) && <VerifiedMark className="text-[11.5px]" />}
+          {f.plus && <PlusMark />}
             {muted && (
               <Icon
                 cls="fa-solid fa-bell-slash shrink-0 text-[9px] text-muted"

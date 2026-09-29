@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { buildPlayer, type BackItem, type SkinModel } from "./playerModel";
 import { applyAnimation, idlePose, rememberBasePose, type Animation } from "./animation";
 import { createPoof, type Poof } from "./poof";
+import { SpriteCape, type CapeAnimation } from "./capeAnimation";
 import { defaultSkinUrl } from "../../api";
 
 const ZOOM_MIN = 0.72;
@@ -23,10 +24,13 @@ export default function PlayerView({
   model,
   back = "cape",
   animation,
+  capeAnimation,
   className = "",
 }: {
   skinUrl: string;
   capeUrl?: string | null;
+
+  capeAnimation?: CapeAnimation | null;
   model: SkinModel;
 
   back?: BackItem;
@@ -70,6 +74,8 @@ export default function PlayerView({
     let rig: ReturnType<typeof buildPlayer> | null = null;
     let alive = true;
     let poof: Poof | null = null;
+    let sprite: SpriteCape | null = null;
+    const capeStarted = performance.now();
 
     const load = (url: string) =>
       new Promise<HTMLImageElement | null>((resolve) => {
@@ -81,11 +87,14 @@ export default function PlayerView({
         img.src = url;
       });
 
-    void Promise.all([load(skinUrl), load(capeUrl || "")])
+    const sheetUrl = capeAnimation?.sheetUrl ?? "";
+    void Promise.all([load(skinUrl), load(sheetUrl || capeUrl || "")])
       .then(async ([skin, cape]) => [skin ?? (await load(defaultSkinUrl(model))), cape] as const)
       .then(([skin, cape]) => {
         if (!alive || !skin) return;
-        rig = buildPlayer(skin, model, cape, back);
+
+        sprite = cape && capeAnimation ? new SpriteCape(cape, capeAnimation) : null;
+        rig = buildPlayer(skin, model, sprite ? sprite.canvas : cape, back);
         rememberBasePose(rig);
 
         rig.root.position.y = -16;
@@ -170,6 +179,10 @@ export default function PlayerView({
       if (rig) {
         if (animRef.current) applyAnimation(rig, animRef.current, t);
         else idlePose(rig, t);
+
+        if (sprite && rig.capeTexture && sprite.draw((performance.now() - capeStarted) / 1000)) {
+          rig.capeTexture.needsUpdate = true;
+        }
       }
       if (poof && !poof.update(performance.now() / 1000)) {
         pivot.remove(poof.object);
@@ -222,7 +235,7 @@ export default function PlayerView({
       host.removeChild(renderer.domElement);
     };
 
-  }, [skinUrl, capeUrl, model, back]);
+  }, [skinUrl, capeUrl, model, back, capeAnimation ? JSON.stringify(capeAnimation) : ""]);
 
   return <div ref={hostRef} className={className} />;
 }

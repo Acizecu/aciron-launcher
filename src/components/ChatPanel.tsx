@@ -1,13 +1,24 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ContactAvatar, VerifiedMark } from "./ContactAvatar";
+import { ContactAvatar, PlusMark, VerifiedMark } from "./ContactAvatar";
 import ProfileModal from "./ProfileModal";
 import MessageMenu, { type MenuItem } from "./chat/MessageMenu";
 import ForwardModal from "./chat/ForwardModal";
 import TypingDots from "./chat/TypingDots";
 import LoadingDots from "./LoadingDots";
 import EmojiPicker from "./chat/EmojiPicker";
+import FloatingPanel from "./FloatingPanel";
+import Lightbox from "./Lightbox";
 import Twemoji from "./chat/Twemoji";
-import { acironProfileUrl, getAccounts, MAX_MESSAGE, openUrl, type Friend } from "../api";
+import {
+  acironProfileUrl,
+  chatFileUrl,
+  getAccounts,
+  MAX_MESSAGE,
+  openUrl,
+  pickFile,
+  type ChatAttachment,
+  type Friend,
+} from "../api";
 import { PRESENCE_COLOR, presenceText } from "../friends";
 import ReactionPicker from "./chat/ReactionPicker";
 import {
@@ -25,6 +36,7 @@ import {
   remove,
   retry,
   send,
+  sendImage,
   setOpenConversation,
   splitReactions,
   useConversation,
@@ -88,6 +100,67 @@ function MessagesSkeleton() {
   );
 }
 
+function Attachments({ items, mine }: { items: ChatAttachment[]; mine: boolean }) {
+  const [view, setView] = useState<number | null>(null);
+  const urls = items.map((a) => a.preview ?? chatFileUrl(a.url));
+  return (
+    <div className="mb-1 flex flex-col gap-1">
+      {items.map((a, i) => {
+        if (a.expired && !a.preview) {
+          return (
+            <div
+              key={a.id}
+              className={`flex items-center gap-2 rounded-[12px] px-3 py-2 text-[12.5px] ${
+                mine ? "bg-bg/15 text-bg/75" : "bg-bg/40 text-muted"
+              }`}
+            >
+              <Icon cls="fa-regular fa-image" />
+              {t("Картинка удалена по сроку хранения")}
+            </div>
+          );
+        }
+        const w = a.width ?? 320;
+        const h = a.height ?? 200;
+        const maxW = Math.min(280, w);
+        return (
+          <button
+            key={a.id}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (urls[i]) setView(i);
+            }}
+            className="relative block overflow-hidden rounded-[12px] bg-bg/30"
+            style={{ width: maxW, aspectRatio: `${w} / ${h}`, maxHeight: 320 }}
+          >
+            {urls[i] && (
+              <img
+                src={urls[i]!}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                draggable={false}
+                className="h-full w-full object-cover"
+              />
+            )}
+            {a.preview && (
+              <span className="absolute inset-0 grid place-items-center bg-black/30">
+                <LoadingDots />
+              </span>
+            )}
+          </button>
+        );
+      })}
+      {view !== null && (
+        <Lightbox
+          images={urls.filter((u): u is string => !!u).map((url) => ({ url }))}
+          index={view}
+          onClose={() => setView(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 const Bubble = memo(function Bubble({
   msg,
   mine,
@@ -130,7 +203,7 @@ const Bubble = memo(function Bubble({
     >
       {}
       {mine && !selecting && reactable && (
-        <ReactionPicker current={myReaction(reactions)} onPick={(e) => onReact(msg, e)} />
+        <ReactionPicker mine current={myReaction(reactions)} onPick={(e) => onReact(msg, e)} />
       )}
       {selecting && (
         <span
@@ -175,10 +248,15 @@ const Bubble = memo(function Bubble({
             </div>
           </div>
         )}
+        {msg.attachments && msg.attachments.length > 0 && (
+          <Attachments items={msg.attachments} mine={mine} />
+        )}
         {}
-        <div className="selectable whitespace-pre-wrap break-words text-[14px] leading-[1.45]">
-          <Twemoji text={rep.text} />
-        </div>
+        {rep.text && (
+          <div className="selectable whitespace-pre-wrap break-words text-[14px] leading-[1.45]">
+            <Twemoji text={rep.text} />
+          </div>
+        )}
         <div
           className={`mt-0.5 flex items-center justify-end gap-1 text-[11.5px] ${
             mine ? "text-bg/60" : "text-muted"
@@ -229,6 +307,7 @@ const Composer = memo(function Composer({
   sending,
   reply,
   onSubmit,
+  onImage,
   onTyping,
   onCancelReply,
 }: {
@@ -236,6 +315,8 @@ const Composer = memo(function Composer({
   sending: boolean;
   reply: ReplyTarget | null;
   onSubmit: (text: string) => void | Promise<void>;
+
+  onImage: (src: { path: string } | { data: string; preview: string }, caption: string) => Promise<boolean>;
   onTyping?: () => void;
   onCancelReply: () => void;
 }) {
@@ -244,7 +325,37 @@ const Composer = memo(function Composer({
   const [draft, setDraft] = useState("");
   const [picker, setPicker] = useState(false);
   const area = useRef<HTMLTextAreaElement | null>(null);
+  const emojiBtn = useRef<HTMLButtonElement | null>(null);
   const over = draft.length > MAX_MESSAGE;
+
+  const closePicker = useCallback(() => {
+    setPicker(false);
+    requestAnimationFrame(() => area.current?.focus());
+  }, []);
+
+  const image = async (src: { path: string } | { data: string; preview: string }) => {
+    const caption = draft.trim();
+    if (await onImage(src, caption)) setDraft("");
+  };
+
+  const attach = async () => {
+    const path = await pickFile(t("Изображения"), ["png", "jpg", "jpeg", "gif", "webp"]);
+    if (path) void image({ path });
+  };
+
+  const paste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const file = Array.from(e.clipboardData.items)
+      .find((it) => it.kind === "file" && it.type.startsWith("image/"))
+      ?.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      void image({ data: url.slice(url.indexOf(",") + 1), preview: url });
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     if (reply) area.current?.focus();
@@ -299,6 +410,7 @@ const Composer = memo(function Composer({
 
             if (e.target.value.trim()) onTyping?.();
           }}
+          onPaste={paste}
           onKeyDown={(e) => {
             if (e.key === "Escape" && reply) {
               e.preventDefault();
@@ -314,17 +426,26 @@ const Composer = memo(function Composer({
           className="max-h-32 min-h-[40px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[14px] text-text outline-none placeholder:text-muted"
         />
         <button
+          onClick={attach}
+          title={t("Отправить картинку")}
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-white/[0.05] hover:text-text"
+        >
+          <Icon cls="fa-regular fa-image text-[18px]" />
+        </button>
+        <button
+          ref={emojiBtn}
           onClick={() => setPicker((v) => !v)}
           title={t("Эмодзи")}
+          aria-expanded={picker}
           className={`grid h-10 w-10 shrink-0 place-items-center rounded-full transition-colors ${
             picker ? "bg-white/[0.06] text-accent" : "text-muted hover:bg-white/[0.05] hover:text-text"
           }`}
         >
           <Icon cls="fa-regular fa-face-smile text-[18px]" />
         </button>
-        {picker && (
-          <EmojiPicker onPick={insert} onClose={() => setPicker(false)} />
-        )}
+        <FloatingPanel anchor={emojiBtn} open={picker} onClose={closePicker} side="top" align="end">
+          <EmojiPicker onPick={insert} />
+        </FloatingPanel>
         <button
           onClick={submit}
           disabled={!draft.trim() || over}
@@ -436,6 +557,20 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       }
     },
     [friend.id, reply, sending, toast]
+  );
+
+  const submitImage = useCallback(
+    async (src: { path: string } | { data: string; preview: string }, caption: string) => {
+      wasAtBottom.current = true;
+      try {
+        await sendImage(friend.id, src, stripMarkers(caption));
+        return true;
+      } catch (e) {
+        toast(ts(String(e)) || t("Картинка не отправлена"), "error");
+        return false;
+      }
+    },
+    [friend.id, toast]
   );
 
   const startReply = useCallback(
@@ -598,6 +733,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
                   {friend.username}
                 </span>
                 {friend.verified && <VerifiedMark className="text-[12px]" />}
+          {friend.plus && <PlusMark />}
               </div>
               <div className="truncate text-[12.5px]">
                 {typing ? (
@@ -750,6 +886,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
           sending={sending}
           reply={reply}
           onSubmit={submit}
+          onImage={submitImage}
           onTyping={() => notifyTyping(friend.id)}
           onCancelReply={() => setReply(null)}
         />

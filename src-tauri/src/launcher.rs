@@ -788,7 +788,10 @@ async fn prepare_and_launch(
     let game_dir = game_dir_override.unwrap_or_else(|| root.clone());
 
     if settings.autoadd_server {
-        ensure_test_server(&game_dir);
+        let list = crate::aciron_servers::fetch().await;
+        if let Err(e) = crate::aciron_servers::apply(&game_dir, &list) {
+            eprintln!("[servers] {e}");
+        }
     }
 
     if settings.fullscreen {
@@ -1369,24 +1372,6 @@ fn version_ge_1_20(version: &str) -> bool {
     major > 1 || (major == 1 && minor >= 20)
 }
 
-fn test_server_name() -> &'static str {
-    crate::i18n::t("Aciron — test server")
-}
-
-const TEST_SERVER_IP: &str = "mc.aciron.pro";
-
-fn ensure_test_server(game_dir: &Path) {
-    let path = game_dir.join("servers.dat");
-    if path.exists() {
-        return;
-    }
-    if let Some(p) = path.parent() {
-        let _ = std::fs::create_dir_all(p);
-    }
-    let data = build_servers_nbt(&[(test_server_name(), TEST_SERVER_IP)]);
-    let _ = std::fs::write(&path, data);
-}
-
 fn ensure_fullscreen(game_dir: &Path) {
     let path = game_dir.join("options.txt");
     let _ = std::fs::create_dir_all(game_dir);
@@ -1405,37 +1390,6 @@ fn ensure_fullscreen(game_dir: &Path) {
         lines.push("fullscreen:true".to_string());
     }
     let _ = std::fs::write(&path, lines.join("\n") + "\n");
-}
-
-fn build_servers_nbt(servers: &[(&str, &str)]) -> Vec<u8> {
-    fn write_str(out: &mut Vec<u8>, s: &str) {
-        let b = s.as_bytes();
-        out.extend_from_slice(&(b.len() as u16).to_be_bytes());
-        out.extend_from_slice(b);
-    }
-    let mut out = Vec::new();
-
-    out.push(0x0A);
-    write_str(&mut out, "");
-
-    out.push(0x09);
-    write_str(&mut out, "servers");
-    out.push(0x0A);
-    out.extend_from_slice(&(servers.len() as i32).to_be_bytes());
-    for (name, ip) in servers {
-        out.push(0x08);
-        write_str(&mut out, "name");
-        write_str(&mut out, name);
-        out.push(0x08);
-        write_str(&mut out, "ip");
-        write_str(&mut out, ip);
-        out.push(0x01);
-        write_str(&mut out, "acceptTextures");
-        out.push(1);
-        out.push(0x00);
-    }
-    out.push(0x00);
-    out
 }
 
 const ACIRON_SKINS_JAR: &[u8] = include_bytes!("../resources/aciron-skins.jar");
@@ -1649,7 +1603,16 @@ pub async fn launch_build(
     match &res {
         Ok(_) => {
 
-            crate::discord::set_build(&build.name);
+            let detail = if build.loader.is_empty() || build.loader == "vanilla" {
+                format!("Minecraft {}", build.mc_version)
+            } else {
+                format!("Minecraft {} · {}", build.mc_version, build.loader)
+            };
+            crate::discord::set_build(
+                &build.name,
+                crate::build_covers::rpc_image(&build).as_deref(),
+                &detail,
+            );
         }
         Err(e) => emit(&app, "error", e, 0, 1),
     }

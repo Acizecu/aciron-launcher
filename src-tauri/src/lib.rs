@@ -1,7 +1,9 @@
 mod accounts;
 mod aciron;
+mod aciron_servers;
 mod announce;
 mod atomic;
+mod build_covers;
 mod builds;
 mod cancel;
 mod chat;
@@ -27,6 +29,7 @@ mod presence;
 mod promo;
 mod realtime;
 mod recents;
+mod screenshots;
 mod secret;
 mod servers;
 mod settings;
@@ -132,6 +135,7 @@ pub fn run() {
             accounts::set_active_account,
             microsoft::add_microsoft_account,
             aciron::aciron_login_start,
+            aciron::aciron_refresh_plus,
             aciron::aciron_login_finish,
             aciron::aciron_login_telegram_send,
             aciron::aciron_register,
@@ -152,6 +156,9 @@ pub fn run() {
             realtime::realtime_send_typing,
             chat::chat_history,
             chat::chat_send,
+            chat::chat_send_image,
+            chat::chat_send_image_data,
+            chat::chat_limits,
             chat::chat_overview,
             chat::chat_mark_read,
             chat::chat_delete,
@@ -186,6 +193,7 @@ pub fn run() {
             promo::promo_install,
             builds::set_build_image,
             builds::get_build_image,
+            build_covers::build_cover,
             builds::read_image_data_url,
             builds::set_build_banner,
             builds::get_build_banner,
@@ -221,6 +229,13 @@ pub fn run() {
             ftb::ftb_project_versions,
             ftb::ftb_install_modpack,
             servers::server_status,
+            screenshots::screenshots_list,
+            screenshots::screenshot_thumbnail,
+            screenshots::screenshot_full,
+            screenshots::screenshot_open,
+            screenshots::screenshot_reveal,
+            screenshots::screenshot_delete,
+            aciron_servers::aciron_servers_list,
             update::build_info,
             crash::crash_report_js,
             crash::crash_reports_pending,
@@ -238,6 +253,18 @@ pub fn run() {
             importer::first_run_pending,
             importer::complete_first_run,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app, event| {
+
+            if let tauri::RunEvent::Exit = event {
+                tauri::async_runtime::block_on(async {
+                    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+                        realtime::shutdown().await;
+                        presence::goodbye().await;
+                    })
+                    .await;
+                });
+            }
+        });
 }

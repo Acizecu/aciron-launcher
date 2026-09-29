@@ -35,6 +35,9 @@ pub struct Friend {
 
     #[serde(default)]
     pub verified: bool,
+
+    #[serde(default)]
+    pub plus: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,6 +49,8 @@ pub struct PendingUser {
     pub has_skin: bool,
     #[serde(default)]
     pub verified: bool,
+    #[serde(default)]
+    pub plus: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

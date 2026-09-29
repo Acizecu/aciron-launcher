@@ -109,8 +109,9 @@ export default function AddAccountModal({
 
       setMethod(r.methods.includes("totp") ? "totp" : r.methods[0]);
       setCode("");
-      setTgSent(false);
-      setCooldown(0);
+
+      setTgSent(!!r.codeSentTo);
+      setCooldown(r.codeSentTo ? r.resendInSecs || TELEGRAM_COOLDOWN : 0);
       setStep("twofa");
     } catch (e) {
       const msg = ts(String(e));
@@ -131,7 +132,13 @@ export default function AddAccountModal({
   const submitTwofa = async () => {
     setError("");
     if (!code.trim())
-      return setError(method === "telegram" ? t("Введите код из Telegram") : t("Введите код 2FA"));
+      return setError(
+        method === "telegram"
+          ? t("Введите код из Telegram")
+          : method === "email"
+            ? t("Введите код из письма")
+            : t("Введите код 2FA")
+      );
     setBusy(true);
     try {
       await acironLoginFinish(ticket, code.trim());
@@ -152,7 +159,7 @@ export default function AddAccountModal({
       await acironLoginTelegramSend(ticket);
       setTgSent(true);
       setCooldown(TELEGRAM_COOLDOWN);
-      setNotice(t("Код отправлен в Telegram"));
+      setNotice(method === "email" ? t("Код отправлен на почту") : t("Код отправлен в Telegram"));
     } catch (e) {
       setError(ts(String(e)));
     } finally {
@@ -435,15 +442,23 @@ export default function AddAccountModal({
               <div className="grid h-14 w-14 place-items-center rounded-full bg-accent/12 text-accent">
                 <Icon
                   cls={`text-2xl ${
-                    method === "telegram" ? "fa-brands fa-telegram" : "fa-solid fa-shield-halved"
+                    method === "telegram"
+                      ? "fa-brands fa-telegram"
+                      : method === "email"
+                        ? "fa-solid fa-envelope"
+                        : "fa-solid fa-shield-halved"
                   }`}
                 />
               </div>
               <p className="text-sm text-text">{t("У аккаунта включён второй фактор")}</p>
               <p className="text-[12.5px] text-muted">
                 {method === "telegram"
-                  ? t("Пришлём 6-значный код в привязанный Telegram")
-                  : t("Введите код из приложения-аутентификатора или резервный код")}
+                  ? tgSent
+                    ? t("Бот прислал 6-значный код в Telegram")
+                    : t("Пришлём 6-значный код в привязанный Telegram")
+                  : method === "email"
+                    ? t("Мы отправили 6-значный код на почту")
+                    : t("Введите код из приложения-аутентификатора или резервный код")}
               </p>
             </div>
 
@@ -462,10 +477,14 @@ export default function AddAccountModal({
                   >
                     <Icon
                       cls={
-                        m === "telegram" ? "fa-brands fa-telegram" : "fa-solid fa-mobile-screen"
+                        m === "telegram"
+                          ? "fa-brands fa-telegram"
+                          : m === "email"
+                            ? "fa-solid fa-envelope"
+                            : "fa-solid fa-mobile-screen"
                       }
                     />
-                    {m === "telegram" ? "Telegram" : t("Приложение")}
+                    {m === "telegram" ? "Telegram" : m === "email" ? t("Почта") : t("Приложение")}
                   </button>
                 ))}
               </div>
@@ -484,17 +503,21 @@ export default function AddAccountModal({
               <>
                 <label className="block">
                   <span className="field-label">
-                    {method === "telegram" ? t("Код из Telegram") : t("Код 2FA")}
+                    {method === "telegram"
+                      ? t("Код из Telegram")
+                      : method === "email"
+                        ? t("Код из письма")
+                        : t("Код 2FA")}
                   </span>
                   <input
                     autoFocus
                     className={`${inputCls} text-center tracking-[0.3em]`}
                     value={code}
                     placeholder="000000"
-                    maxLength={method === "telegram" ? 6 : 9}
+                    maxLength={method === "totp" ? 9 : 6}
                     onChange={(e) =>
                       setCode(
-                        method === "telegram"
+                        method !== "totp"
                           ? e.target.value.replace(/\D/g, "")
                           : e.target.value.replace(/[^0-9A-Za-z-]/g, "").toUpperCase()
                       )
@@ -502,7 +525,7 @@ export default function AddAccountModal({
                     onKeyDown={(e) => e.key === "Enter" && submitTwofa()}
                   />
                 </label>
-                {method === "telegram" && (
+                {method !== "totp" && (
                   <button
                     onClick={sendTelegram}
                     disabled={busy || cooldown > 0}

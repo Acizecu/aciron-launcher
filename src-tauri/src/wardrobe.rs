@@ -91,6 +91,9 @@ pub struct ActiveLook {
     pub skin_hash: Option<String>,
     #[serde(default)]
     pub cape_hash: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cape_animation: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -233,6 +236,16 @@ pub struct CatalogCape {
 
     #[serde(default)]
     pub by: String,
+
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub animation: Option<serde_json::Value>,
+}
+
+fn list_field<T: serde::de::DeserializeOwned>(body: serde_json::Value, field: &str) -> Result<Vec<T>, String> {
+    let list = if body.is_array() { body } else { body[field].clone() };
+    serde_json::from_value(list).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -242,7 +255,7 @@ pub async fn cape_catalog() -> Result<Vec<CatalogCape>, String> {
         .json()
         .await
         .map_err(|e| e.to_string())?;
-    serde_json::from_value(body["capes"].clone()).map_err(|e| e.to_string())
+    list_field(body, "capes")
 }
 
 #[tauri::command]
@@ -269,7 +282,7 @@ pub async fn skin_catalog() -> Result<Vec<CatalogSkin>, String> {
         .json()
         .await
         .map_err(|e| e.to_string())?;
-    serde_json::from_value(body["skins"].clone()).map_err(|e| e.to_string())
+    list_field(body, "skins")
 }
 
 #[tauri::command]

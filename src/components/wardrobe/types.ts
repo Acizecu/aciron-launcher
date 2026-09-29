@@ -1,5 +1,6 @@
 
 import type { SkinModelId } from "../../api";
+import type { CapeAnimation } from "./capeAnimation";
 import { t, ts } from "../../i18n";
 
 export function human(e: unknown): string {
@@ -35,6 +36,8 @@ export type CapeEntry = {
   apply: () => Promise<unknown>;
 
   remove?: () => void;
+
+  animation?: CapeAnimation | null;
 };
 
 export type Instant = {
@@ -43,4 +46,5 @@ export type Instant = {
   model?: SkinModelId;
   capeKey?: string;
   capeUrl?: string | null;
+  capeAnimation?: CapeAnimation | null;
 };

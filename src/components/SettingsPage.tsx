@@ -28,7 +28,7 @@ import { Card, Field, PathRow, Toggle, iconBtnCls, inputCls } from "./settings/c
 import Dropdown from "./Dropdown";
 import { LangFlag } from "./FlagIcons";
 import { DEBUG_TOOLS } from "../config";
-import { getSfxPrefs, setSfxPrefs } from "../sfx";
+import { getSfxPrefs, playClick, setSfxPrefs } from "../sfx";
 import { useToast } from "./../ToastContext";
 import { LANGS, setLang, t, ts, useLang, type Lang } from "../i18n";
 import Icon from "./Icon";
@@ -343,7 +343,34 @@ export default function SettingsPage({
                   </Field>
                 </Card>
                 <Card>
-                  {}
+                  <Field label={t("Громкость звуков")} hint={t("Щелчки, наведение и уведомления")}>
+                    <span className="rounded-[10px] bg-bg px-2.5 py-1 text-sm font-semibold text-accent">
+                      {sfx.volume}%
+                    </span>
+                  </Field>
+                  <div className="px-4 pb-4">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={sfx.volume}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setSfx((p) => ({ ...p, volume: v }));
+                        setSfxPrefs({ volume: v });
+                      }}
+
+                      onPointerUp={() => playClick()}
+                      data-no-sound
+                      className="aciron-range"
+                      style={{ "--pct": `${sfx.volume}%` } as CSSProperties}
+                    />
+                    <div className="mt-1 flex justify-between text-[12px] text-muted">
+                      <span>{t("Без звука")}</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
                   <Field label={t("Звук нажатия")} hint={t("Щелчок при нажатии на кнопки")}>
                     <Toggle
                       value={sfx.click}

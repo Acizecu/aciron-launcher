@@ -447,6 +447,106 @@ export async function serverStatus(address: string, force = false): Promise<Serv
   }
 }
 
+export type AcironServer = {
+  name: string;
+  address: string;
+  version?: string | null;
+  description?: string | null;
+  iconUrl?: string | null;
+  addToGame?: boolean;
+};
+
+export async function acironServers(): Promise<AcironServer[]> {
+  if (!isTauri) return [{ name: "Aciron", address: "mc.aciron.pro", version: "1.21.1" }];
+  try {
+    return await invoke<AcironServer[]>("aciron_servers_list");
+  } catch {
+    return [];
+  }
+}
+
+export type Screenshot = {
+
+  instanceId: string;
+  instanceName: string;
+  mcVersion: string;
+  file: string;
+  size: number;
+  takenAt: number;
+};
+
+export async function screenshotsList(): Promise<Screenshot[]> {
+  if (!isTauri) return [];
+  try {
+    return await invoke<Screenshot[]>("screenshots_list");
+  } catch {
+    return [];
+  }
+}
+
+const thumbCache = new Map<string, string | null>();
+const thumbKey = (s: Screenshot) => `${s.instanceId}/${s.file}/${s.takenAt}`;
+
+export function cachedScreenshotThumb(s: Screenshot): string | null | undefined {
+  return thumbCache.get(thumbKey(s));
+}
+
+export async function screenshotThumb(s: Screenshot): Promise<string | null> {
+  const k = thumbKey(s);
+  if (thumbCache.has(k)) return thumbCache.get(k)!;
+  if (!isTauri) return null;
+  try {
+    const v = await invoke<string | null>("screenshot_thumbnail", { instanceId: s.instanceId, file: s.file });
+
+    if (thumbCache.size > 600) thumbCache.delete(thumbCache.keys().next().value!);
+    thumbCache.set(k, v);
+    return v;
+  } catch {
+    return null;
+  }
+}
+
+export async function screenshotFull(s: Screenshot): Promise<string> {
+  return invoke<string>("screenshot_full", { instanceId: s.instanceId, file: s.file });
+}
+
+export async function screenshotOpen(s: Screenshot): Promise<void> {
+  await invoke("screenshot_open", { instanceId: s.instanceId, file: s.file });
+}
+
+export async function screenshotReveal(s: Screenshot): Promise<void> {
+  await invoke("screenshot_reveal", { instanceId: s.instanceId, file: s.file });
+}
+
+export async function screenshotDelete(s: Screenshot): Promise<void> {
+  await invoke("screenshot_delete", { instanceId: s.instanceId, file: s.file });
+  thumbCache.delete(thumbKey(s));
+}
+
+export type BuildCover = { src: string; kind: "custom" | "official" };
+
+const coverCache = new Map<string, BuildCover | null>();
+
+export function cachedBuildCover(buildId: string): BuildCover | null | undefined {
+  return coverCache.get(buildId);
+}
+
+export async function buildCover(buildId: string): Promise<BuildCover | null> {
+  if (!isTauri) return null;
+  try {
+    const c = await invoke<BuildCover | null>("build_cover", { buildId });
+    coverCache.set(buildId, c);
+    return c;
+  } catch {
+    return null;
+  }
+}
+
+export function forgetBuildCover(buildId: string) {
+  coverCache.delete(buildId);
+  coverCache.delete(`build:${buildId}`);
+}
+
 export type AccountType = "offline" | "microsoft" | "aciron";
 
 export type Account = {
@@ -460,6 +560,8 @@ export type Account = {
   aciron_name?: string;
 
   licensed?: boolean;
+
+  plus?: boolean;
 };
 
 const ID_URL = import.meta.env.VITE_ACIRON_ID_URL || "https://example.invalid";
@@ -491,6 +593,13 @@ export function accountsChanged() {
   window.dispatchEvent(new Event("aciron-account"));
 }
 
+export async function refreshPlus(accountId: string): Promise<boolean> {
+  if (!isTauri) return false;
+  return invoke<boolean>("aciron_refresh_plus", { accountId });
+}
+
+export const ACCOUNTS_CHANGED = "aciron-accounts-changed";
+
 export async function getAccounts(): Promise<AccountsState> {
   if (!isTauri) return { ...mockAccounts };
   return invoke<AccountsState>("get_accounts");
@@ -511,11 +620,11 @@ export async function addMicrosoftAccount(): Promise<Account> {
   return invoke<Account>("add_microsoft_account");
 }
 
-export type AcironTwofaMethod = "totp" | "telegram";
+export type AcironTwofaMethod = "totp" | "telegram" | "email";
 
 export type AcironLoginStart =
   | { twofaRequired: false; account: Account }
-  | { twofaRequired: true; ticket: string; methods: AcironTwofaMethod[] };
+  | { twofaRequired: true; ticket: string; methods: AcironTwofaMethod[]; codeSentTo: string | null; resendInSecs: number };
 
 function mockAcironAccount(login: string): Account {
   return {
@@ -540,14 +649,22 @@ export async function acironLoginStart(
     twofaRequired: boolean;
     ticket: string;
     methods: string[];
+    codeSentTo?: string | null;
+    resendInSecs?: number;
   }>("aciron_login_start", { login, password });
 
   if (r.twofaRequired) {
     const known = r.methods.filter(
-      (m): m is AcironTwofaMethod => m === "totp" || m === "telegram"
+      (m): m is AcironTwofaMethod => m === "totp" || m === "telegram" || m === "email"
     );
 
-    return { twofaRequired: true, ticket: r.ticket, methods: known.length ? known : ["totp"] };
+    return {
+      twofaRequired: true,
+      ticket: r.ticket,
+      methods: known.length ? known : ["totp"],
+      codeSentTo: r.codeSentTo ?? null,
+      resendInSecs: r.resendInSecs ?? 0,
+    };
   }
   if (!r.account) throw new Error("Не удалось войти в Aciron ID");
   accountsChanged();
@@ -632,6 +749,8 @@ export type Friend = {
   system?: boolean;
 
   verified?: boolean;
+
+  plus?: boolean;
 };
 
 export type PendingUser = {
@@ -639,6 +758,7 @@ export type PendingUser = {
   username: string;
   hasSkin: boolean;
   verified?: boolean;
+  plus?: boolean;
 };
 
 export type FriendsData = {
@@ -734,6 +854,20 @@ export async function friendUnblock(user_id: string): Promise<void> {
   cacheBust("friends");
 }
 
+export type ChatAttachment = {
+  id: number | string;
+  kind: "image";
+  url: string | null;
+  width?: number | null;
+  height?: number | null;
+  mime?: string | null;
+  size?: number | null;
+
+  expired: boolean;
+
+  preview?: string;
+};
+
 export type ChatMessage = {
   id: string;
   from: string;
@@ -742,7 +876,33 @@ export type ChatMessage = {
 
   at: number;
   read: boolean;
+  attachments?: ChatAttachment[];
 };
+
+export function chatFileUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith("http") ? url : `${ACIRON_ID_API}${url}`;
+}
+
+export async function chatSendImage(
+  userId: string,
+  src: { path: string } | { data: string },
+  caption?: string
+): Promise<ChatMessage> {
+  if (!isTauri) throw new Error("Недоступно в браузерном превью");
+  return "path" in src
+    ? invoke<ChatMessage>("chat_send_image", { userId, path: src.path, caption: caption ?? null })
+    : invoke<ChatMessage>("chat_send_image_data", { userId, data: src.data, caption: caption ?? null });
+}
+
+export async function chatLimits(): Promise<{ imageMaxBytes: number } | null> {
+  if (!isTauri) return { imageMaxBytes: 4 * 1024 * 1024 };
+  try {
+    return await invoke<{ imageMaxBytes: number }>("chat_limits");
+  } catch {
+    return null;
+  }
+}
 
 export const MAX_MESSAGE = 2000;
 
@@ -803,6 +963,7 @@ export type FriendProfile = {
   createdAt: number | null;
   verified?: boolean;
   presence: FriendPresence;
+  plus?: boolean;
 };
 
 export async function friendProfile(user_id: string): Promise<FriendProfile> {
@@ -869,9 +1030,26 @@ export type WardrobeData = {
 
     skinHash?: string | null;
     capeHash?: string | null;
+
+    capeAnimation?: CapeAnimationDto | null;
   };
   licensed: boolean;
 };
+
+export type CapeAnimationDto = {
+  sheetUrl: string;
+  frameWidth: number;
+  frameHeight: number;
+  frames: number;
+  fps: number;
+  mode?: string | null;
+  order?: string | null;
+};
+
+export function capeAnimationOf(a: CapeAnimationDto | null | undefined) {
+  if (!a || !a.sheetUrl || !a.frames) return null;
+  return { ...a, sheetUrl: a.sheetUrl.startsWith("http") ? a.sheetUrl : `${ACIRON_ID_API}${a.sheetUrl}` };
+}
 
 export type ApplyResult = { synced: boolean; error?: string | null };
 
@@ -962,7 +1140,14 @@ export async function wardrobeCapeOff(): Promise<ApplyResult> {
   return r;
 }
 
-export type CatalogCape = { id: string; name: string; url: string; by: string };
+export type CatalogCape = {
+  id: string;
+  name: string;
+  url: string;
+  by: string;
+  kind?: string | null;
+  animation?: CapeAnimationDto | null;
+};
 
 export const CAPE_CATALOG_KEY = "cape-catalog";
 
@@ -1324,6 +1509,7 @@ export async function addContentFiles(
 
 export async function setBuildImage(build_id: string, src_path: string): Promise<Build> {
   if (!isTauri) throw new Error("нет бэкенда");
+  forgetBuildCover(build_id);
   return invoke<Build>("set_build_image", { buildId: build_id, srcPath: src_path });
 }
 

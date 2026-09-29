@@ -73,6 +73,9 @@ pub struct Build {
     pub icon_url: String,
 
     #[serde(default)]
+    pub image_url: String,
+
+    #[serde(default)]
     pub source_id: String,
 
     #[serde(default)]
@@ -344,6 +347,7 @@ pub fn create_build(name: String, mc_version: String, loader: String) -> Result<
         banner: String::new(),
         image: String::new(),
         icon_url: String::new(),
+        image_url: String::new(),
         source_id: String::new(),
         playtime_secs: 0,
         favorite: false,
@@ -374,6 +378,8 @@ pub fn delete_build(id: String) -> Result<(), String> {
     }
 
     crate::recents::remove(&format!("build:{id}"));
+
+    crate::build_covers::forget_remote(id.clone());
     if dir.is_dir() {
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -459,6 +465,8 @@ pub fn set_build_image(build_id: String, src_path: String) -> Result<Build, Stri
     std::fs::copy(&src, dir.join(&filename)).map_err(|e| e.to_string())?;
     build.image = filename;
     upsert_build(build.clone())?;
+
+    crate::build_covers::sync_in_background(build_id);
     Ok(build)
 }
 

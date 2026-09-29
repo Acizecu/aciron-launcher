@@ -40,6 +40,9 @@ pub struct Account {
 
     #[serde(default)]
     pub mojang_cape: String,
+
+    #[serde(default)]
+    pub plus: bool,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -160,6 +163,15 @@ pub fn update_tokens(
     let _ = save(&store);
 }
 
+pub fn update_account(id: &str, f: impl FnOnce(&mut Account)) -> Option<Account> {
+    let mut store = load();
+    let acc = store.accounts.iter_mut().find(|a| a.id == id)?;
+    f(acc);
+    let out = acc.clone();
+    let _ = save(&store);
+    Some(out)
+}
+
 pub fn get_account(id: &str) -> Option<Account> {
     load().accounts.into_iter().find(|a| a.id == id)
 }
@@ -204,6 +216,7 @@ pub fn add_offline_account(username: String) -> Result<Account, String> {
         mojang_look: String::new(),
         mojang_skin: String::new(),
         mojang_cape: String::new(),
+        plus: false,
     };
     store.active = acc.id.clone();
     store.accounts.push(acc.clone());

@@ -4,7 +4,7 @@ import ConfirmModal from "./ConfirmModal";
 import ActionMenu from "./ActionMenu";
 import PlayerView from "./wardrobe/PlayerView";
 import JoinServerModal from "./JoinServerModal";
-import { VerifiedMark } from "./ContactAvatar";
+import { PlusMark, VerifiedMark } from "./ContactAvatar";
 import {
   ACIRON_ID_API,
   friendBlock,
@@ -132,6 +132,7 @@ export default function ProfileModal({
             <div className="flex items-center gap-2">
               <span className="truncate text-[22px] font-semibold tracking-[-0.02em] text-text">{p.username}</span>
               {p.verified && <VerifiedMark className="text-[14px]" />}
+              {p.plus && <PlusMark />}
               {muted && (
                 <Icon
                   cls="fa-solid fa-bell-slash shrink-0 text-[12px] text-muted"

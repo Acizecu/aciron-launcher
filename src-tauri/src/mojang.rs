@@ -130,6 +130,13 @@ fn active_cape_id(profile: &Value) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+pub fn secure_texture_url(url: &str) -> String {
+    match url.strip_prefix("http://textures.minecraft.net/") {
+        Some(rest) => format!("https://textures.minecraft.net/{rest}"),
+        None => url.to_string(),
+    }
+}
+
 fn active_skin_url(profile: &Value) -> String {
     profile["skins"]
         .as_array()
@@ -338,7 +345,7 @@ pub async fn capes() -> Result<Vec<LicenseCape>, String> {
                 .map(|c| LicenseCape {
                     id: c["id"].as_str().unwrap_or_default().to_string(),
                     name: c["alias"].as_str().unwrap_or("Cape").to_string(),
-                    url: c["url"].as_str().unwrap_or_default().to_string(),
+                    url: secure_texture_url(c["url"].as_str().unwrap_or_default()),
                     active: c["state"].as_str() == Some("ACTIVE"),
                 })
                 .filter(|c| !c.id.is_empty())
@@ -433,6 +440,19 @@ pub async fn prove_license(aciron_token: &str, ms: &Account) -> Result<(), Strin
 mod tests {
     use super::{active_cape_id, active_skin_url, require_64};
     use serde_json::json;
+
+    #[test]
+    fn mojang_texture_urls_become_https() {
+        assert_eq!(
+            super::secure_texture_url("http://textures.minecraft.net/texture/abc"),
+            "https://textures.minecraft.net/texture/abc"
+        );
+        assert_eq!(
+            super::secure_texture_url("https://textures.minecraft.net/texture/abc"),
+            "https://textures.minecraft.net/texture/abc"
+        );
+        assert_eq!(super::secure_texture_url("http://example.com/a.png"), "http://example.com/a.png");
+    }
 
     fn head(w: u32, h: u32) -> Vec<u8> {
         let mut v = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];

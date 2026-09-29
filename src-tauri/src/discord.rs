@@ -14,7 +14,7 @@ const DOWNLOAD_URL: &str = "https://aciron.pro";
 enum State {
     Idle,
     Version(String),
-    Build { name: String },
+    Build { name: String, image: Option<String>, detail: String },
 }
 
 fn slot() -> &'static Mutex<Option<DiscordIpcClient>> {
@@ -86,7 +86,7 @@ pub fn set_enabled(on: bool) {
         match st {
             State::Idle => set_idle(),
             State::Version(v) => set_version(&v),
-            State::Build { name } => set_build(&name),
+            State::Build { name, image, detail } => set_build(&name, image.as_deref(), &detail),
         }
     } else if let Ok(mut g) = slot().lock() {
         if let Some(c) = g.as_mut() {
@@ -162,9 +162,13 @@ pub fn set_version(version: &str) {
     );
 }
 
-pub fn set_build(name: &str) {
+pub fn set_build(name: &str, image: Option<&str>, detail: &str) {
     if let Ok(mut s) = last_state().lock() {
-        *s = State::Build { name: name.to_string() };
+        *s = State::Build {
+            name: name.to_string(),
+            image: image.map(str::to_string),
+            detail: detail.to_string(),
+        };
     }
     if !configured() || !enabled() {
         return;
@@ -173,17 +177,28 @@ pub fn set_build(name: &str) {
         crate::i18n::t("Playing {v}"),
         name,
     );
+    let state = if detail.is_empty() {
+        crate::i18n::t("Minecraft instance").to_string()
+    } else {
+        detail.to_string()
+    };
+    let assets = match image {
+        Some(url) => Assets::new()
+            .large_image(url)
+            .large_text(name)
+            .small_image("logo")
+            .small_text(large_text()),
+        None => Assets::new()
+            .large_image("logo")
+            .large_text(large_text())
+            .small_image("grass")
+            .small_text(name),
+    };
     apply(
         Activity::new()
             .details(&details)
-            .state(crate::i18n::t("Minecraft instance"))
-            .assets(
-                Assets::new()
-                    .large_image("logo")
-                    .large_text(large_text())
-                    .small_image("grass")
-                    .small_text(name),
-            )
+            .state(&state)
+            .assets(assets)
             .timestamps(Timestamps::new().start(now()))
             .buttons(download_button()),
     );

@@ -15,6 +15,9 @@ pub struct Message {
     pub at: i64,
     #[serde(default)]
     pub read: bool,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -55,6 +58,56 @@ pub async fn chat_send(user_id: String, body: String) -> Result<Message, String>
         .await
         .map_err(|e| e.to_string())?;
     Ok(data.message)
+}
+
+#[tauri::command]
+pub async fn chat_send_image(user_id: String, path: String, caption: Option<String>) -> Result<Message, String> {
+    let path = std::path::PathBuf::from(path);
+    let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+    if !meta.is_file() {
+        return Err("This is not a file".into());
+    }
+
+    if meta.len() > 16 * 1024 * 1024 {
+        return Err("The image is too large".into());
+    }
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("image").to_string();
+    send_image_bytes(&user_id, bytes, name, caption).await
+}
+
+#[tauri::command]
+pub async fn chat_send_image_data(user_id: String, data: String, caption: Option<String>) -> Result<Message, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let bytes = STANDARD.decode(data.trim()).map_err(|_| "Bad image data".to_string())?;
+    if bytes.len() > 16 * 1024 * 1024 {
+        return Err("The image is too large".into());
+    }
+    send_image_bytes(&user_id, bytes, "pasted.png".into(), caption).await
+}
+
+async fn send_image_bytes(user_id: &str, bytes: Vec<u8>, name: String, caption: Option<String>) -> Result<Message, String> {
+    let token = crate::aciron::active_token()?;
+    let mut form = reqwest::multipart::Form::new()
+        .part("file", reqwest::multipart::Part::bytes(bytes).file_name(name));
+    if let Some(c) = caption.filter(|c| !c.trim().is_empty()) {
+        form = form.text("caption", c);
+    }
+    let resp = crate::aciron::post(&format!("/api/chat/{}/image", urlencode(user_id)))?
+        .header("Authorization", format!("Bearer {token}"))
+
+        .timeout(std::time::Duration::from_secs(90))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|_| crate::aciron::OFFLINE.to_string())?;
+    let data: SendResponse = crate::social::check(resp).await?.json().await.map_err(|e| e.to_string())?;
+    Ok(data.message)
+}
+
+#[tauri::command]
+pub async fn chat_limits() -> Result<serde_json::Value, String> {
+    get("/api/chat/limits").await?.json().await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]

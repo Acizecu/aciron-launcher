@@ -18,6 +18,20 @@ void syncLangFromSettings();
 
 const isSplash = new URLSearchParams(location.search).get("window") === "splash";
 
+if (!import.meta.env.DEV) {
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      const key = e.key.toLowerCase();
+      if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && key === "r")) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    },
+    { capture: true }
+  );
+}
+
 window.addEventListener("error", (e) => {
   reportUiCrash(
     e.message || "ошибка без сообщения",

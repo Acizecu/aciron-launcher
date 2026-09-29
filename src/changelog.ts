@@ -14,6 +14,223 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.1",
+    date: "2026-09-30",
+    added: [
+      {
+        ru: {
+          title: "Вкладка «Скриншоты»",
+          body:
+            "Все скриншоты из игры собраны в одном месте и разложены по сборкам. Можно искать по имени, " +
+            "открыть снимок на весь экран, показать его в папке или удалить. Файлы остаются только у тебя на компьютере.",
+        },
+        en: {
+          title: "Screenshots tab",
+          body:
+            "All your in-game screenshots are in one place, grouped by build. Search by name, open a shot " +
+            "full screen, show it in its folder or delete it. The files stay on your computer only.",
+        },
+        tr: {
+          title: "Ekran görüntüleri sekmesi",
+          body:
+            "Oyunda aldığın tüm ekran görüntüleri tek yerde, derlemelere göre gruplanmış halde. Ada göre ara, " +
+            "görüntüyü tam ekran aç, klasöründe göster ya da sil. Dosyalar yalnızca senin bilgisayarında kalır.",
+        },
+      },
+      {
+        ru: {
+          title: "Серверы Aciron",
+          body:
+            "Во вкладке «Серверы» появились серверы, которые добавляет команда Aciron, с версией и описанием. " +
+            "Часть из них лаунчер сам добавит в список серверов в игре. Новые серверы появляются без перезапуска лаунчера.",
+        },
+        en: {
+          title: "Aciron servers",
+          body:
+            "The Servers tab now lists servers added by the Aciron team, with their version and description. " +
+            "Some of them are also added to the in-game server list. New servers show up without restarting the launcher.",
+        },
+        tr: {
+          title: "Aciron sunucuları",
+          body:
+            "Sunucular sekmesinde artık Aciron ekibinin eklediği sunucular sürüm ve açıklamalarıyla görünüyor. " +
+            "Bazıları oyundaki sunucu listesine de ekleniyor. Yeni sunucular başlatıcıyı yeniden açmadan görünür.",
+        },
+      },
+      {
+        ru: {
+          title: "Картинки в чате",
+          body:
+            "В личные сообщения можно отправить картинку кнопкой или вставить скриншот через Ctrl+V. " +
+            "Размер до 4 МБ, с Aciron Plus до 10 МБ. Картинки хранятся 30 дней.",
+        },
+        en: {
+          title: "Images in chat",
+          body:
+            "You can send an image in direct messages with the button or paste a screenshot with Ctrl+V. " +
+            "Up to 4 MB, or 10 MB with Aciron Plus. Images are kept for 30 days.",
+        },
+        tr: {
+          title: "Sohbette resimler",
+          body:
+            "Özel mesajlarda düğmeyle resim gönderebilir ya da Ctrl+V ile ekran görüntüsü yapıştırabilirsin. " +
+            "En fazla 4 MB, Aciron Plus ile 10 MB. Resimler 30 gün saklanır.",
+        },
+      },
+      {
+        ru: {
+          title: "Новый выбор эмодзи",
+          body:
+            "У выбора эмодзи появились поиск по-русски и по-английски, недавние сверху и разделы по темам. " +
+            "По списку можно ходить стрелками и выбирать Enter.",
+        },
+        en: {
+          title: "New emoji picker",
+          body:
+            "The emoji picker has search in Russian and English, recent emoji at the top and sections by topic. " +
+            "Move through the list with the arrow keys and pick with Enter.",
+        },
+        tr: {
+          title: "Yeni emoji seçici",
+          body:
+            "Emoji seçicide artık Rusça ve İngilizce arama, en üstte son kullanılanlar ve konulara göre bölümler var. " +
+            "Listede ok tuşlarıyla gezinip Enter ile seçebilirsin.",
+        },
+      },
+      {
+        ru: {
+          title: "Обложки сборок",
+          body:
+            "В последних запусках и в статусе Discord теперь картинка самой сборки: своя, если ты её ставил, " +
+            "иначе официальная с Modrinth или CurseForge.",
+        },
+        en: {
+          title: "Build covers",
+          body:
+            "Recent launches and your Discord status now show the build's own picture: yours if you set one, " +
+            "otherwise the official one from Modrinth or CurseForge.",
+        },
+        tr: {
+          title: "Derleme kapakları",
+          body:
+            "Son açılanlarda ve Discord durumunda artık derlemenin kendi resmi görünüyor: kendin koyduysan " +
+            "seninki, yoksa Modrinth ya da CurseForge'daki resmi görsel.",
+        },
+      },
+      {
+        ru: {
+          title: "Анимированные плащи",
+          body: "В гардеробе появились плащи с анимацией. На модели игрока они двигаются так же, как в каталоге.",
+        },
+        en: {
+          title: "Animated capes",
+          body: "The wardrobe now has animated capes. They move on the player model the same way as in the catalog.",
+        },
+        tr: {
+          title: "Hareketli pelerinler",
+          body: "Gardıropta artık hareketli pelerinler var. Oyuncu modelinde katalogdaki gibi hareket ediyorlar.",
+        },
+      },
+      {
+        ru: {
+          title: "Aciron Plus в лаунчере",
+          body:
+            "У подписчиков рядом с ником стоит значок Plus: в меню аккаунта, в друзьях и в профиле. " +
+            "Рекламная карточка на главной у них больше не показывается.",
+        },
+        en: {
+          title: "Aciron Plus in the launcher",
+          body:
+            "Subscribers get a Plus badge next to their nickname in the account menu, the friends list and profiles. " +
+            "The promo card on the home screen is no longer shown to them.",
+        },
+        tr: {
+          title: "Başlatıcıda Aciron Plus",
+          body:
+            "Abonelerin takma adının yanında Plus rozeti var: hesap menüsünde, arkadaş listesinde ve profilde. " +
+            "Ana ekrandaki tanıtım kartı artık onlara gösterilmiyor.",
+        },
+      },
+      {
+        ru: {
+          title: "Код при входе",
+          body:
+            "Если в Aciron ID включено «Требовать код при входе», после пароля лаунчер попросит код из письма " +
+            "или от бота в Telegram. Код можно прислать ещё раз прямо из окна входа.",
+        },
+        en: {
+          title: "Sign-in code",
+          body:
+            "If “Require a code at sign-in” is on in Aciron ID, the launcher asks for a code from your email " +
+            "or the Telegram bot after the password. You can request the code again from the sign-in window.",
+        },
+        tr: {
+          title: "Girişte kod",
+          body:
+            "Aciron ID'de «Girişte kod iste» açıksa, başlatıcı paroladan sonra e-postana ya da Telegram botuna " +
+            "gelen kodu ister. Kodu giriş penceresinden yeniden isteyebilirsin.",
+        },
+      },
+      {
+        ru: {
+          title: "Громкость звуков и консоль игры",
+          body:
+            "В настройках появился ползунок громкости для щелчков и уведомлений. В консоли игры ошибки и " +
+            "предупреждения отмечены слева, а строки стека идут со сдвигом под своей ошибкой.",
+        },
+        en: {
+          title: "Sound volume and game console",
+          body:
+            "Settings have a volume slider for clicks and notifications. In the game console, errors and warnings " +
+            "are marked on the left, and stack trace lines are indented under their error.",
+        },
+        tr: {
+          title: "Ses seviyesi ve oyun konsolu",
+          body:
+            "Ayarlarda tıklamalar ve bildirimler için ses kaydırıcısı var. Oyun konsolunda hatalar ve uyarılar " +
+            "solda işaretli, yığın satırları ise kendi hatalarının altında içeriden başlıyor.",
+        },
+      },
+    ],
+    fixed: [
+      {
+        ru: "Скины и плащи Aciron снова видны в игре. После переезда на новый сервер игра не находила адрес, откуда их брать.",
+        en: "Aciron skins and capes show up in the game again. After the move to the new server, the game could not find where to load them from.",
+        tr: "Aciron görünümleri ve pelerinleri oyunda yeniden görünüyor. Yeni sunucuya geçişten sonra oyun onları nereden alacağını bulamıyordu.",
+      },
+      {
+        ru: "Плащи Minecraft, выбранные на сайте, теперь видны и в лаунчере. Раньше гардероб показывал старый плащ до недели.",
+        en: "Minecraft capes picked on the website now show in the launcher too. Before, the wardrobe could show the old cape for up to a week.",
+        tr: "Sitede seçilen Minecraft pelerinleri artık başlatıcıda da görünüyor. Eskiden gardırop eski pelerini bir haftaya kadar gösterebiliyordu.",
+      },
+      {
+        ru: "Сообщения в чате больше не пропадают, если их отправить одновременно с другими событиями.",
+        en: "Chat messages no longer go missing when they are sent at the same time as other updates.",
+        tr: "Sohbet mesajları, başka güncellemelerle aynı anda gönderildiğinde artık kaybolmuyor.",
+      },
+      {
+        ru: "Друг, у которого пропал интернет или закрылся лаунчер, больше не висит «в сети» часами. Через минуту-полторы он показывается не в сети.",
+        en: "A friend who lost their connection or closed the launcher no longer stays “online” for hours. They show as offline within a minute or two.",
+        tr: "İnternet bağlantısı kopan ya da başlatıcıyı kapatan arkadaş artık saatlerce «çevrimiçi» görünmüyor. Bir iki dakika içinde çevrimdışı görünüyor.",
+      },
+      {
+        ru: "Статус «в игре» теперь видят друзья и на сайте Aciron ID.",
+        en: "Your “in game” status is now visible to friends on the Aciron ID website too.",
+        tr: "«Oyunda» durumun artık Aciron ID sitesindeki arkadaşlarına da görünüyor.",
+      },
+      {
+        ru: "После смены аккаунта друзья и чат переключаются на новый аккаунт сразу, без перезапуска лаунчера.",
+        en: "After switching accounts, friends and chat move to the new account right away, without restarting the launcher.",
+        tr: "Hesap değiştirdikten sonra arkadaşlar ve sohbet, başlatıcıyı yeniden açmadan hemen yeni hesaba geçiyor.",
+      },
+      {
+        ru: "Панели реакций и эмодзи больше не вылезают за край окна.",
+        en: "The reaction and emoji panels no longer go past the edge of the window.",
+        tr: "Tepki ve emoji panelleri artık pencerenin kenarından taşmıyor.",
+      },
+    ],
+  },
+  {
     version: "1.2.0",
     date: "2026-09-24",
     added: [

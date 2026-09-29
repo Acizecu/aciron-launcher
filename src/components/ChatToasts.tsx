@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ContactAvatar, isVerified, VerifiedMark } from "./ContactAvatar";
+import { ContactAvatar, isVerified, PlusMark, VerifiedMark } from "./ContactAvatar";
 import { type ChatMessage, type Friend } from "../api";
 import { onMessage, parseForward } from "../chat";
 import { contacts, useFriends } from "../friends";
@@ -64,6 +64,7 @@ function Toast({
             {friend?.username ?? t("Новое сообщение")}
           </span>
           {isVerified(friend) && <VerifiedMark className="text-[9px]" />}
+          {friend?.plus && <PlusMark small />}
         </div>
         {}
         <div className="mt-0.5 line-clamp-2 text-[12px] text-muted">

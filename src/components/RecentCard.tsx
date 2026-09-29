@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { type Recent } from "../api";
+import { useEffect, useState } from "react";
+import { buildCover, cachedBuildCover, type Recent } from "../api";
 import { cardInDelay } from "../anim";
 import { coverFor } from "../covers";
 import { useLauncherCtx } from "../LauncherContext";
@@ -31,7 +31,19 @@ export default function RecentCard({
   dying?: boolean;
   onRemove: () => void;
 }) {
-  const img = coverFor(recent.id, recent.mc_version);
+
+  const [cover, setCover] = useState(() =>
+    recent.kind === "build" ? cachedBuildCover(recent.id)?.src ?? null : null
+  );
+  useEffect(() => {
+    if (recent.kind !== "build") return;
+    let alive = true;
+    void buildCover(recent.id).then((c) => alive && setCover(c?.src ?? null));
+    return () => {
+      alive = false;
+    };
+  }, [recent.id, recent.kind]);
+  const img = cover ?? coverFor(recent.id, recent.mc_version);
   const { launch, isRunning, stop } = useLauncherCtx();
 
   const [busy, setBusy] = useState(false);

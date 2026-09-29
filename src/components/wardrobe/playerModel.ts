@@ -56,10 +56,12 @@ function setBoxUv(
 export type PlayerRig = {
   root: THREE.Group;
   bones: Record<BoneName, THREE.Group>;
+
+  capeTexture: THREE.Texture | null;
   dispose: () => void;
 };
 
-function textureFrom(image: HTMLImageElement): THREE.Texture {
+function textureFrom(image: HTMLImageElement | HTMLCanvasElement): THREE.Texture {
   const t = new THREE.Texture(image);
   t.magFilter = THREE.NearestFilter;
   t.minFilter = THREE.NearestFilter;
@@ -82,7 +84,7 @@ export type BackItem = "cape" | "elytra";
 export function buildPlayer(
   skin: HTMLImageElement,
   model: SkinModel,
-  cape: HTMLImageElement | null,
+  cape: HTMLImageElement | HTMLCanvasElement | null,
   back: BackItem = "cape"
 ): PlayerRig {
   const texW = 64;
@@ -178,8 +180,10 @@ export function buildPlayer(
   const backParts: { dispose: () => void }[] = [];
 
   const capeBone = bone("Cape", [0, 24, -2], "Body");
+  let capeTexture: THREE.Texture | null = null;
   if (cape) {
     const ctex = textureFrom(cape);
+    capeTexture = ctex;
     backParts.push(ctex);
 
     if (back === "elytra") {
@@ -231,6 +235,7 @@ export function buildPlayer(
   return {
     root,
     bones,
+    capeTexture,
     dispose: () => {
       root.traverse((o) => {
         if (o instanceof THREE.Mesh) o.geometry.dispose();

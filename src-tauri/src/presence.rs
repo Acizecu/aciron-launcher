@@ -28,11 +28,34 @@ pub fn set_playing(mc_version: &str, build_name: &str, log_path: PathBuf) {
             log_path: Some(log_path),
         };
     }
+
+    crate::realtime::send_game_state(true);
+    tauri::async_runtime::spawn(beat());
 }
 
 pub fn set_stopped() {
     if let Ok(mut a) = activity().lock() {
         *a = Activity::default();
+    }
+    crate::realtime::send_game_state(false);
+    tauri::async_runtime::spawn(beat());
+}
+
+pub fn in_game() -> bool {
+    activity().lock().map(|a| a.in_game).unwrap_or(false)
+}
+
+pub async fn goodbye() {
+    let acc = match accounts::active_account() {
+        Some(a) if a.kind == "aciron" && !a.aciron_token.is_empty() => a,
+        _ => return,
+    };
+    if let Ok(rb) = crate::aciron::post("/api/presence/offline") {
+        let _ = tokio::time::timeout(
+            Duration::from_millis(1500),
+            rb.header("Authorization", format!("Bearer {}", acc.aciron_token)).send(),
+        )
+        .await;
     }
 }
 

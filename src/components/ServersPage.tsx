@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { serverStatus, cachedServerStatus, type ServerStatus } from "../api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { acironServers, isTauri, serverStatus, cachedServerStatus, type ServerStatus } from "../api";
 import { cardInDelay } from "../anim";
 import { useLauncherCtx } from "../LauncherContext";
 import { useToast } from "../ToastContext";
@@ -9,13 +10,17 @@ import Icon from "./Icon";
 type GameServer = {
   name: string;
   ip: string;
+
   version: string;
   desc?: string;
+  icon?: string;
 };
 
-const SERVERS: GameServer[] = [
-
-];
+function launchVersion(s: GameServer, st: ServerStatus | null): string | null {
+  if (s.version) return s.version;
+  const found = st?.version.match(/\d+\.\d+(\.\d+)?/g);
+  return found?.length ? found[found.length - 1] : null;
+}
 
 function fmt(n: number): string {
   return n.toLocaleString(locale());
@@ -60,10 +65,16 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
     }
   };
 
+  const version = launchVersion(s, st);
+
   const connect = () => {
     if (busy) return;
-    launch(s.version, s.ip);
-    toast(t("Запуск {version} и подключение к {name}…", { version: s.version, name: s.name }), "success");
+    if (!version) {
+      toast(t("У сервера не указана версия игры"), "error");
+      return;
+    }
+    launch(version, s.ip);
+    toast(t("Запуск {version} и подключение к {name}…", { version, name: s.name }), "success");
   };
 
   return (
@@ -73,8 +84,8 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
     >
       {}
       <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-raised text-lg font-semibold text-muted">
-        {st?.icon ? (
-          <img src={st.icon} alt="" className="h-full w-full object-cover" />
+        {s.icon || st?.icon ? (
+          <img src={s.icon || st?.icon} alt="" className="h-full w-full object-cover" />
         ) : (
           initials(s.name)
         )}
@@ -98,7 +109,7 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
         </div>
 
         <div className="mt-0.5 truncate whitespace-pre-line text-[12px] text-muted">
-          {st?.motd || s.desc || s.ip}
+          {s.desc || st?.motd || s.ip}
         </div>
 
       </div>
@@ -112,17 +123,17 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
               <span className="font-semibold text-text">{fmt(st.players_online)}</span>
               <span className="text-muted">/ {fmt(st.players_max)}</span>
             </div>
-            <div className="text-[12px] text-muted">{s.version}</div>
+            <div className="text-[12px] text-muted">{version}</div>
           </>
         ) : (
-          <div className="text-[12px] text-muted">{s.version}</div>
+          <div className="text-[12px] text-muted">{version}</div>
         )}
       </div>
 
       <button
         onClick={connect}
         disabled={busy}
-        title={t("Запустить {version} и зайти на сервер", { version: s.version })}
+        title={t("Запустить {version} и зайти на сервер", { version: version ?? "" })}
         className="btn btn-sm btn-secondary w-[96px] shrink-0"
       >
         {busy ? <Icon cls="fa-solid fa-spinner fa-spin" /> : t("Играть")}
@@ -139,18 +150,51 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
   );
 }
 
+let lastServers: GameServer[] | null = null;
+
 export default function ServersPage() {
   const [query, setQuery] = useState("");
+  const [servers, setServers] = useState<GameServer[] | null>(lastServers);
 
+  const load = useCallback(async () => {
+    const list = await acironServers();
+    const mapped = list.map((s) => ({
+      name: s.name,
+      ip: s.address,
+      version: s.version ?? "",
+      desc: s.description ?? undefined,
+      icon: s.iconUrl ?? undefined,
+    }));
+    lastServers = mapped;
+    setServers(mapped);
+  }, []);
+
+  useEffect(() => {
+    void load();
+    if (!isTauri) return;
+
+    let un: (() => void) | undefined;
+    let alive = true;
+    void listen("servers-changed", () => void load()).then((f) => {
+      if (alive) un = f;
+      else f();
+    });
+    return () => {
+      alive = false;
+      un?.();
+    };
+  }, [load]);
+
+  const all = servers ?? [];
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return SERVERS;
-    return SERVERS.filter(
+    if (!q) return all;
+    return all.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
         s.ip.toLowerCase().includes(q)
     );
-  }, [query]);
+  }, [query, all]);
 
   return (
     <div className="flex h-full min-h-0 flex-col px-8 py-6">
@@ -180,7 +224,11 @@ export default function ServersPage() {
       </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto py-1 pr-1 pb-4">
-        {SERVERS.length === 0 ? (
+        {servers === null ? (
+          <div className="grid h-full place-items-center text-muted">
+            <Icon cls="fa-solid fa-spinner fa-spin" />
+          </div>
+        ) : all.length === 0 ? (
           <div className="grid h-full place-items-center text-center">
             <div className="max-w-xs">
               <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-[18px] bg-white/[0.04] text-xl text-accent">

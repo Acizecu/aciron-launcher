@@ -1,9 +1,10 @@
+import { PlusMark } from "./ContactAvatar";
 import { useEffect, useRef, useState } from "react";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
   type Account,
   type AccountsState,
-  getAccounts,
+  ACCOUNTS_CHANGED, getAccounts,
   setActiveAccount,
   removeAccount,
   acironLinkLicense,
@@ -39,6 +40,9 @@ export default function AccountMenu() {
   const refresh = () => getAccounts().then(setState);
   useEffect(() => {
     refresh();
+
+    window.addEventListener(ACCOUNTS_CHANGED, refresh);
+    return () => window.removeEventListener(ACCOUNTS_CHANGED, refresh);
   }, []);
 
   const active = state.accounts.find((a) => a.id === state.active) ?? state.accounts[0];
@@ -85,8 +89,9 @@ export default function AccountMenu() {
           </span>
         )}
         <div className="text-left leading-tight">
-          <div className="max-w-[130px] truncate text-[14.5px] font-semibold text-text">
-            {active?.username ?? t("Нет аккаунта")}
+          <div className="flex max-w-[170px] items-center gap-1.5">
+            <span className="truncate text-[14.5px] font-semibold text-text">{active?.username ?? t("Нет аккаунта")}</span>
+            {active?.plus && <PlusMark small />}
           </div>
           <div className="mt-0.5 text-[12px] text-muted">
             {active ? typeLabel(active) : t("Добавьте аккаунт")}
@@ -120,7 +125,10 @@ export default function AccountMenu() {
                 >
                   <Head skin={headSkinUrl(a)} name={a.username} size={34} className="rounded-full" />
                   <div className="min-w-0 flex-1 leading-tight">
-                    <div className="truncate text-[14px] font-medium text-text">{a.username}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-[14px] font-medium text-text">{a.username}</span>
+                      {a.plus && <PlusMark small />}
+                    </div>
                     <div className="mt-0.5 text-[12px] text-muted">{typeLabel(a)}</div>
                   </div>
                   {isActive ? (

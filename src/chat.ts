@@ -9,6 +9,7 @@ import {
   chatMarkRead,
   chatOverview,
   chatSend,
+  chatSendImage,
   isTauri,
   sendTyping,
   type ChatMessage,
@@ -287,6 +288,38 @@ export async function send(userId: string, body: string): Promise<void> {
     if (temp) replaceTemp(userId, temp.id, real);
   } catch (e) {
     if (temp) setState(userId, temp.id, "failed");
+    throw e;
+  }
+}
+
+export async function sendImage(
+  userId: string,
+  src: { path: string; preview?: string } | { data: string; preview?: string },
+  caption = ""
+): Promise<void> {
+  const conv = state.byUser[userId];
+  const tid = tempId();
+  const temp: LocalMessage | null = conv
+    ? {
+        id: tid,
+        localId: tid,
+        from: "",
+        to: userId,
+        body: caption.trim(),
+        at: Date.now(),
+        read: false,
+        state: "sending",
+        attachments: [{ id: tid, kind: "image", url: null, expired: false, preview: src.preview }],
+      }
+    : null;
+  if (conv && temp) patch(userId, { messages: [...conv.messages, temp] });
+  touch(userId, Date.now());
+  try {
+    const real = await chatSendImage(userId, "path" in src ? { path: src.path } : { data: src.data }, caption.trim());
+    if (temp) replaceTemp(userId, temp.id, real);
+  } catch (e) {
+
+    if (temp) discard(userId, temp.id);
     throw e;
   }
 }

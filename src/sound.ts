@@ -1,5 +1,7 @@
 
 
+import { masterVolume } from "./sfx";
+
 let ctx: AudioContext | null = null;
 
 function audio(): AudioContext | null {
@@ -21,7 +23,7 @@ function tone(at: number, freq: number, dur: number, gain: number) {
   osc.frequency.value = freq;
 
   vol.gain.setValueAtTime(0, at);
-  vol.gain.linearRampToValueAtTime(gain, at + 0.012);
+  vol.gain.linearRampToValueAtTime(gain * masterVolume(), at + 0.012);
   vol.gain.exponentialRampToValueAtTime(0.0001, at + dur);
 
   osc.connect(vol).connect(a.destination);
@@ -30,7 +32,7 @@ function tone(at: number, freq: number, dur: number, gain: number) {
 }
 
 export function playNotification(enabled = true) {
-  if (!enabled) return;
+  if (!enabled || masterVolume() <= 0) return;
   const a = audio();
   if (!a) return;
 

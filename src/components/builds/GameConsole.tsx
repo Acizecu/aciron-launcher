@@ -18,17 +18,18 @@ export type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
 const LEVEL_STYLE: Record<LogLevel, string> = {
   error: "text-danger",
   warn: "text-warn",
-  info: "text-text/85",
-  debug: "text-muted",
-  trace: "text-[#f87171]/70",
+  info: "text-text/80",
+  debug: "text-muted/80",
+
+  trace: "pl-5 text-danger/55",
 };
 
-const LEVEL_BAR: Record<LogLevel, string> = {
-  error: "bg-[#f87171]",
-  warn: "bg-[#fbbf24]",
+const LEVEL_MARK: Record<LogLevel, string> = {
+  error: "bg-danger",
+  warn: "bg-warn",
   info: "bg-transparent",
   debug: "bg-transparent",
-  trace: "bg-[#f87171]/40",
+  trace: "bg-transparent",
 };
 
 const FILTERS: { id: LogLevel | "all"; label: string }[] = [
@@ -63,6 +64,7 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
   const [rows, setRows] = useState<Row[]>([]);
   const [filter, setFilter] = useState<LogLevel | "all">("all");
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [follow, setFollow] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -187,81 +189,82 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
     return h > 0 ? t("{h} ч {m} мин", { h, m }) : t("{m} мин", { m });
   };
 
+  const count = (id: LogLevel | "all") =>
+    id === "error" ? counts.errors : id === "warn" ? counts.warns : 0;
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[16px] border border-line bg-card/35">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[16px] bg-bg/70 ring-1 ring-line/60">
       {}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/50 bg-card/50 px-3 py-2">
-        {FILTERS.map((f) => {
-          const on = filter === f.id;
-          return (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              className={`rounded-full px-2.5 py-1 text-[12px] transition-colors ${
-                on ? "bg-accent/15 text-accent" : "text-muted hover:text-text"
-              }`}
-            >
-              {t(f.label)}
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 pt-2.5 pb-2">
+        <span className="flex items-center gap-2 pr-1 text-[12px] font-medium text-muted">
+          <span className={`h-2 w-2 rounded-full ${running ? "pulse-dot bg-[#4ade80]" : "bg-muted/50"}`} />
+          {running ? t("Игра идёт") : t("Остановлена")}
+        </span>
 
-        {}
-        {(counts.errors > 0 || counts.warns > 0) && (
-          <span
-            className="flex items-center gap-2 text-[12px] tabular-nums"
-            title={t("Ошибок и предупреждений за сессию")}
-          >
-            {counts.errors > 0 && (
-              <span className="flex items-center gap-1 text-danger">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#f87171]" />
-                {counts.errors}
-              </span>
-            )}
-            {counts.warns > 0 && (
-              <span className="flex items-center gap-1 text-warn">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#fbbf24]" />
-                {counts.warns}
-              </span>
-            )}
-          </span>
-        )}
-
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex h-7 items-center gap-1.5 rounded-[12px] bg-bg/60 px-2">
-            <Icon cls="fa-solid fa-magnifying-glass text-[11.5px] text-muted" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("Поиск")}
-              className="w-28 bg-transparent text-[12px] text-text outline-none placeholder:text-muted"
-            />
-            {query && (
+        <div className="flex items-center gap-0.5 rounded-full bg-card/60 p-0.5">
+          {FILTERS.map((f) => {
+            const on = filter === f.id;
+            const n = count(f.id);
+            return (
               <button
-                onClick={() => setQuery("")}
-                className="text-muted transition-colors hover:text-text"
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[12px] transition-colors ${
+                  on ? "bg-bg text-text shadow-sm" : "text-muted hover:text-text"
+                }`}
               >
-                <Icon cls="fa-solid fa-xmark text-[11.5px]" />
+                {t(f.label)}
+                {n > 0 && (
+                  <span
+                    className={`rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums ${
+                      f.id === "error" ? "bg-danger/15 text-danger" : "bg-warn/15 text-warn"
+                    }`}
+                  >
+                    {n}
+                  </span>
+                )}
               </button>
-            )}
-          </div>
-          <button
-            onClick={() => setFollow((v) => !v)}
-            title={
-              follow
-                ? t("Не прокручивать за новыми строками")
-                : t("Прокручивать за новыми строками")
-            }
-            className={`grid h-7 w-7 place-items-center rounded-[12px] transition-colors ${
-              follow ? "bg-accent/15 text-accent" : "text-muted hover:text-text"
-            }`}
-          >
-            <Icon cls="fa-solid fa-angles-down text-[12px]" />
-          </button>
+            );
+          })}
+        </div>
+
+        <div className="ml-auto flex items-center gap-1">
+          {searchOpen || query ? (
+            <div className="flex h-7 items-center gap-1.5 rounded-full bg-card/60 px-2.5">
+              <Icon cls="fa-solid fa-magnifying-glass text-[11px] text-muted" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onBlur={() => !query && setSearchOpen(false)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setQuery("");
+                    setSearchOpen(false);
+                  }
+                }}
+                placeholder={t("Поиск")}
+                className="w-32 bg-transparent text-[12px] text-text outline-none placeholder:text-muted"
+              />
+              {query && (
+                <button onClick={() => setQuery("")} className="text-muted transition-colors hover:text-text">
+                  <Icon cls="fa-solid fa-xmark text-[11px]" />
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => setSearchOpen(true)}
+              title={t("Поиск")}
+              className="grid h-7 w-7 place-items-center rounded-full text-muted transition-colors hover:bg-card/60 hover:text-text"
+            >
+              <Icon cls="fa-solid fa-magnifying-glass text-[12px]" />
+            </button>
+          )}
           <button
             onClick={copyAll}
             title={t("Скопировать показанное")}
-            className="grid h-7 w-7 place-items-center rounded-[12px] text-muted transition-colors hover:text-text"
+            className="grid h-7 w-7 place-items-center rounded-full text-muted transition-colors hover:bg-card/60 hover:text-text"
           >
             <Icon cls={`fa-solid ${copied ? "fa-check text-accent" : "fa-copy"} text-[12px]`} />
           </button>
@@ -270,13 +273,13 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
             <button
               onClick={openShare}
               title={t("Создать ссылку на этот лог")}
-              className={`flex h-7 items-center gap-1.5 rounded-[12px] px-2 text-[12px] transition-colors ${
+              className={`flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] transition-colors ${
                 !running && counts.errors > 0
                   ? "bg-accent/15 text-accent hover:bg-accent/25"
-                  : "text-muted hover:text-text"
+                  : "text-muted hover:bg-card/60 hover:text-text"
               }`}
             >
-              <Icon cls="fa-solid fa-link text-[11.5px]" />
+              <Icon cls="fa-solid fa-link text-[11px]" />
               {t("Создать лог")}
             </button>
           )}
@@ -284,48 +287,58 @@ export default function GameConsole({ gameId, running }: { gameId: string; runni
       </div>
 
       {}
-      <div
-        ref={scroller}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-
-          setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
-        }}
-        className="min-h-0 flex-1 overflow-auto bg-bg/45 py-1.5 font-mono text-[12px] leading-[1.55]"
-      >
-        {shown.length === 0 ? (
-          <div className="grid h-full place-items-center text-center text-[12px] text-muted">
-            {rows.length === 0 ? (
-              running ? (
-                <span className="inline-flex items-center">
-                  {t("Игра запускается")}
-                  <LoadingDots className="ml-1" />
-                </span>
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scroller}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+          }}
+          className="h-full overflow-auto px-1 pb-2 font-mono text-[12px] leading-[1.6]"
+        >
+          {shown.length === 0 ? (
+            <div className="grid h-full place-items-center text-center text-[12px] text-muted">
+              {rows.length === 0 ? (
+                running ? (
+                  <span className="inline-flex items-center">
+                    {t("Игра запускается")}
+                    <LoadingDots className="ml-1" />
+                  </span>
+                ) : (
+                  <span className="flex flex-col items-center gap-2.5">
+                    <span className="grid h-10 w-10 place-items-center rounded-full bg-card/60">
+                      <Icon cls="fa-solid fa-terminal text-[15px] opacity-60" />
+                    </span>
+                    {t("Запустите игру, чтобы увидеть её вывод")}
+                  </span>
+                )
               ) : (
-                <span className="flex flex-col items-center gap-2">
-                  <Icon cls="fa-solid fa-terminal text-lg opacity-40" />
-                  {t("Запустите игру, чтобы увидеть её вывод")}
-                </span>
-              )
-            ) : (
-              <span>{t("Под фильтр ничего не подходит")}</span>
-            )}
-          </div>
-        ) : (
-          shown.map((r) => (
-            <div
-              key={r.n}
-              className={`group flex gap-2 px-2 transition-colors hover:bg-card/50 ${
-                LEVEL_STYLE[r.level]
-              }`}
-            >
-              <span className={`mt-[3px] w-[2px] shrink-0 rounded-full ${LEVEL_BAR[r.level]}`} />
-              {}
-              <span className="selectable min-w-0 flex-1 whitespace-pre-wrap break-all">
-                {r.text}
-              </span>
+                <span>{t("Под фильтр ничего не подходит")}</span>
+              )}
             </div>
-          ))
+          ) : (
+            shown.map((r) => (
+              <div
+                key={r.n}
+                className={`flex gap-2.5 rounded-md px-2 transition-colors hover:bg-card/40 ${LEVEL_STYLE[r.level]}`}
+              >
+                <span className={`mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full ${LEVEL_MARK[r.level]}`} />
+                {}
+                <span className="selectable min-w-0 flex-1 whitespace-pre-wrap break-all">{r.text}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {}
+        {!follow && shown.length > 0 && (
+          <button
+            onClick={() => setFollow(true)}
+            className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-[12px] font-medium text-text shadow-lg ring-1 ring-line transition-colors hover:text-accent"
+          >
+            <Icon cls="fa-solid fa-angles-down text-[11px]" />
+            {t("К новым строкам")}
+          </button>
         )}
       </div>
 
