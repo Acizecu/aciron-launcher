@@ -14,6 +14,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.3",
+    date: "2026-09-30",
+    added: [],
+    fixed: [
+      {
+        ru: "Скины и плащи Aciron в игре снова появляются сразу. В 1.3.2 свой облик мог не подгрузиться до перезахода в мир.",
+        en: "Aciron skins and capes show up in the game right away again. In 1.3.2 your own look could stay missing until you rejoined the world.",
+        tr: "Aciron görünümleri ve pelerinleri oyunda yine hemen görünüyor. 1.3.2'de kendi görünümün dünyaya yeniden girene kadar yüklenmeyebiliyordu.",
+      },
+    ],
+  },
+  {
     version: "1.3.2",
     date: "2026-09-30",
     added: [
