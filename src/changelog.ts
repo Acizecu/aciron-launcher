@@ -14,6 +14,28 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.4",
+    date: "2026-09-30",
+    added: [],
+    fixed: [
+      {
+        ru: "Игра больше не замирает при входе на сервер с большим числом игроков. В 1.3.3 загрузка скинов Aciron могла останавливать игру, а на медленном интернете FPS падал почти до нуля.",
+        en: "The game no longer freezes when you join a server with many players. In 1.3.3 loading Aciron skins could stall the game, and on slow internet FPS dropped almost to zero.",
+        tr: "Çok oyunculu bir sunucuya girerken oyun artık donmuyor. 1.3.3'te Aciron görünümlerinin yüklenmesi oyunu durdurabiliyordu, yavaş internette FPS neredeyse sıfıra düşüyordu.",
+      },
+      {
+        ru: "Скины друзей теперь видны на NeoForge и других сборках, где раньше они иногда не появлялись до перезахода.",
+        en: "Friends' skins now show up on NeoForge and other builds where they sometimes stayed missing until you rejoined.",
+        tr: "Arkadaşlarının görünümleri artık NeoForge'da ve daha önce yeniden girene kadar bazen görünmediği diğer paketlerde de görünüyor.",
+      },
+      {
+        ru: "Скины и плащи Aciron работают на Minecraft 26.3.",
+        en: "Aciron skins and capes work on Minecraft 26.3.",
+        tr: "Aciron görünümleri ve pelerinleri Minecraft 26.3'te çalışıyor.",
+      },
+    ],
+  },
+  {
     version: "1.3.3",
     date: "2026-09-30",
     added: [],
