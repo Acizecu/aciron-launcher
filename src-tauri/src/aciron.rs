@@ -274,12 +274,15 @@ pub async fn aciron_register(
     username: String,
     email: String,
     password: String,
+    consent: Option<bool>,
 ) -> Result<String, String> {
     let resp = post("/api/register")?
         .json(&json!({
             "username": username.trim(),
             "email": email.trim(),
             "password": password,
+
+            "consent": consent.unwrap_or(false),
         }))
         .send()
         .await

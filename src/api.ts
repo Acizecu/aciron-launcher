@@ -453,6 +453,8 @@ export type AcironServer = {
   version?: string | null;
   description?: string | null;
   iconUrl?: string | null;
+
+  bannerUrl?: string | null;
   addToGame?: boolean;
 };
 
@@ -686,10 +688,11 @@ export async function acironLoginTelegramSend(ticket: string): Promise<void> {
 export async function acironRegister(
   username: string,
   email: string,
-  password: string
+  password: string,
+  consent: boolean
 ): Promise<string> {
   if (!isTauri) return email;
-  return invoke<string>("aciron_register", { username, email, password });
+  return invoke<string>("aciron_register", { username, email, password, consent });
 }
 
 export async function acironVerifyEmail(email: string, code: string): Promise<Account> {

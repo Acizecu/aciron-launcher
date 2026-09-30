@@ -84,6 +84,8 @@ pub fn run() {
 
             update::remember_install_dir(app.handle());
 
+            build_covers::backfill_in_background();
+
             std::thread::spawn(discord::init);
 
             tauri::async_runtime::spawn(presence::heartbeat_loop());

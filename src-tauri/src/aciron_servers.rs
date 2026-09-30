@@ -19,6 +19,9 @@ pub struct AcironServer {
     #[serde(default)]
     pub icon_url: Option<String>,
 
+    #[serde(default)]
+    pub banner_url: Option<String>,
+
     #[serde(default = "yes")]
     pub add_to_game: bool,
 }
@@ -42,6 +45,7 @@ fn fallback() -> Vec<AcironServer> {
         version: None,
         description: None,
         icon_url: None,
+        banner_url: None,
         add_to_game: true,
     }]
 }
@@ -84,6 +88,9 @@ pub async fn fetch() -> Vec<AcironServer> {
 fn clean(mut s: AcironServer) -> AcironServer {
     if !s.icon_url.as_deref().is_some_and(|u| u.starts_with("https://") && u.len() < 512) {
         s.icon_url = None;
+    }
+    if !s.banner_url.as_deref().is_some_and(|u| u.starts_with("https://") && u.len() < 512) {
+        s.banner_url = None;
     }
     if !s.version.as_deref().is_some_and(|v| {
         !v.is_empty() && v.len() <= 32 && v.chars().all(|c| c.is_ascii_alphanumeric() || ".-_ +".contains(c))
@@ -331,6 +338,7 @@ mod tests {
             version: None,
             description: None,
             icon_url: None,
+            banner_url: None,
             add_to_game: true,
         }
     }

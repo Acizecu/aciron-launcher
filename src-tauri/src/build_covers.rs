@@ -81,6 +81,36 @@ async fn sync(build_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn backfill_in_background() {
+    tauri::async_runtime::spawn(async move {
+
+        tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+        if crate::aciron::active_token().is_err() {
+            return;
+        }
+        for b in builds::load_builds() {
+            if !b.image.is_empty() && b.image_url.is_empty() {
+                if let Err(e) = sync(&b.id).await {
+                    eprintln!("[covers] backfill {}: {e}", b.id);
+                }
+            }
+        }
+    });
+}
+
+pub fn ensure_rpc_image(build_id: String, name: String, detail: String) {
+    tauri::async_runtime::spawn(async move {
+        if sync(&build_id).await.is_err() {
+            return;
+        }
+        if let Some(b) = builds::get_build(&build_id) {
+            if crate::discord::showing_build(&name) {
+                crate::discord::set_build(&name, rpc_image(&b).as_deref(), &detail);
+            }
+        }
+    });
+}
+
 pub fn forget_remote(build_id: String) {
     tauri::async_runtime::spawn(async move {
         if let Ok(token) = crate::aciron::active_token() {

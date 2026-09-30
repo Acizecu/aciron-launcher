@@ -342,6 +342,20 @@ export default function WardrobePage() {
         },
       });
 
+    const byOrigin = (c: CatalogCape): CapeOrigin => (c.by === "mojang" ? "mojang" : "aciron");
+    const pushCatalog = (c: CatalogCape) =>
+      out.push({
+        key: `cat:${c.id}`,
+        name: c.name,
+        url: `${ACIRON_ID_API}${c.url}`,
+        origin: byOrigin(c),
+        active: data?.active.capeCatalogId === c.id,
+        apply: () => capeCatalogApply(c.id),
+        animation: capeAnimationOf(c.animation),
+      });
+
+    for (const c of catalog ?? []) if (byOrigin(c) === "aciron") pushCatalog(c);
+
     for (const it of data?.capes ?? [])
       out.push({
         key: `own:${it.id}`,
@@ -353,21 +367,7 @@ export default function WardrobePage() {
         remove: () => setConfirm({ kind: "item", id: it.id, name: it.name }),
       });
 
-    const byOrigin = (c: CatalogCape): CapeOrigin => (c.by === "mojang" ? "mojang" : "aciron");
-    const stockCapes = (catalog ?? []).slice().sort((a, b) => {
-      const rank = (c: CatalogCape) => (byOrigin(c) === "mojang" ? 0 : 1);
-      return rank(a) - rank(b);
-    });
-    for (const c of stockCapes)
-      out.push({
-        key: `cat:${c.id}`,
-        name: c.name,
-        url: `${ACIRON_ID_API}${c.url}`,
-        origin: byOrigin(c),
-        active: data?.active.capeCatalogId === c.id,
-        apply: () => capeCatalogApply(c.id),
-        animation: capeAnimationOf(c.animation),
-      });
+    for (const c of catalog ?? []) if (byOrigin(c) === "mojang") pushCatalog(c);
 
     return out;
   }, [lic, data, catalog]);
@@ -389,6 +389,13 @@ export default function WardrobePage() {
   };
 
   const capeOff = () => wearCape("off", null, () => wardrobeCapeOff());
+
+  const licenseCapeOff = () =>
+    act("license-off", async () => {
+      await licenseCapeApply(null);
+      setLic(await licenseCapes());
+      setInstant((s) => (s && licenseKey(s.capeKey) ? { ...s, capeKey: undefined, capeUrl: undefined } : s));
+    }, t("Плащ лицензии снят"));
 
   const skinVer = data?.active.skinHash ?? "";
   const capeVer = data?.active.capeHash ?? "";
@@ -648,6 +655,18 @@ export default function WardrobePage() {
                         )}
                       />
                     )}
+                    {lic?.linked && !licError && capes.some((c) => c.origin === "license") && (
+                      <Tile
+                        name={t("Снять плащ лицензии")}
+                        sub={t("С аккаунта Minecraft")}
+                        active={!licenseCape}
+                        index={0}
+                        disabled={busy === "license-off"}
+                        onClick={() => void licenseCapeOff()}
+                      >
+                        <span className="block h-[62%] w-[40%] rounded-[9px] border border-dashed border-line-strong" />
+                      </Tile>
+                    )}
                     {capes
                       .filter((c) => c.origin === "license")
                       .map((c, i) => (
@@ -656,7 +675,7 @@ export default function WardrobePage() {
                           entry={c}
                           active={capeActive(c)}
                           badge={ownCapeOn ? t("на лицензии") : undefined}
-                          index={i}
+                          index={i + 1}
                           onApply={() => wearCape(c.key, c.url, c.apply, c.animation)}
                         />
                       ))}

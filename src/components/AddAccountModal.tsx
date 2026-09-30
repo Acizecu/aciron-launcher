@@ -60,6 +60,8 @@ export default function AddAccountModal({
   const [tgSent, setTgSent] = useState(false);
 
   const [regNick, setRegNick] = useState("");
+
+  const [agree, setAgree] = useState(false);
   const [email, setEmail] = useState("");
   const [password2, setPassword2] = useState("");
   const [cooldown, setCooldown] = useState(0);
@@ -192,9 +194,10 @@ export default function AddAccountModal({
     if (!EMAIL_RE.test(email.trim())) return setError(t("Введите корректный e-mail"));
     if (password.length < 8) return setError(t("Пароль минимум 8 символов"));
     if (password !== password2) return setError(t("Пароли не совпадают"));
+    if (!agree) return setError(t("Примите соглашение и дайте согласие на обработку персональных данных"));
     setBusy(true);
     try {
-      const mail = await acironRegister(regNick.trim(), email.trim(), password);
+      const mail = await acironRegister(regNick.trim(), email.trim(), password, agree);
       setEmail(mail);
       setCode("");
       setCooldown(RESEND_COOLDOWN);
@@ -598,6 +601,24 @@ export default function AddAccountModal({
                 />
               </label>
             </div>
+            <label className="flex cursor-pointer items-start gap-2.5 text-[12.5px] leading-relaxed text-text2">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+                checked={agree}
+                onChange={(e) => setAgree(e.target.checked)}
+              />
+              <span>
+                {t("Принимаю")}{" "}
+                <button type="button" className="text-accent hover:underline" onClick={() => openUrl("https://aciron.pro/legal/terms")}>
+                  {t("пользовательское соглашение")}
+                </button>{" "}
+                {t("и даю")}{" "}
+                <button type="button" className="text-accent hover:underline" onClick={() => openUrl("https://aciron.pro/legal/consent")}>
+                  {t("согласие на обработку персональных данных")}
+                </button>
+              </span>
+            </label>
             {error && <Err msg={error} />}
             <div className="flex gap-2 pt-1">
               <BackBtn onClick={() => setStep("aciron")} />

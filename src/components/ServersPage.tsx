@@ -14,6 +14,7 @@ type GameServer = {
   version: string;
   desc?: string;
   icon?: string;
+  banner?: string;
 };
 
 function launchVersion(s: GameServer, st: ServerStatus | null): string | null {
@@ -80,8 +81,19 @@ function ServerRow({ s, index }: { s: GameServer; index: number }) {
   return (
     <div
       style={cardInDelay(index)}
-      className="card-in list-row flex items-center gap-4 px-3 py-3"
+      className={`card-in list-row relative flex items-center gap-4 overflow-hidden px-3 [&>button]:relative [&>div]:relative ${s.banner ? "py-5" : "py-3"}`}
     >
+      {s.banner && (
+        <>
+          {}
+          <img src={s.banner} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover" />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "linear-gradient(90deg, rgba(10,11,13,0.92) 0%, rgba(10,11,13,0.7) 45%, rgba(10,11,13,0.35) 100%)" }}
+          />
+        </>
+      )}
       {}
       <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-raised text-lg font-semibold text-muted">
         {s.icon || st?.icon ? (
@@ -164,6 +176,7 @@ export default function ServersPage() {
       version: s.version ?? "",
       desc: s.description ?? undefined,
       icon: s.iconUrl ?? undefined,
+      banner: s.bannerUrl ?? undefined,
     }));
     lastServers = mapped;
     setServers(mapped);

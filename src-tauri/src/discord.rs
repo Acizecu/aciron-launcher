@@ -162,6 +162,10 @@ pub fn set_version(version: &str) {
     );
 }
 
+pub fn showing_build(name: &str) -> bool {
+    matches!(last_state().lock().as_deref(), Ok(State::Build { name: n, .. }) if n == name)
+}
+
 pub fn set_build(name: &str, image: Option<&str>, detail: &str) {
     if let Ok(mut s) = last_state().lock() {
         *s = State::Build {

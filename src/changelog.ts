@@ -14,6 +14,77 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.2",
+    date: "2026-09-30",
+    added: [
+      {
+        ru: {
+          title: "Плащ лицензии можно снять",
+          body:
+            "В гардеробе, в разделе плащей с лицензии, появилась плитка «Снять плащ лицензии». Плащ снимается с аккаунта " +
+            "Minecraft сразу, без кнопки «Сохранить», и надевается обратно той же плиткой.",
+        },
+        en: {
+          title: "Take off the license cape",
+          body:
+            "The license capes section of the wardrobe has a «Take off the license cape» tile. The cape comes off the " +
+            "Minecraft account right away, without pressing Save, and goes back on with the same tile.",
+        },
+        tr: {
+          title: "Lisans pelerini çıkarılabiliyor",
+          body:
+            "Gardıropta lisans pelerinleri bölümüne «Lisans pelerinini çıkar» kutucuğu eklendi. Pelerin Minecraft " +
+            "hesabından hemen, Kaydet'e basmadan çıkar ve aynı kutucukla geri takılır.",
+        },
+      },
+      {
+        ru: {
+          title: "Плащи Aciron — первыми",
+          body: "В гардеробе плащи Aciron теперь идут первыми, за ними твои загруженные, потом плащи в стиле Mojang.",
+        },
+        en: {
+          title: "Aciron capes come first",
+          body: "The wardrobe now lists Aciron capes first, then the ones you uploaded, then Mojang-style capes.",
+        },
+        tr: {
+          title: "Önce Aciron pelerinleri",
+          body: "Gardırop artık önce Aciron pelerinlerini, sonra senin yüklediklerini, sonra Mojang tarzı pelerinleri gösteriyor.",
+        },
+      },
+      {
+        ru: {
+          title: "Баннеры серверов",
+          body: "У серверов во вкладке «Серверы» может быть свой баннер. Его присылает владелец сервера, и он стоит фоном карточки.",
+        },
+        en: {
+          title: "Server banners",
+          body: "Servers in the Servers tab can have their own banner. The server owner sends it, and it sits behind the card.",
+        },
+        tr: {
+          title: "Sunucu afişleri",
+          body: "Sunucular sekmesindeki sunucuların kendi afişi olabiliyor. Afişi sunucu sahibi gönderiyor, kartın arka planında duruyor.",
+        },
+      },
+    ],
+    fixed: [
+      {
+        ru: "Скины и плащи Aciron в игре больше не подвешивают кадр. Раньше при появлении каждого нового игрока игра ждала ответ сервера, и на заполненном сервере это давало подёргивания.",
+        en: "Aciron skins and capes no longer stall frames in the game. Before, the game waited for the server every time a new player came into view, which caused stutter on busy servers.",
+        tr: "Aciron görünümleri ve pelerinleri oyunda artık kareyi dondurmuyor. Eskiden her yeni oyuncu göründüğünde oyun sunucunun cevabını bekliyordu ve kalabalık sunucularda takılmalar oluyordu.",
+      },
+      {
+        ru: "Выбор плаща лицензии больше не пишет «свой плащ снять не удалось».",
+        en: "Picking a license cape no longer says «your own cape could not be taken off».",
+        tr: "Lisans pelerini seçmek artık «kendi pelerinin çıkarılamadı» demiyor.",
+      },
+      {
+        ru: "Своя обложка сборки теперь видна и в статусе Discord, в том числе у обложек, поставленных раньше.",
+        en: "Your own build cover now shows in the Discord status too, including covers set earlier.",
+        tr: "Kendi derleme kapağın artık Discord durumunda da görünüyor, daha önce koyduğun kapaklar dahil.",
+      },
+    ],
+  },
+  {
     version: "1.3.1",
     date: "2026-09-30",
     added: [

@@ -1613,6 +1613,9 @@ pub async fn launch_build(
                 crate::build_covers::rpc_image(&build).as_deref(),
                 &detail,
             );
+            if !build.image.is_empty() && build.image_url.is_empty() {
+                crate::build_covers::ensure_rpc_image(build.id.clone(), build.name.clone(), detail);
+            }
         }
         Err(e) => emit(&app, "error", e, 0, 1),
     }
