@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useRenderPaused } from "../../hooks/useRenderPaused";
 import * as THREE from "three";
 import { buildPlayer, type BackItem, type SkinModel } from "./playerModel";
 import { applyAnimation, idlePose, rememberBasePose, type Animation } from "./animation";
@@ -47,6 +48,15 @@ export default function PlayerView({
   animRef.current = animation ?? null;
 
   const mounted = useRef(false);
+
+  const paused = useRenderPaused();
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const syncRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    syncRef.current();
+  }, [paused]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -194,7 +204,7 @@ export default function PlayerView({
 
     let running = false;
     let visibleInView = true;
-    const shouldRun = () => alive && visibleInView && !document.hidden;
+    const shouldRun = () => alive && visibleInView && !document.hidden && !pausedRef.current;
     const startLoop = () => {
       if (running || !shouldRun()) return;
       running = true;
@@ -206,6 +216,7 @@ export default function PlayerView({
       cancelAnimationFrame(frame);
     };
     const syncLoop = () => (shouldRun() ? startLoop() : stopLoop());
+    syncRef.current = syncLoop;
 
     const onVisibility = () => syncLoop();
     document.addEventListener("visibilitychange", onVisibility);
@@ -221,6 +232,7 @@ export default function PlayerView({
     return () => {
       alive = false;
       stopLoop();
+      syncRef.current = () => {};
       document.removeEventListener("visibilitychange", onVisibility);
       io.disconnect();
       ro.disconnect();

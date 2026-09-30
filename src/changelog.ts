@@ -14,6 +14,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.5",
+    date: "2026-09-30",
+    added: [],
+    fixed: [
+      {
+        ru: "Лаунчер больше не нагружает видеокарту, пока вы играете. Живой фон и 3D-модель в гардеробе замирают, когда запущена игра или окно лаунчера не в фокусе. На встроенной графике из-за этого могла подтормаживать сама игра.",
+        en: "The launcher no longer loads the graphics card while you play. The live background and the 3D model in the wardrobe pause while the game is running or the launcher window isn't focused. On integrated graphics this could make the game itself stutter.",
+        tr: "Başlatıcı artık sen oynarken ekran kartını yormuyor. Oyun açıkken ya da başlatıcı penceresi odakta değilken canlı arka plan ve gardıroptaki 3D model duruyor. Dahili grafikte bu yüzden oyunun kendisi takılabiliyordu.",
+      },
+    ],
+  },
+  {
     version: "1.3.4",
     date: "2026-09-30",
     added: [],
