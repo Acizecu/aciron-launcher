@@ -9,6 +9,7 @@ import EmojiPicker from "./chat/EmojiPicker";
 import FloatingPanel from "./FloatingPanel";
 import Lightbox from "./Lightbox";
 import Twemoji from "./chat/Twemoji";
+import ImageSendModal from "./chat/ImageSendModal";
 import {
   acironProfileUrl,
   chatFileUrl,
@@ -16,6 +17,7 @@ import {
   MAX_MESSAGE,
   openUrl,
   pickFile,
+  readImageDataUrl,
   type ChatAttachment,
   type Friend,
 } from "../api";
@@ -48,7 +50,39 @@ import { useToast } from "../ToastContext";
 import { dtf, t, useLang, ts } from "../i18n";
 import Icon from "./Icon";
 
-type ReplyTarget = { id: string; author: string; text: string };
+type ImageSource = { path: string; preview?: string } | { data: string; preview: string };
+type PendingImage = { src: ImageSource; preview: string | null; name?: string };
+
+type ReplyTarget = { id: string; author: string; text: string; image: boolean; thumb: string | null };
+
+function attachmentThumb(m: { attachments?: ChatAttachment[] } | undefined): string | null {
+  const a = m?.attachments?.find((x) => x.preview || (x.url && !x.expired));
+  return a ? (a.preview ?? chatFileUrl(a.url)) : null;
+}
+
+function QuoteThumb({ src, mine }: { src: string | null | undefined; mine: boolean }) {
+  const [broken, setBroken] = useState(false);
+  if (src && !broken) {
+    return (
+      <img
+        src={src}
+        alt=""
+        draggable={false}
+        onError={() => setBroken(true)}
+        className="chat-checker h-9 w-9 shrink-0 rounded-[8px] object-cover"
+      />
+    );
+  }
+  return (
+    <span
+      className={`grid h-9 w-9 shrink-0 place-items-center rounded-[8px] ${
+        mine ? "bg-bg/15 text-bg/70" : "bg-white/[0.06] text-muted"
+      }`}
+    >
+      <Icon cls="fa-regular fa-image text-[14px]" />
+    </span>
+  );
+}
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
@@ -173,6 +207,7 @@ const Bubble = memo(function Bubble({
   reactions,
   onReact,
   reactable,
+  replyThumb,
 }: {
   msg: LocalMessage;
   mine: boolean;
@@ -186,6 +221,8 @@ const Bubble = memo(function Bubble({
   onReact: (msg: LocalMessage, emoji: string) => void;
 
   reactable: boolean;
+
+  replyThumb?: string | null;
 }) {
 
   useLang();
@@ -236,16 +273,25 @@ const Bubble = memo(function Bubble({
         {}
         {rep.replyTo && (
           <div
-            className={`mb-1.5 rounded-[10px] border-l-2 px-2 py-1 text-[12px] leading-tight ${
+            className={`mb-1.5 flex items-center gap-2 rounded-[10px] border-l-2 py-1 pl-2 pr-1 text-[12px] leading-tight ${
               mine ? "border-bg/40 bg-bg/10 text-bg/75" : "border-accent/60 bg-bg/40 text-muted"
             }`}
           >
-            <div className={`font-semibold ${mine ? "text-bg/90" : "text-accent"}`}>
-              {rep.replyTo.author}
+            <div className="min-w-0 flex-1">
+              <div className={`font-semibold ${mine ? "text-bg/90" : "text-accent"}`}>
+                {rep.replyTo.author}
+              </div>
+              <div className="selectable truncate">
+                {rep.replyTo.text ? (
+                  <Twemoji text={rep.replyTo.text} />
+                ) : rep.replyTo.imageOf !== undefined ? (
+                  t("Картинка")
+                ) : (
+                  "…"
+                )}
+              </div>
             </div>
-            <div className="selectable truncate">
-              <Twemoji text={rep.replyTo.text} />
-            </div>
+            {rep.replyTo.imageOf !== undefined && <QuoteThumb src={replyThumb} mine={mine} />}
           </div>
         )}
         {msg.attachments && msg.attachments.length > 0 && (
@@ -316,7 +362,7 @@ const Composer = memo(function Composer({
   reply: ReplyTarget | null;
   onSubmit: (text: string) => void | Promise<void>;
 
-  onImage: (src: { path: string } | { data: string; preview: string }, caption: string) => Promise<boolean>;
+  onImage: (src: ImageSource, caption: string) => Promise<boolean>;
   onTyping?: () => void;
   onCancelReply: () => void;
 }) {
@@ -324,6 +370,9 @@ const Composer = memo(function Composer({
   useLang();
   const [draft, setDraft] = useState("");
   const [picker, setPicker] = useState(false);
+
+  const [pending, setPending] = useState<PendingImage | null>(null);
+  const toast = useToast();
   const area = useRef<HTMLTextAreaElement | null>(null);
   const emojiBtn = useRef<HTMLButtonElement | null>(null);
   const over = draft.length > MAX_MESSAGE;
@@ -333,14 +382,32 @@ const Composer = memo(function Composer({
     requestAnimationFrame(() => area.current?.focus());
   }, []);
 
-  const image = async (src: { path: string } | { data: string; preview: string }) => {
-    const caption = draft.trim();
+  const confirmImage = async (caption: string) => {
+    const p = pending;
+    if (!p?.preview) return;
+    setPending(null);
+    requestAnimationFrame(() => area.current?.focus());
+    const src: ImageSource = "path" in p.src ? { path: p.src.path, preview: p.preview } : p.src;
     if (await onImage(src, caption)) setDraft("");
+  };
+
+  const cancelImage = () => {
+    setPending(null);
+    requestAnimationFrame(() => area.current?.focus());
   };
 
   const attach = async () => {
     const path = await pickFile(t("Изображения"), ["png", "jpg", "jpeg", "gif", "webp"]);
-    if (path) void image({ path });
+    if (!path) return;
+    setPending({ src: { path }, preview: null, name: path.split(/[\\/]/).pop() });
+
+    try {
+      const preview = await readImageDataUrl(path);
+      setPending((cur) => (cur && "path" in cur.src && cur.src.path === path ? { ...cur, preview } : cur));
+    } catch {
+      setPending(null);
+      toast(t("Не удалось открыть картинку"), "error");
+    }
   };
 
   const paste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -352,7 +419,11 @@ const Composer = memo(function Composer({
     const reader = new FileReader();
     reader.onload = () => {
       const url = String(reader.result);
-      void image({ data: url.slice(url.indexOf(",") + 1), preview: url });
+      setPending({
+        src: { data: url.slice(url.indexOf(",") + 1), preview: url },
+        preview: url,
+        name: file.name && file.name !== "image.png" ? file.name : undefined,
+      });
     };
     reader.readAsDataURL(file);
   };
@@ -387,9 +458,12 @@ const Composer = memo(function Composer({
       {reply && (
         <div className="msg-in mx-2 mt-2 flex items-center gap-2 rounded-[12px] border-l-2 border-accent bg-white/[0.04] px-2.5 py-1.5">
           <Icon cls="fa-solid fa-reply text-[11.5px] text-accent" />
+          {reply.image && <QuoteThumb src={reply.thumb} mine={false} />}
           <div className="min-w-0 flex-1 leading-tight">
             <div className="text-[12px] font-medium text-accent">{reply.author}</div>
-            <div className="truncate text-[12px] text-muted">{reply.text || "…"}</div>
+            <div className="truncate text-[12px] text-muted">
+              {reply.text || (reply.image ? t("Картинка") : "…")}
+            </div>
           </div>
           <button
             onClick={onCancelReply}
@@ -462,6 +536,16 @@ const Composer = memo(function Composer({
           {t("Слишком длинное: {n} из {max}", { n: draft.length, max: MAX_MESSAGE })}
         </div>
       )}
+      {pending && (
+        <ImageSendModal
+          preview={pending.preview}
+          name={pending.name}
+          caption={draft.trim()}
+          replyTo={reply?.author}
+          onSend={(c) => void confirmImage(c)}
+          onClose={cancelImage}
+        />
+      )}
     </div>
   );
 });
@@ -473,7 +557,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
   const [sending, setSending] = useState(false);
   const [reply, setReply] = useState<ReplyTarget | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[]; msg: LocalMessage } | null>(null);
   const [forward, setForward] = useState<string[] | null>(null);
   const [profile, setProfile] = useState(false);
   const toast = useToast();
@@ -546,7 +630,9 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       wasAtBottom.current = true;
 
       const clean = stripMarkers(text);
-      const body = reply ? encodeReply(reply.author, reply.text, clean) : clean;
+      const body = reply
+        ? encodeReply(reply.author, reply.text, clean, reply.image ? reply.id : undefined)
+        : clean;
       setReply(null);
       try {
         await send(friend.id, body);
@@ -560,17 +646,23 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
   );
 
   const submitImage = useCallback(
-    async (src: { path: string } | { data: string; preview: string }, caption: string) => {
+    async (src: ImageSource, caption: string) => {
       wasAtBottom.current = true;
+
+      const clean = stripMarkers(caption);
+      const body = reply
+        ? encodeReply(reply.author, reply.text, clean, reply.image ? reply.id : undefined)
+        : clean;
+      setReply(null);
       try {
-        await sendImage(friend.id, src, stripMarkers(caption));
+        await sendImage(friend.id, src, body);
         return true;
       } catch (e) {
         toast(ts(String(e)) || t("Картинка не отправлена"), "error");
         return false;
       }
     },
-    [friend.id, toast]
+    [friend.id, reply, toast]
   );
 
   const startReply = useCallback(
@@ -579,10 +671,13 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
       if (friend.system) return;
       const shown = parseForward(msg.body);
       const author = msg.from === friend.id ? friend.username : myName;
+      const image = !!msg.attachments?.length;
       setReply({
         id: msg.id,
         author,
         text: parseReply(shown.text).text.replace(/\s+/g, " ").trim(),
+        image,
+        thumb: image ? attachmentThumb(msg) : null,
       });
     },
     [friend.id, friend.username, friend.system, myName]
@@ -652,8 +747,10 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         onClick: () => void del(ids),
       });
     }
-    setMenu({ x: e.clientX, y: e.clientY, items });
+    setMenu({ x: e.clientX, y: e.clientY, items, msg });
   }, [selected, friend.id, friend.system, copy, del, startReply, toast]);
+
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   const onToggle = useCallback((id: string) => {
     setSelected((s) => {
@@ -682,9 +779,9 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
     [friend.id, friend.system, reactions, toast]
   );
 
-  const rows = useMemo(
-    () =>
-      visible.map((m, i) => {
+  const rows = useMemo(() => {
+    const byId = new Map(conv.messages.map((m) => [m.id, m]));
+    return visible.map((m, i) => {
         const prev = visible[i - 1];
         const mine = m.from !== friend.id;
 
@@ -692,10 +789,12 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         const newDay = !prev || dayLabel(prev.at) !== dayLabel(m.at);
         const grouped =
           !newDay && !!prev && prevMine === mine && m.at - prev.at < GROUP_WINDOW_MS;
-        return { m, mine, newDay, grouped };
-      }),
-    [visible, friend.id]
-  );
+
+        const quoted = parseReply(parseForward(m.body).text).replyTo?.imageOf;
+        const replyThumb = quoted ? attachmentThumb(byId.get(quoted)) : undefined;
+        return { m, mine, newDay, grouped, replyThumb };
+    });
+  }, [visible, conv.messages, friend.id]);
 
   return (
     <section className="flex min-w-0 flex-1 flex-col">
@@ -842,7 +941,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
           </div>
         )}
 
-        {rows.map(({ m, mine, newDay, grouped }) => (
+        {rows.map(({ m, mine, newDay, grouped, replyThumb }) => (
           <div
             key={m.localId ?? m.id}
             className={m.at >= mountAt.current ? "msg-in" : undefined}
@@ -866,6 +965,7 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
               reactions={reactions[m.id]}
               onReact={onReact}
               reactable={!friend.system}
+              replyThumb={replyThumb}
             />
           </div>
         ))}
@@ -892,7 +992,19 @@ export default function ChatPanel({ friend }: { friend: Friend }) {
         />
       )}
 
-      {menu && <MessageMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
+      {menu && (
+        <MessageMenu
+          x={menu.x}
+          y={menu.y}
+          items={menu.items}
+          reaction={
+            friend.system || menu.msg.state === "failed" || menu.msg.id.startsWith("tmp-")
+              ? undefined
+              : { current: myReaction(reactions[menu.msg.id]), onPick: (e) => onReact(menu.msg, e) }
+          }
+          onClose={closeMenu}
+        />
+      )}
       {forward && (
         <ForwardModal
           count={forward.length}

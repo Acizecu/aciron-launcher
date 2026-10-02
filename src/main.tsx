@@ -6,6 +6,7 @@ import Splash from "./components/Splash";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./index.css";
 import { initThemeEarly } from "./ThemeContext";
+import "./windowFocus";
 import { initUiSounds } from "./sfx";
 import { syncLangFromSettings } from "./i18n";
 import { reportUiCrash } from "./api";

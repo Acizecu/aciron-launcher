@@ -14,6 +14,71 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.6",
+    date: "2026-10-02",
+    added: [
+      {
+        ru: {
+          title: "Картинка уходит после подтверждения",
+          body: "Перед отправкой картинки открывается окно с предпросмотром и полем для подписи. Картинка, случайно вставленная через Ctrl+V, больше не улетает собеседнику сразу.",
+        },
+        en: {
+          title: "Images wait for your confirmation",
+          body: "Before an image is sent, a window shows a preview and a caption field. An image pasted by accident with Ctrl+V no longer goes straight to the other person.",
+        },
+        tr: {
+          title: "Görsel onaydan sonra gidiyor",
+          body: "Görsel gönderilmeden önce önizleme ve açıklama alanı olan bir pencere açılıyor. Ctrl+V ile yanlışlıkla yapıştırılan görsel artık karşı tarafa hemen gitmiyor.",
+        },
+      },
+      {
+        ru: {
+          title: "Уведомления складываются стопкой",
+          body: "Новое уведомление ложится поверх прежних, а те выглядывают из-под него. Наведите мышь, чтобы раскрыть стопку. Пока лаунчер стоит за игрой, уведомления не пропадают и ждут вас.",
+        },
+        en: {
+          title: "Notifications stack up",
+          body: "A new notification lands on top of the older ones, which peek out from underneath. Hover to expand the stack. While the launcher sits behind the game, notifications don't disappear and wait for you.",
+        },
+        tr: {
+          title: "Bildirimler üst üste diziliyor",
+          body: "Yeni bildirim eskilerin üstüne düşüyor, eskiler altından görünüyor. Yığını açmak için fareyi üzerine getir. Başlatıcı oyunun arkasındayken bildirimler kaybolmuyor, seni bekliyor.",
+        },
+      },
+      {
+        ru: {
+          title: "Прозрачные плащи",
+          body: "Прозрачные и полупрозрачные пиксели плаща видны в игре и в гардеробе. Раньше на их месте была чёрная заливка.",
+        },
+        en: {
+          title: "Transparent capes",
+          body: "Transparent and semi-transparent cape pixels now show in the game and in the wardrobe. They used to be filled with black.",
+        },
+        tr: {
+          title: "Saydam pelerinler",
+          body: "Pelerindeki saydam ve yarı saydam pikseller artık oyunda ve gardıropta görünüyor. Eskiden yerlerinde siyah dolgu vardı.",
+        },
+      },
+    ],
+    fixed: [
+      {
+        ru: "Меню по правой кнопке в чате открывается у курсора, а не в стороне. У меню новый вид и строка быстрых реакций.",
+        en: "The right-click menu in chat opens at the cursor instead of off to the side. The menu has a new look and a row of quick reactions.",
+        tr: "Sohbetteki sağ tık menüsü artık kenarda değil, imlecin yanında açılıyor. Menünün yeni bir görünümü ve hızlı tepki satırı var.",
+      },
+      {
+        ru: "Ответ на картинку показывает её миниатюру. Раньше под именем автора было пусто.",
+        en: "A reply to an image shows its thumbnail. Before, there was nothing under the author's name.",
+        tr: "Bir görsele verilen yanıt artık görselin küçük resmini gösteriyor. Önceden yazarın adının altı boştu.",
+      },
+      {
+        ru: "Окно лаунчера без фокуса больше не тратит ресурсы на анимации. Интерфейс замирает и продолжает с того же места, когда вы к нему вернётесь.",
+        en: "An unfocused launcher window no longer spends resources on animations. The interface pauses and picks up where it left off when you come back.",
+        tr: "Odakta olmayan başlatıcı penceresi artık animasyonlara kaynak harcamıyor. Arayüz duruyor ve geri döndüğünde kaldığı yerden devam ediyor.",
+      },
+    ],
+  },
+  {
     version: "1.3.5",
     date: "2026-09-30",
     added: [],

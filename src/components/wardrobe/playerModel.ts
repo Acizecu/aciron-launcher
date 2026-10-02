@@ -221,7 +221,13 @@ export function buildPlayer(
     } else {
       const cgeo = new THREE.BoxGeometry(10, 16, 1);
       setBoxUv(cgeo, 0, 0, 10, 16, 1, 64, 32);
-      const cmat = new THREE.MeshLambertMaterial({ map: ctex });
+
+      const cmat = new THREE.MeshLambertMaterial({
+        map: ctex,
+        transparent: true,
+        alphaTest: 0.01,
+        side: THREE.DoubleSide,
+      });
       backParts.push(cmat);
       const mesh = new THREE.Mesh(cgeo, cmat);
 

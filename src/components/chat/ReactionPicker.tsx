@@ -5,7 +5,7 @@ import Twemoji from "./Twemoji";
 import { t } from "../../i18n";
 import Icon from "../Icon";
 
-const QUICK = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👀"];
+export const QUICK = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👀"];
 
 export default function ReactionPicker({
   current,

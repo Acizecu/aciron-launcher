@@ -1425,3 +1425,45 @@ body {
 .announce-body ol {
   margin: 0;
 }
+
+/* ---- окно не в фокусе: интерфейс замирает ----
+   Класс ставит windowFocus.ts. Анимации встают на паузу и продолжаются с того
+   же места, когда фокус вернётся; холсты останавливает useRenderPaused. */
+html.app-unfocused *,
+html.app-unfocused *::before,
+html.app-unfocused *::after {
+  animation-play-state: paused !important;
+}
+
+/* ---- меню сообщения и предпросмотр картинки ----
+   Меню масштабируется transform-ом (масштаб интерфейса), поэтому появление
+   анимируем отдельным свойством scale — они складываются, а не спорят. */
+@keyframes msg-menu-in {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+.msg-menu {
+  animation: msg-menu-in 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-menu {
+    animation: none;
+  }
+}
+/* Шахматка под картинкой: прозрачные места PNG видно сразу. */
+.chat-checker {
+  background-color: #1b1b20;
+  background-image:
+    linear-gradient(45deg, #26262c 25%, transparent 25%),
+    linear-gradient(-45deg, #26262c 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #26262c 75%),
+    linear-gradient(-45deg, transparent 75%, #26262c 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}

@@ -161,25 +161,36 @@ const RE_C = "";
 
 const QUOTE_MAX = 140;
 
-export function encodeReply(author: string, quoted: string, body: string): string {
-  const clean = (s: string) =>
-    s.replace(RE_A, "").replace(RE_B, "").replace(RE_C, "").replace(/\s+/g, " ").trim();
+const RE_IMG = "";
+
+export function encodeReply(author: string, quoted: string, body: string, imageOf?: string): string {
+  const clean = (s: string) => stripMarkers(s).replace(/\s+/g, " ").trim();
 
   const inner = parseReply(parseForward(quoted).text).text;
   const short = clean(inner).slice(0, QUOTE_MAX);
-  return `${RE_A}${clean(author) || "…"}${RE_B}${short}${RE_C}${body}`;
+  const img = imageOf ? `${RE_IMG}${clean(imageOf)}${RE_IMG}` : "";
+  return `${RE_A}${clean(author) || "…"}${RE_B}${img}${short}${RE_C}${body}`;
 }
 
 export function parseReply(body: string): {
-  replyTo?: { author: string; text: string };
+  replyTo?: { author: string; text: string; imageOf?: string };
   text: string;
 } {
   if (!body.startsWith(RE_A)) return { text: body };
   const b = body.indexOf(RE_B);
   const c = body.indexOf(RE_C);
   if (b < 0 || c < b) return { text: body };
+  let quote = body.slice(b + 1, c);
+  let imageOf: string | undefined;
+  if (quote.startsWith(RE_IMG)) {
+    const end = quote.indexOf(RE_IMG, 1);
+    if (end > 1) {
+      imageOf = quote.slice(1, end);
+      quote = quote.slice(end + 1);
+    }
+  }
   return {
-    replyTo: { author: body.slice(1, b), text: body.slice(b + 1, c) },
+    replyTo: { author: body.slice(1, b), text: quote, imageOf },
     text: body.slice(c + 1),
   };
 }
@@ -209,7 +220,7 @@ export function parseReaction(body: string): { targetId: string; emoji: string }
 }
 
 export function stripMarkers(s: string): string {
-  return s.replace(/[\uE011-\uE017]/g, "");
+  return s.replace(/[\uE011-\uE018]/g, "");
 }
 
 export type Reaction = { emoji: string; count: number; mine: boolean };

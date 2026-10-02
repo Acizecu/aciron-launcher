@@ -14,9 +14,12 @@ const SLIDE_MS = 260;
 export default function FriendRequestToast({
   user,
   onDone,
+  hold,
 }: {
   user: PendingUser;
   onDone: () => void;
+
+  hold: boolean;
 }) {
   const [shown, setShown] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -35,20 +38,22 @@ export default function FriendRequestToast({
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(close, LIFE_MS);
   };
-  const hold = () => {
+  const pause = () => {
     if (timer.current) window.clearTimeout(timer.current);
   };
 
   useEffect(() => {
-
     const raf = requestAnimationFrame(() => setShown(true));
-    arm();
     return () => {
       cancelAnimationFrame(raf);
       if (timer.current) window.clearTimeout(timer.current);
     };
-
   }, []);
+
+  useEffect(() => {
+    if (hold) pause();
+    else arm();
+  }, [hold]);
 
   const respond = async (accept: boolean) => {
     if (busy) return;
@@ -75,14 +80,12 @@ export default function FriendRequestToast({
 
   return (
     <div
-      onMouseEnter={hold}
-      onMouseLeave={arm}
       style={{
         transition: `transform ${SLIDE_MS}ms cubic-bezier(.2,.8,.2,1), opacity ${SLIDE_MS}ms`,
         transform: shown ? "translateX(0)" : "translateX(-120%)",
         opacity: shown ? 1 : 0,
       }}
-      className="pointer-events-auto w-[300px] rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] p-3 backdrop-blur"
+      className="pointer-events-auto w-full rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] p-3 backdrop-blur"
     >
       <div className="flex items-center gap-3">
         {}

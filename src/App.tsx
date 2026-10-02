@@ -24,7 +24,6 @@ import Tooltip from "./components/Tooltip";
 import { APP_VERSION, DEBUG_TOOLS, DEV } from "./config";
 import { LauncherProvider } from "./LauncherContext";
 import { ToastProvider } from "./ToastContext";
-import FriendRequestToasts from "./components/FriendRequestToasts";
 import ChatToasts from "./components/ChatToasts";
 import { ThemeProvider } from "./ThemeContext";
 import { t, useLang } from "./i18n";
@@ -282,7 +281,6 @@ function AppInner() {
       {}
       <Tooltip />
       {}
-      <FriendRequestToasts sound={notifySound} />
       {}
       <ChatToasts
         sound={notifySound}

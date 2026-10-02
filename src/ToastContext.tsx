@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { DEV } from "./config";
 import { t as tr } from "./i18n";
 import Icon from "./components/Icon";
+import NotifyStack from "./components/NotifyStack";
 
 export type ToastType = "success" | "error" | "info" | "warning";
 type Toast = { id: number; message: string; type: ToastType; leaving?: boolean };
@@ -52,41 +53,47 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={push}>
       {children}
-      <div className="pointer-events-none fixed bottom-5 left-1/2 z-[100] flex w-[380px] max-w-[92vw] -translate-x-1/2 flex-col items-stretch gap-2">
-        {toasts.map((t) => {
+      {}
+      <NotifyStack
+        from="bottom"
+        width="min(380px, 92vw)"
+        className="fixed bottom-5 left-1/2 z-[100] -translate-x-1/2"
+        entries={toasts.map((t) => {
           const st = STYLES[t.type];
-          return (
-            <div
-              key={t.id}
-              className={`pointer-events-auto relative flex items-center gap-3 overflow-hidden rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] py-3 pl-4 pr-3 ${
-                t.leaving ? "toast-out" : "animate-[float-in_.22s_ease]"
-              }`}
-            >
-              {}
-              <span className="absolute inset-y-0 left-0 w-1" style={{ background: st.color }} />
-
-              <span
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
-                style={{ background: `color-mix(in srgb, ${st.color} 15%, transparent)`, color: st.color }}
+          return {
+            key: t.id,
+            node: (
+              <div
+                className={`pointer-events-auto relative flex items-center gap-3 overflow-hidden rounded-[16px] bg-popover shadow-[0_24px_60px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] py-3 pl-4 pr-3 ${
+                  t.leaving ? "toast-out" : "animate-[float-in_.22s_ease]"
+                }`}
               >
-                <Icon cls={`fa-solid ${st.icon} text-sm`} />
-              </span>
+                {}
+                <span className="absolute inset-y-0 left-0 w-1" style={{ background: st.color }} />
 
-              <span className="min-w-0 flex-1 break-words text-[13px] leading-snug text-text">
-                {t.message}
-              </span>
+                <span
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]"
+                  style={{ background: `color-mix(in srgb, ${st.color} 15%, transparent)`, color: st.color }}
+                >
+                  <Icon cls={`fa-solid ${st.icon} text-sm`} />
+                </span>
 
-              <button
-                onClick={() => drop(t.id)}
-                title={tr("Закрыть")}
-                className="grid h-7 w-7 shrink-0 place-items-center rounded-[10px] text-muted transition-colors hover:text-text"
-              >
-                <Icon cls="fa-solid fa-xmark text-[12.5px]" />
-              </button>
-            </div>
-          );
+                <span className="min-w-0 flex-1 break-words text-[13px] leading-snug text-text">
+                  {t.message}
+                </span>
+
+                <button
+                  onClick={() => drop(t.id)}
+                  title={tr("Закрыть")}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-[10px] text-muted transition-colors hover:text-text"
+                >
+                  <Icon cls="fa-solid fa-xmark text-[12.5px]" />
+                </button>
+              </div>
+            ),
+          };
         })}
-      </div>
+      />
     </ToastCtx.Provider>
   );
 }
