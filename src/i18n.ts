@@ -12,6 +12,17 @@ function isLang(v: unknown): v is Lang {
 }
 
 const EN: Record<string, string> = {
+  "Java для сборки": "Java for this instance",
+  "Автоматически — под версию Minecraft": "Automatic — match the Minecraft version",
+  "Своя Java — указать файл": "Custom Java — choose a file",
+  "Путь к Java": "Java path",
+  "Выбрать файл Java": "Choose Java executable",
+  "Выбранная Java используется только для этой сборки. Версии из списка скачиваются при первом запуске.": "This Java is used only for this instance. Listed versions download on first launch.",
+  "Выберите существующий файл Java": "Choose an existing Java executable",
+  "Неизвестная версия Java": "Unknown Java version",
+  "Нельзя отправить заявку этому игроку": "You cannot send a friend request to this player",
+  "Нельзя отправить сообщение этому игроку": "You cannot send a message to this player",
+  "Подготовка ресурсов старых версий": "Preparing legacy assets",
 
   "Главная": "Home",
   "Гардероб": "Wardrobe",
@@ -1217,6 +1228,17 @@ const EN: Record<string, string> = {
 };
 
 const TR: Record<string, string> = {
+  "Java для сборки": "Bu paket için Java",
+  "Автоматически — под версию Minecraft": "Otomatik — Minecraft sürümüne göre",
+  "Своя Java — указать файл": "Özel Java — dosya seç",
+  "Путь к Java": "Java yolu",
+  "Выбрать файл Java": "Java dosyasını seç",
+  "Выбранная Java используется только для этой сборки. Версии из списка скачиваются при первом запуске.": "Bu Java yalnızca bu pakette kullanılır. Listedeki sürümler ilk başlatmada indirilir.",
+  "Выберите существующий файл Java": "Var olan bir Java dosyası seçin",
+  "Неизвестная версия Java": "Bilinmeyen Java sürümü",
+  "Нельзя отправить заявку этому игроку": "Bu oyuncuya arkadaşlık isteği gönderemezsiniz",
+  "Нельзя отправить сообщение этому игроку": "Bu oyuncuya mesaj gönderemezsiniz",
+  "Подготовка ресурсов старых версий": "Eski sürümlerin kaynakları hazırlanıyor",
 
   "Главная": "Ana sayfa",
   "Гардероб": "Gardırop",

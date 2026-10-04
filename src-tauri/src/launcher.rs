@@ -105,7 +105,8 @@ async fn ensure_java_runtime(
     let runtime_root = game_dir.join("runtime").join(component);
     let exe = if cfg!(windows) { "javaw.exe" } else { "java" };
     let java_bin = runtime_root.join("bin").join(exe);
-    if java_bin.exists() {
+    let incomplete = runtime_root.join(".aciron-incomplete");
+    if java_bin.exists() && !incomplete.exists() {
         return Some(java_bin);
     }
 
@@ -136,14 +137,16 @@ async fn ensure_java_runtime(
 
     let total = to_dl.len() as u64;
     let done = Arc::new(AtomicU64::new(0));
-    stream::iter(to_dl.into_iter().map(|(rel, url)| {
+    tokio::fs::create_dir_all(&runtime_root).await.ok()?;
+    tokio::fs::write(&incomplete, b"").await.ok()?;
+    let results = stream::iter(to_dl.into_iter().map(|(rel, url)| {
         let client = client.clone();
         let root = runtime_root.clone();
         let done = done.clone();
         let app = app.clone();
         async move {
             let dest = root.join(&rel);
-            let _ = download_file(&client, &url, &dest).await;
+            let result = download_file(&client, &url, &dest).await;
             #[cfg(unix)]
             if rel.starts_with("bin/") {
                 use std::os::unix::fs::PermissionsExt;
@@ -153,12 +156,15 @@ async fn ensure_java_runtime(
             if n % 20 == 0 || n == total {
                 emit(&app, "java", "Downloading Java runtime", n, total);
             }
+            result
         }
     }))
     .buffer_unordered(16)
     .collect::<Vec<_>>()
     .await;
 
+    if results.into_iter().any(|result| result.is_err()) { return None; }
+    tokio::fs::remove_file(&incomplete).await.ok()?;
     java_bin.exists().then_some(java_bin)
 }
 
@@ -760,6 +766,8 @@ async fn prepare_and_launch(
     loader: Option<&str>,
 
     loader_version: Option<&str>,
+    java_runtime: Option<&str>,
+    java_path: Option<&str>,
     server: Option<&str>,
     build_id: Option<String>,
     build_name: Option<&str>,
@@ -938,13 +946,18 @@ async fn prepare_and_launch(
         .map_err(|e| e.to_string())??;
     }
 
-    let component = version_json["javaVersion"]["component"]
+    let default_component = version_json["javaVersion"]["component"]
         .as_str()
-        .unwrap_or("jre-legacy")
-        .to_string();
+        .unwrap_or("jre-legacy");
+    let runtime = java_runtime.unwrap_or("");
+    crate::launch_config::validate_java(runtime, java_path.unwrap_or(""))?;
+    let component = if runtime.is_empty() || runtime == "custom" { default_component } else { runtime };
 
-    let java = match ensure_java_runtime(app, &dl_client, &component, &root).await {
+    let java = if runtime == "custom" {
+        PathBuf::from(java_path.unwrap_or(""))
+    } else { match ensure_java_runtime(app, &dl_client, component, &root).await {
         Some(j) => j,
+        None if !runtime.is_empty() => return Err(format!("Не удалось установить выбранную Java: {component}")),
         None => {
             let p = PathBuf::from(&settings.java_path);
             let jw = p.with_file_name(if cfg!(windows) { "javaw.exe" } else { "java" });
@@ -957,7 +970,7 @@ async fn prepare_and_launch(
             }
             chosen
         }
-    };
+    }};
 
     let mut loader_main_class: Option<String> = None;
     let mut loader_jvm_args: Vec<String> = Vec::new();
@@ -1080,6 +1093,24 @@ async fn prepare_and_launch(
     .collect::<Vec<_>>()
     .await;
 
+    let game_assets = crate::launch_config::game_assets(&index_json, &assets_dir, &game_dir, &asset_id);
+    let legacy_layout = index_json["virtual"].as_bool() == Some(true)
+        || index_json["map_to_resources"].as_bool() == Some(true);
+    if legacy_layout {
+        emit(app, "assets", "Preparing legacy assets", 0, 1);
+        let index = index_json.clone();
+        let assets = assets_dir.clone();
+        let game = game_dir.clone();
+        let asset_id = asset_id.clone();
+        let jar = client_jar.clone();
+        let pre_1_6 = version_json["assets"].as_str() == Some("pre-1.6");
+        tokio::task::spawn_blocking(move || {
+            crate::launch_config::materialize_assets(&index, &assets, &game, &asset_id)?;
+            if pre_1_6 { crate::launch_config::normalize_legacy_language(&jar, &game)?; }
+            Ok::<(), String>(())
+        }).await.map_err(|e| e.to_string())??;
+    }
+
     let sep = if cfg!(windows) { ";" } else { ":" };
     classpath.push((String::new(), client_jar.clone()));
     let cp = classpath
@@ -1136,37 +1167,33 @@ async fn prepare_and_launch(
     }
 
     args.extend(loader_jvm_args);
-    args.extend([
-        "-cp".into(),
-        cp,
-        main_class,
+    args.extend(["-cp".into(), cp, main_class]);
+    let game_args = crate::launch_config::game_arguments(&version_json, &[
+        ("auth_player_name", id.name),
+        ("auth_session", format!("token:{}:{}", id.token, id.uuid)),
+        ("auth_uuid", id.uuid),
+        ("auth_access_token", id.token),
+        ("user_type", id.user_type),
+        ("user_properties", "{}".into()),
+        ("version_name", version.to_string()),
+        ("version_type", version_json["type"].as_str().unwrap_or("release").to_string()),
+        ("game_directory", game_dir.to_string_lossy().into_owned()),
+        ("assets_root", assets_dir.to_string_lossy().into_owned()),
+        ("game_assets", game_assets.to_string_lossy().into_owned()),
+        ("assets_index_name", asset_id),
+        ("clientid", String::new()),
+        ("auth_xuid", String::new()),
+        ("resolution_width", settings.window_width.to_string()),
+        ("resolution_height", settings.window_height.to_string()),
+    ], rules_allow)?;
+    args.extend(game_args);
 
-        "--username".into(),
-        id.name,
-        "--version".into(),
-        version.to_string(),
-        "--gameDir".into(),
-        game_dir.to_string_lossy().into_owned(),
-        "--assetsDir".into(),
-        assets_dir.to_string_lossy().into_owned(),
-        "--assetIndex".into(),
-        asset_id,
-        "--uuid".into(),
-        id.uuid,
-        "--accessToken".into(),
-        id.token,
-
-        "--userProperties".into(),
-        "{}".into(),
-        "--userType".into(),
-        id.user_type,
-        "--versionType".into(),
-        "release".into(),
-        "--width".into(),
-        settings.window_width.to_string(),
-        "--height".into(),
-        settings.window_height.to_string(),
-    ]);
+    if version_json["assets"].as_str() != Some("pre-1.6") {
+        args.extend([
+            "--width".into(), settings.window_width.to_string(),
+            "--height".into(), settings.window_height.to_string(),
+        ]);
+    }
 
     args.extend(loader_game_args);
 
@@ -1555,7 +1582,7 @@ pub async fn launch_game(
 ) -> Result<(), String> {
     let settings = settings::load_settings();
     let res =
-        prepare_and_launch(&app, &settings, &version, None, None, None, server.as_deref(), None, None).await;
+        prepare_and_launch(&app, &settings, &version, None, None, None, None, None, server.as_deref(), None, None).await;
     match &res {
         Ok(_) => {
 
@@ -1597,6 +1624,8 @@ pub async fn launch_build(
         Some(&loader),
 
         Some(build.loader_version.as_str()).filter(|s| !s.is_empty()),
+        Some(build.java_runtime.as_str()),
+        Some(build.java_path.as_str()),
 
         server.as_deref(),
         Some(build_id.clone()),

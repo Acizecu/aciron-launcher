@@ -1361,6 +1361,8 @@ export type Build = {
   mc_version: string;
   loader: Loader;
   loader_version: string;
+  java_runtime: string;
+  java_path: string;
   mods: InstalledMod[];
   created: number;
   dir: string;
@@ -1380,11 +1382,16 @@ export async function getBuilds(): Promise<Build[]> {
   return invoke<Build[]>("get_builds");
 }
 
-export async function createBuild(name: string, mc_version: string, loader: Loader): Promise<Build> {
+export async function createBuild(name: string, mc_version: string, loader: Loader, java_runtime = "", java_path = ""): Promise<Build> {
   if (!isTauri) {
-    return { id: String(Date.now()), name, mc_version, loader, loader_version: "", mods: [], created: Date.now() / 1000, dir: "", banner: "", image: "", icon_url: "", playtime_secs: 0, favorite: false, last_played: 0 };
+    return { id: String(Date.now()), name, mc_version, loader, loader_version: "", java_runtime, java_path, mods: [], created: Date.now() / 1000, dir: "", banner: "", image: "", icon_url: "", playtime_secs: 0, favorite: false, last_played: 0 };
   }
-  return invoke<Build>("create_build", { name, mcVersion: mc_version, loader });
+  return invoke<Build>("create_build_with_java", { name, mcVersion: mc_version, loader, javaRuntime: java_runtime, javaPath: java_path });
+}
+
+export async function setBuildJava(build_id: string, java_runtime: string, java_path: string): Promise<Build> {
+  if (!isTauri) throw new Error("нет бэкенда");
+  return invoke<Build>("set_build_java", { buildId: build_id, javaRuntime: java_runtime, javaPath: java_path });
 }
 
 export async function setBuildFavorite(build_id: string, favorite: boolean): Promise<Build> {

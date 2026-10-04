@@ -18,6 +18,7 @@ mod i18n;
 mod importer;
 mod instance;
 mod launcher;
+mod launch_config;
 mod logshare;
 mod microsoft;
 mod modrinth;
@@ -184,6 +185,7 @@ pub fn run() {
             presence::set_presence_privacy,
             builds::get_builds,
             builds::create_build,
+            builds::create_build_with_java,
             builds::delete_build,
             builds::open_build_folder,
             builds::rename_build,
@@ -201,6 +203,7 @@ pub fn run() {
             builds::get_build_banner,
             builds::set_build_favorite,
             builds::set_build_loader,
+            builds::set_build_java,
             builds::add_content_files,
             pack::export_build,
             pack::build_tree,

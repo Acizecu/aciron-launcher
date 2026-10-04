@@ -55,6 +55,11 @@ pub struct Build {
     pub loader: String,
     #[serde(default)]
     pub loader_version: String,
+
+    #[serde(default)]
+    pub java_runtime: String,
+    #[serde(default)]
+    pub java_path: String,
     #[serde(default)]
     pub mods: Vec<InstalledMod>,
     #[serde(default)]
@@ -150,6 +155,19 @@ pub fn set_build_loader(
     let mut b = get_build(&build_id).ok_or("Instance not found")?;
     b.loader = loader;
     b.loader_version = loader_version.trim().to_string();
+    upsert_build(b.clone())?;
+    Ok(b)
+}
+
+#[tauri::command]
+pub fn set_build_java(build_id: String, java_runtime: String, java_path: String) -> Result<Build, String> {
+    let runtime = java_runtime.trim();
+    let path = java_path.trim();
+    crate::launch_config::validate_java(runtime, path)?;
+    let _guard = builds_lock().lock().unwrap_or_else(|p| p.into_inner());
+    let mut b = get_build(&build_id).ok_or("Instance not found")?;
+    b.java_runtime = runtime.to_string();
+    b.java_path = if runtime == "custom" { path.to_string() } else { String::new() };
     upsert_build(b.clone())?;
     Ok(b)
 }
@@ -324,6 +342,14 @@ pub fn get_builds() -> Vec<Build> {
 
 #[tauri::command]
 pub fn create_build(name: String, mc_version: String, loader: String) -> Result<Build, String> {
+    create_build_with_java(name, mc_version, loader, String::new(), String::new())
+}
+
+#[tauri::command]
+pub fn create_build_with_java(name: String, mc_version: String, loader: String, java_runtime: String, java_path: String) -> Result<Build, String> {
+    let java_runtime = java_runtime.trim().to_string();
+    let java_path = if java_runtime == "custom" { java_path.trim().to_string() } else { String::new() };
+    crate::launch_config::validate_java(&java_runtime, &java_path)?;
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err("Enter an instance name".into());
@@ -341,6 +367,8 @@ pub fn create_build(name: String, mc_version: String, loader: String) -> Result<
         mc_version,
         loader,
         loader_version: String::new(),
+        java_runtime,
+        java_path,
         mods: Vec::new(),
         created: now_secs(),
         dir: dir.clone(),

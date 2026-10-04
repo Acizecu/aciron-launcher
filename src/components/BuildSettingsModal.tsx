@@ -3,6 +3,7 @@ import Modal from "./Modal";
 import BuildCover from "./BuildCover";
 import Dropdown from "./Dropdown";
 import LoaderVersionPicker from "./builds/LoaderVersionPicker";
+import BuildJavaPicker from "./builds/BuildJavaPicker";
 import {
   listVersions,
   changeBuildVersion,
@@ -10,6 +11,7 @@ import {
   setBuildImage,
   setBuildBanner,
   setBuildLoader,
+  setBuildJava,
   getBuildBanner,
   pickFile,
   type Build,
@@ -52,6 +54,8 @@ export default function BuildSettingsModal({
   const [version, setVersion] = useState(build.mc_version);
   const [loader, setLoader] = useState<Loader>(build.loader as Loader);
   const [loaderVersion, setLoaderVersion] = useState(build.loader_version ?? "");
+  const [javaRuntime, setJavaRuntime] = useState(build.java_runtime ?? "");
+  const [javaPath, setJavaPath] = useState(build.java_path ?? "");
   const [name, setName] = useState(build.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -114,15 +118,20 @@ export default function BuildSettingsModal({
   const versionChanged = version !== build.mc_version;
   const loaderChanged = loader !== build.loader;
   const loaderVersionChanged = loaderVersion !== (build.loader_version ?? "");
+  const javaChanged = javaRuntime !== (build.java_runtime ?? "") || javaPath.trim() !== (build.java_path ?? "");
 
   const apply = async () => {
     setError("");
-    if (!nameChanged && !versionChanged && !loaderChanged && !loaderVersionChanged) {
+    if (!nameChanged && !versionChanged && !loaderChanged && !loaderVersionChanged && !javaChanged) {
       onClose();
       return;
     }
     setBusy(true);
     try {
+      if (javaChanged) {
+        const upd = await setBuildJava(build.id, javaRuntime, javaPath);
+        onUpdated(upd);
+      }
       if (nameChanged) {
         const upd = await renameBuild(build.id, name.trim());
         onUpdated(upd);
@@ -151,7 +160,7 @@ export default function BuildSettingsModal({
             : t("Ядро: {loader}, последняя версия", { loader: loaderLabel[loader] ?? loader }),
           "success"
         );
-      } else if (nameChanged && !versionChanged) {
+      } else if ((nameChanged || javaChanged) && !versionChanged) {
         toast(t("Сохранено"), "success");
       }
       onClose();
@@ -330,6 +339,8 @@ export default function BuildSettingsModal({
             onChange={setLoaderVersion}
           />
         </div>
+
+        <BuildJavaPicker runtime={javaRuntime} path={javaPath} onRuntime={setJavaRuntime} onPath={setJavaPath} disabled={busy} />
 
         {error && (
           <div role="alert" className="flex items-start gap-2 text-[13px] text-danger">

@@ -14,6 +14,29 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.10",
+    date: "2026-10-05",
+    added: [
+      {
+        ru: { title: "Своя Java для каждой сборки", body: "При создании сборки и в её настройках можно выбрать Java 8, 17, 21, 25 или указать свой файл Java. Версия из списка скачивается при первом запуске. Автоматический выбор остаётся доступен." },
+        en: { title: "Choose Java for each instance", body: "When creating or editing an instance, choose Java 8, 17, 21, 25 or your own Java executable. Listed versions download on first launch. Automatic selection is also available." },
+        tr: { title: "Her paket için Java seçimi", body: "Paket oluştururken veya ayarlarını değiştirirken Java 8, 17, 21, 25 ya da kendi Java dosyanı seçebilirsin. Listedeki sürümler ilk başlatmada indirilir. Otomatik seçim de kullanılabilir." },
+      },
+    ],
+    fixed: [
+      {
+        ru: "Исправили вылет Minecraft 1.5.2 из-за языка в настройках новой версии игры, а также аргументы запуска и ресурсы старых версий.",
+        en: "Fixed Minecraft 1.5.2 crashing on a language setting from a newer game version, along with launch arguments and resources for older versions.",
+        tr: "Yeni bir oyun sürümünün dil ayarı nedeniyle Minecraft 1.5.2'nin çökmesini, eski sürümlerin başlatma parametrelerini ve kaynaklarını düzelttik.",
+      },
+      {
+        ru: "Заблокированный игрок больше не может прислать заявку или сообщение и видит причину отказа. Ранее заблокированных игроков добавьте в чёрный список ещё раз: прежде блокировка не сохранялась.",
+        en: "Blocked players can no longer send friend requests or messages and see an explanation. Block previously blocked players again: their blocks were not saved before this fix.",
+        tr: "Engellenen oyuncular artık arkadaşlık isteği veya mesaj gönderemez ve nedenini görür. Önceki engellemeler kaydedilmediği için daha önce engellediğin oyuncuları tekrar engelle.",
+      },
+    ],
+  },
+  {
     version: "1.3.9",
     date: "2026-10-05",
     added: [],

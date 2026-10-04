@@ -4,6 +4,7 @@ import Dropdown from "./Dropdown";
 import LoadingDots from "./LoadingDots";
 import { t, ts } from "../i18n";
 import LoaderVersionPicker from "./builds/LoaderVersionPicker";
+import BuildJavaPicker from "./builds/BuildJavaPicker";
 import {
   createBuild,
   installOptifine,
@@ -40,6 +41,8 @@ export default function CreateBuildModal({
   const [version, setVersion] = useState("");
 
   const [loaderVersion, setLoaderVersion] = useState("");
+  const [javaRuntime, setJavaRuntime] = useState("");
+  const [javaPath, setJavaPath] = useState("");
   const [versions, setVersions] = useState<VersionInfo[] | null>(null);
   const [showSnapshots, setShowSnapshots] = useState(false);
 
@@ -95,7 +98,7 @@ export default function CreateBuildModal({
     if (!version) return setError(t("Выберите версию Minecraft"));
     setBusy(true);
     try {
-      const build = await createBuild(name.trim(), version, loader);
+      const build = await createBuild(name.trim(), version, loader, javaRuntime, javaPath);
 
       if (loaderVersion) {
         try {
@@ -271,6 +274,8 @@ export default function CreateBuildModal({
             </label>
           )}
         </div>
+
+        <BuildJavaPicker runtime={javaRuntime} path={javaPath} onRuntime={setJavaRuntime} onPath={setJavaPath} disabled={busy} />
 
         {error && (
           <div role="alert" className="flex items-start gap-2 text-[13px] text-danger">
