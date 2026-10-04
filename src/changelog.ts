@@ -14,6 +14,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.9",
+    date: "2026-10-05",
+    added: [],
+    fixed: [
+      {
+        ru: "Исправили запуск старых версий Minecraft, которые закрывались с ошибкой userProperties до появления окна игры.",
+        en: "Fixed older Minecraft versions closing with a userProperties error before the game window opened.",
+        tr: "Oyun penceresi açılmadan userProperties hatasıyla kapanan eski Minecraft sürümlerinin başlatılmasını düzelttik.",
+      },
+    ],
+  },
+  {
     version: "1.3.8",
     date: "2026-10-04",
     added: [],

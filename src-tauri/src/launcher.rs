@@ -1155,6 +1155,9 @@ async fn prepare_and_launch(
         id.uuid,
         "--accessToken".into(),
         id.token,
+
+        "--userProperties".into(),
+        "{}".into(),
         "--userType".into(),
         id.user_type,
         "--versionType".into(),
