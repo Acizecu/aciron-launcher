@@ -14,6 +14,27 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.7",
+    date: "2026-10-04",
+    added: [
+      {
+        ru: {
+          title: "Анимированные плащи в игре",
+          body: "Плащи из гардероба теперь анимируются в Minecraft. Скорость, порядок кадров и режим воспроизведения совпадают с предпросмотром. После обновления лаунчера перезапустите игру.",
+        },
+        en: {
+          title: "Animated capes in the game",
+          body: "Wardrobe capes now animate in Minecraft. Speed, frame order and playback mode match the preview. Restart the game after updating the launcher.",
+        },
+        tr: {
+          title: "Oyunda animasyonlu pelerinler",
+          body: "Gardıroptaki pelerinler artık Minecraft'ta hareket ediyor. Hız, kare sırası ve oynatma modu önizlemeyle aynı. Başlatıcıyı güncelledikten sonra oyunu yeniden başlat.",
+        },
+      },
+    ],
+    fixed: [],
+  },
+  {
     version: "1.3.6",
     date: "2026-10-02",
     added: [
