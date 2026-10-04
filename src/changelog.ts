@@ -14,6 +14,18 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.3.8",
+    date: "2026-10-04",
+    added: [],
+    fixed: [
+      {
+        ru: "Исправили анимированные плащи, которые в версии 1.3.7 оставались статичными в игре. После обновления лаунчера перезапустите Minecraft.",
+        en: "Fixed animated capes that stayed static in the game in version 1.3.7. Restart Minecraft after updating the launcher.",
+        tr: "1.3.7 sürümünde oyunda hareketsiz kalan animasyonlu pelerinleri düzelttik. Başlatıcıyı güncelledikten sonra Minecraft'ı yeniden başlat.",
+      },
+    ],
+  },
+  {
     version: "1.3.7",
     date: "2026-10-04",
     added: [
