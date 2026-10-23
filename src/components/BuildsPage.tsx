@@ -8,6 +8,7 @@ import {
   setBuildImage,
   setBuildFavorite,
   addContentFiles,
+  pickFiles,
   refreshBuildContent,
   matchLocalMods,
   importMrpack,
@@ -559,17 +560,9 @@ export default function BuildsPage() {
   }, [importFromPath]);
 
   const dropKind: ContentKind = contentTab === "console" ? "mod" : contentTab;
-  const onFilesDropped = useCallback(
+  const addFiles = useCallback(
     async (paths: string[]) => {
-      const packs = paths.filter((p) => /\.(acpack|mrpack)$/i.test(p));
-      if (packs.length > 0) {
-        for (const p of packs) await importFromPath(p);
-        return;
-      }
-      if (view !== "detail" || !selectedId) {
-        toast(t("Откройте сборку — тогда моды и паки можно бросать прямо в неё"), "info");
-        return;
-      }
+      if (!selectedId) return;
       try {
         const [updated, added, skipped] = await addContentFiles(selectedId, paths, dropKind);
         setBuilds((list) => list.map((b) => (b.id === updated.id ? updated : b)));
@@ -588,8 +581,28 @@ export default function BuildsPage() {
         toast(ts(String(e)), "error");
       }
     },
-    [selectedId, view, dropKind, importFromPath, toast]
+    [selectedId, dropKind, toast]
   );
+  const onFilesDropped = useCallback(
+    async (paths: string[]) => {
+      const packs = paths.filter((p) => /\.(acpack|mrpack)$/i.test(p));
+      if (packs.length > 0) {
+        for (const p of packs) await importFromPath(p);
+        return;
+      }
+      if (view !== "detail" || !selectedId) {
+        toast(t("Откройте сборку — тогда моды и паки можно бросать прямо в неё"), "info");
+        return;
+      }
+      await addFiles(paths);
+    },
+    [selectedId, view, importFromPath, toast, addFiles]
+  );
+
+  const pickAndAddFiles = async () => {
+    const paths = await pickFiles(t("Моды и паки"), ["jar", "zip"]);
+    if (paths.length > 0) await addFiles(paths);
+  };
 
   const dropping = useFileDrop(view !== "browse" && !modPage, onFilesDropped);
 
@@ -873,6 +886,13 @@ export default function BuildsPage() {
           </div>
           {}
           <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={() => void pickAndAddFiles()}
+              title={t("Добавить файл в сборку")}
+              className="btn btn-secondary btn-icon"
+            >
+              <Icon cls="fa-solid fa-file-circle-plus text-sm" />
+            </button>
             <button
               onClick={doRefresh}
               title={t("Обновить список (подхватить ручные файлы)")}

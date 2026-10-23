@@ -14,6 +14,49 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "1.4.0",
+    date: "2026-10-23",
+    added: [
+      {
+        ru: { title: "Кнопка «Добавить файл в сборку»", body: "На странице сборки рядом с кнопкой обновления списка. Выберите .jar или .zip в окне выбора файла или вставьте туда путь к файлу: моды попадут в mods, ресурспаки и шейдеры — в свои папки, как при перетаскивании." },
+        en: { title: "Add a file to an instance", body: "A new button on the instance page, next to the rescan button. Pick a .jar or .zip in the file dialog or paste its path there: mods go to mods, resource packs and shaders to their own folders, the same as with drag and drop." },
+        tr: { title: "Kuruluma dosya ekleme düğmesi", body: "Kurulum sayfasında, listeyi yenileme düğmesinin yanında. Dosya penceresinde bir .jar veya .zip seç ya da dosyanın yolunu oraya yapıştır: modlar mods klasörüne, kaynak ve gölgelendirici paketleri kendi klasörlerine gider, sürükleyip bırakmadaki gibi." },
+      },
+    ],
+    fixed: [
+      {
+        ru: "На серверах со SkinsRestorer скин, выбранный командой /skin, больше не заменяется скином из гардероба Aciron. Плащ из гардероба остаётся, если у серверного скина своего плаща нет. После обновления перезапустите Minecraft.",
+        en: "On servers with SkinsRestorer, a skin set with /skin is no longer replaced by your Aciron wardrobe skin. Your wardrobe cape still shows if the server skin has no cape. Restart Minecraft after updating.",
+        tr: "SkinsRestorer olan sunucularda /skin ile seçilen kostüm artık Aciron gardırobundaki kostümle değiştirilmiyor. Sunucu kostümünün kendi pelerini yoksa gardıroptaki pelerin görünmeye devam eder. Güncellemeden sonra Minecraft'ı yeniden başlat.",
+      },
+      {
+        ru: "Игра больше не подвисает на долю секунды, когда рядом появляется новый игрок: облик из гардероба загружается в фоне. Анимированные плащи меньше нагружают кадр.",
+        en: "The game no longer stalls for a split second when a new player appears nearby: wardrobe looks load in the background. Animated capes cost less per frame.",
+        tr: "Yakında yeni bir oyuncu belirdiğinde oyun artık bir anlığına takılmıyor: gardırop görünümleri arka planda yükleniyor. Animasyonlu pelerinler kareyi daha az yoruyor.",
+      },
+      {
+        ru: "Лаунчер не замирает, когда окно не в фокусе, и показывает 3D-модель в гардеробе во время игры. Анимации останавливаются только у свёрнутого окна или окна в трее.",
+        en: "The launcher no longer freezes when its window is out of focus and shows the 3D model in the wardrobe while you play. Animations stop only when the window is minimized or in the tray.",
+        tr: "Başlatıcı artık penceresi odakta değilken donmuyor ve oyun sırasında gardıroptaki 3D modeli gösteriyor. Animasyonlar yalnızca pencere simge durumundayken veya tepsideyken duruyor.",
+      },
+      {
+        ru: "Окно лаунчера больше не зависает, пока в сборку копируются файлы, обновляется список модов или удаляется сборка.",
+        en: "The launcher window no longer hangs while files are copied into an instance, the mod list is rescanned or an instance is deleted.",
+        tr: "Kuruluma dosya kopyalanırken, mod listesi yenilenirken veya kurulum silinirken başlatıcı penceresi artık takılmıyor.",
+      },
+      {
+        ru: "В углах окна больше не видно тёмной кромки за скруглением.",
+        en: "The window corners no longer show a dark edge behind the rounding.",
+        tr: "Pencere köşelerinde yuvarlatmanın arkasındaki koyu kenar artık görünmüyor.",
+      },
+      {
+        ru: "Лаунчер больше не добавляет в список серверов игры «Aciron — тестовый сервер» и убирает его оттуда при следующем запуске.",
+        en: "The launcher no longer adds “Aciron — test server” to the game's server list and removes it on the next launch.",
+        tr: "Başlatıcı artık oyunun sunucu listesine “Aciron — test sunucusu” eklemiyor ve bir sonraki başlatmada onu listeden kaldırıyor.",
+      },
+    ],
+  },
+  {
     version: "1.3.10",
     date: "2026-10-05",
     added: [

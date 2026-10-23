@@ -54,6 +54,13 @@ pub fn t(en: &'static str) -> &'static str {
     }
 }
 
+pub fn all(en: &'static str) -> [&'static str; 3] {
+    match TABLE.iter().find(|(key, _, _)| *key == en) {
+        Some((_, ru, tr)) => [en, ru, tr],
+        None => [en, en, en],
+    }
+}
+
 pub fn code() -> &'static str {
     match lang() {
         Lang::Ru => "ru",

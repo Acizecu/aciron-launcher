@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { backgroundOf, luminance, useTheme } from "../../ThemeContext";
-import { useRenderPaused } from "../../hooks/useRenderPaused";
+import { SLOW_FRAME_MS, useRenderMode } from "../../hooks/useRenderPaused";
 import { rgbTriple, type Paint, type Pointer, type Scene } from "./types";
 import { BACKGROUNDS } from "./scenes";
 
@@ -11,9 +11,12 @@ export default function Background() {
   const { state, palette } = useTheme();
   const id = backgroundOf(state);
 
-  const paused = useRenderPaused();
+  const mode = useRenderMode();
+  const paused = mode === "paused";
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
+  const slowRef = useRef(mode === "slow");
+  slowRef.current = mode === "slow";
   const resumeRef = useRef<() => void>(() => {});
 
   const paintRef = useRef<Paint>({
@@ -73,6 +76,10 @@ export default function Background() {
     const frame = (now: number) => {
       if (pausedRef.current) {
         raf = 0;
+        return;
+      }
+      if (slowRef.current && now - last < SLOW_FRAME_MS) {
+        raf = requestAnimationFrame(frame);
         return;
       }
 

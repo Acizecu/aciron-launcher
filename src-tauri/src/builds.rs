@@ -393,7 +393,6 @@ pub fn create_build_with_java(name: String, mc_version: String, loader: String, 
     Ok(build)
 }
 
-#[tauri::command]
 pub fn delete_build(id: String) -> Result<(), String> {
 
     let dir = build_dir(&id);
@@ -613,7 +612,6 @@ fn sniff_zip_kind(path: &std::path::Path) -> Option<&'static str> {
     }
 }
 
-#[tauri::command]
 pub fn add_content_files(
     build_id: String,
     paths: Vec<String>,
@@ -673,7 +671,6 @@ pub fn add_content_files(
     Ok((updated, added, skipped))
 }
 
-#[tauri::command]
 pub fn refresh_build_content(build_id: String) -> Result<Build, String> {
     use std::collections::HashMap;
     let mut build = get_build(&build_id).ok_or("Instance not found")?;
@@ -737,4 +734,29 @@ pub fn refresh_build_content(build_id: String) -> Result<Build, String> {
     build.mods = kept;
     upsert_build(build.clone())?;
     Ok(build)
+}
+
+pub mod commands {
+    use super::Build;
+
+    async fn blocking<T: Send + 'static>(f: impl FnOnce() -> Result<T, String> + Send + 'static) -> Result<T, String> {
+        tauri::async_runtime::spawn_blocking(f)
+            .await
+            .map_err(|e| e.to_string())?
+    }
+
+    #[tauri::command]
+    pub async fn delete_build(id: String) -> Result<(), String> {
+        blocking(move || super::delete_build(id)).await
+    }
+
+    #[tauri::command]
+    pub async fn add_content_files(build_id: String, paths: Vec<String>, hint: String) -> Result<(Build, u32, u32), String> {
+        blocking(move || super::add_content_files(build_id, paths, hint)).await
+    }
+
+    #[tauri::command]
+    pub async fn refresh_build_content(build_id: String) -> Result<Build, String> {
+        blocking(move || super::refresh_build_content(build_id)).await
+    }
 }

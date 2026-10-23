@@ -795,11 +795,13 @@ async fn prepare_and_launch(
 
     let game_dir = game_dir_override.unwrap_or_else(|| root.clone());
 
-    if settings.autoadd_server {
-        let list = crate::aciron_servers::fetch().await;
-        if let Err(e) = crate::aciron_servers::apply(&game_dir, &list) {
-            eprintln!("[servers] {e}");
-        }
+    let list = if settings.autoadd_server {
+        crate::aciron_servers::fetch().await
+    } else {
+        Vec::new()
+    };
+    if let Err(e) = crate::aciron_servers::apply(&game_dir, &list) {
+        eprintln!("[servers] {e}");
     }
 
     if settings.fullscreen {

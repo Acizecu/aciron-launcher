@@ -249,6 +249,14 @@ export async function pickFile(
   return typeof res === "string" ? res : null;
 }
 
+export async function pickFiles(name: string, extensions: string[]): Promise<string[]> {
+  if (!isTauri) return [];
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const res = await open({ directory: false, multiple: true, filters: [{ name, extensions }] });
+  if (Array.isArray(res)) return res;
+  return typeof res === "string" ? [res] : [];
+}
+
 export async function saveFile(
   name: string,
   extensions: string[],

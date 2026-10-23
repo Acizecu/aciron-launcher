@@ -99,6 +99,15 @@ html.win-maximized #root::after {
   display: none;
 }
 
+/* Модалки и всплывающие окна рисуются порталом прямо в body, мимо #root:
+   их затемнение доходило до прямоугольных углов окна. */
+body {
+  clip-path: inset(0 round 16px);
+}
+html.win-maximized body {
+  clip-path: none;
+}
+
 html.win-maximized #root {
   border-radius: 0;
   clip-path: none;
@@ -1426,12 +1435,13 @@ body {
   margin: 0;
 }
 
-/* ---- окно не в фокусе: интерфейс замирает ----
-   Класс ставит windowFocus.ts. Анимации встают на паузу и продолжаются с того
-   же места, когда фокус вернётся; холсты останавливает useRenderPaused. */
-html.app-unfocused *,
-html.app-unfocused *::before,
-html.app-unfocused *::after {
+/* ---- окно скрыто: интерфейс замирает ----
+   Класс ставит windowFocus.ts, когда окно свёрнуто или убрано в трей.
+   Анимации встают на паузу и продолжаются с того же места, когда окно снова
+   покажут; холсты останавливает useRenderMode. */
+html.app-hidden *,
+html.app-hidden *::before,
+html.app-hidden *::after {
   animation-play-state: paused !important;
 }
 

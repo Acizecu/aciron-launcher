@@ -81,6 +81,16 @@ pub fn run() {
                 }
             }
 
+            if let Some(w) = tauri::Manager::get_webview_window(app, "main") {
+                window_frame::apply_corner_region(&w);
+                let target = w.clone();
+                w.on_window_event(move |e| {
+                    if matches!(e, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) {
+                        window_frame::apply_corner_region(&target);
+                    }
+                });
+            }
+
             tray::init(app.handle());
 
             update::remember_install_dir(app.handle());
@@ -186,12 +196,12 @@ pub fn run() {
             builds::get_builds,
             builds::create_build,
             builds::create_build_with_java,
-            builds::delete_build,
+            builds::commands::delete_build,
             builds::open_build_folder,
             builds::rename_build,
             builds::remove_mod,
             builds::toggle_mod,
-            builds::refresh_build_content,
+            builds::commands::refresh_build_content,
             optifine::install_optifine,
             promo::promo_current,
             promo::promo_install,
@@ -204,7 +214,7 @@ pub fn run() {
             builds::set_build_favorite,
             builds::set_build_loader,
             builds::set_build_java,
-            builds::add_content_files,
+            builds::commands::add_content_files,
             pack::export_build,
             pack::build_tree,
             pack::import_acpack,

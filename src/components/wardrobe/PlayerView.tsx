@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useRenderPaused } from "../../hooks/useRenderPaused";
+import { SLOW_FRAME_MS, useRenderMode } from "../../hooks/useRenderPaused";
 import * as THREE from "three";
 import { buildPlayer, type BackItem, type SkinModel } from "./playerModel";
 import { applyAnimation, idlePose, rememberBasePose, type Animation } from "./animation";
@@ -49,9 +49,12 @@ export default function PlayerView({
 
   const mounted = useRef(false);
 
-  const paused = useRenderPaused();
+  const mode = useRenderMode();
+  const paused = mode === "paused";
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
+  const slowRef = useRef(mode === "slow");
+  slowRef.current = mode === "slow";
   const syncRef = useRef<() => void>(() => {});
 
   useEffect(() => {
@@ -178,8 +181,12 @@ export default function PlayerView({
 
     const clock = new THREE.Clock();
     let frame = 0;
+    let lastDraw = 0;
     const tick = () => {
       frame = requestAnimationFrame(tick);
+      const nowMs = performance.now();
+      if (slowRef.current && nowMs - lastDraw < SLOW_FRAME_MS) return;
+      lastDraw = nowMs;
       const t = clock.getElapsedTime();
       pivot.rotation.y = angle.current.yaw;
       pivot.rotation.x = angle.current.pitch;

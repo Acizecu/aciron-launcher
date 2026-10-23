@@ -1,8 +1,14 @@
 import { useLauncherCtx } from "../LauncherContext";
-import { useWindowFocused } from "../windowFocus";
+import { useWindowFocused, useWindowHidden } from "../windowFocus";
 
-export function useRenderPaused(): boolean {
+export type RenderMode = "live" | "slow" | "paused";
+
+export const SLOW_FRAME_MS = 50;
+
+export function useRenderMode(): RenderMode {
   const { gameRunning } = useLauncherCtx();
   const focused = useWindowFocused();
-  return gameRunning || !focused;
+  const hidden = useWindowHidden();
+  if (hidden) return "paused";
+  return gameRunning && !focused ? "slow" : "live";
 }

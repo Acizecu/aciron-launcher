@@ -38,17 +38,8 @@ pub async fn aciron_servers_list() -> Vec<AcironServer> {
 const CACHE_FILE: &str = "aciron_servers.json";
 const OFFERED_FILE: &str = ".aciron-servers";
 
-fn fallback() -> Vec<AcironServer> {
-    vec![AcironServer {
-        name: crate::i18n::t("Aciron — test server").to_string(),
-        address: "mc.aciron.pro".into(),
-        version: None,
-        description: None,
-        icon_url: None,
-        banner_url: None,
-        add_to_game: true,
-    }]
-}
+const LEGACY_TEST_ADDRESS: &str = "mc.aciron.pro";
+const LEGACY_TEST_NAME: &str = "Aciron — test server";
 
 pub async fn fetch() -> Vec<AcironServer> {
     let cache = crate::settings::launcher_root().join("cache").join(CACHE_FILE);
@@ -81,7 +72,7 @@ pub async fn fetch() -> Vec<AcironServer> {
         None => std::fs::read(&cache)
             .ok()
             .and_then(|b| serde_json::from_slice::<Vec<AcironServer>>(&b).ok())
-            .unwrap_or_else(fallback),
+            .unwrap_or_default(),
     }
 }
 
@@ -136,7 +127,7 @@ pub fn apply(game_dir: &Path, servers: &[AcironServer]) -> Result<(), String> {
             !parsed.ips.contains(&key) && !offered.contains(&key)
         })
         .collect();
-    if add.is_empty() {
+    if add.is_empty() && parsed.removed == 0 {
         return Ok(());
     }
 
@@ -166,6 +157,8 @@ struct ServersFile {
 
     entries: Vec<Vec<u8>>,
     ips: HashSet<String>,
+
+    removed: usize,
 }
 
 impl ServersFile {
@@ -304,6 +297,8 @@ fn parse(data: &[u8]) -> Option<ServersFile> {
             for _ in 0..n {
                 let s = r.p;
 
+                let mut ip = String::new();
+                let mut title = String::new();
                 loop {
                     let et = r.u8()?;
                     if et == 0 {
@@ -311,11 +306,19 @@ fn parse(data: &[u8]) -> Option<ServersFile> {
                     }
                     let en = r.string()?;
                     if et == 8 && en == b"ip" {
-                        let ip = r.string()?;
-                        f.ips.insert(String::from_utf8_lossy(ip).trim().to_lowercase());
+                        ip = String::from_utf8_lossy(r.string()?).trim().to_lowercase();
+                    } else if et == 8 && en == b"name" {
+                        title = String::from_utf8_lossy(r.string()?).trim().to_string();
                     } else {
                         r.skip(et, 1)?;
                     }
+                }
+                if ip == LEGACY_TEST_ADDRESS && crate::i18n::all(LEGACY_TEST_NAME).contains(&title.as_str()) {
+                    f.removed += 1;
+                    continue;
+                }
+                if !ip.is_empty() {
+                    f.ips.insert(ip);
                 }
                 f.entries.push(data[s..r.p].to_vec());
             }
@@ -403,6 +406,23 @@ mod tests {
         apply(&dir, &[srv("Aciron", "mc.aciron.pro")]).unwrap();
         let f = parse(&std::fs::read(dir.join("servers.dat")).unwrap()).unwrap();
         assert!(!f.ips.contains("mc.aciron.pro"));
+    }
+
+    #[test]
+    fn removes_the_legacy_test_server_only() {
+        let dir = tmp("legacy");
+        apply(&dir, &[srv(crate::i18n::all(LEGACY_TEST_NAME)[1], "mc.aciron.pro")]).unwrap();
+        let before = parse(&std::fs::read(dir.join("servers.dat")).unwrap()).unwrap();
+        assert_eq!(before.entries.len(), 0, "the stub is dropped while parsing");
+        assert_eq!(before.removed, 1);
+
+        std::fs::write(dir.join(OFFERED_FILE), "").unwrap();
+        apply(&dir, &[srv(LEGACY_TEST_NAME, "mc.aciron.pro"), srv("My Aciron", "mc.aciron.pro")]).unwrap();
+        apply(&dir, &[]).unwrap();
+        let f = parse(&std::fs::read(dir.join("servers.dat")).unwrap()).unwrap();
+        assert_eq!(f.removed, 0, "the file was rewritten without the stub");
+        assert_eq!(f.entries.len(), 1);
+        assert!(f.ips.contains("mc.aciron.pro"));
     }
 
     #[test]
