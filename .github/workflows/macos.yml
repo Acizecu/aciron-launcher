@@ -9,6 +9,7 @@
 #   ACIRON_MS_CLIENT_ID, ACIRON_REPORT_URL, ACIRON_LOG_URL — то же, что в
 #   src-tauri/.cargo/config.toml у локальной сборки. Без них лаунчер соберётся,
 #   но вход, CurseForge и отчёты о сбоях работать не будут.
+#   VITE_ACIRON_ID_URL — из .env.local, обязателен.
 #   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD — по желанию.
 #   Есть ключ — рядом с .dmg появятся .app.tar.gz и .sig для автообновления.
 #
@@ -34,6 +35,9 @@ jobs:
       ACIRON_MS_CLIENT_ID: ${{ secrets.ACIRON_MS_CLIENT_ID }}
       ACIRON_REPORT_URL: ${{ secrets.ACIRON_REPORT_URL }}
       ACIRON_LOG_URL: ${{ secrets.ACIRON_LOG_URL }}
+      # Фронт: у локальной сборки берётся из .env.local, без него vite.config.ts
+      # останавливает сборку.
+      VITE_ACIRON_ID_URL: ${{ secrets.VITE_ACIRON_ID_URL }}
       ACIRON_CHANNEL: stable
       ACIRON_BUILD_CHANNEL: stable
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
