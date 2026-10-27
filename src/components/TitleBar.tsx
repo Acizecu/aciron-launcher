@@ -9,6 +9,7 @@ import {
   isTauri,
 } from "../api";
 import { useMaximized } from "../windowState";
+import { isMac } from "../platform";
 import Modal from "./Modal";
 import { LANGS, setLang, t, useLang, type Lang } from "../i18n";
 import { useClickOutside } from "../hooks/useClickOutside";
@@ -199,9 +200,12 @@ export default function TitleBar() {
       data-tauri-drag-region
       className="relative flex h-9 shrink-0 items-center bg-bg"
     >
+      {}
       <span
         data-tauri-drag-region
-        className="pointer-events-none absolute inset-0 flex items-center mx-3 text-[13px] font-small tracking-wide text-text"
+        className={`pointer-events-none absolute inset-0 flex items-center mx-3 text-[13px] font-small tracking-wide text-text ${
+          isMac ? "justify-center" : ""
+        }`}
       >
         <div className="flex gap-1">
           <span className="text-gradient font-semibold">Aciron</span>
@@ -239,6 +243,7 @@ export default function TitleBar() {
           <p className="text-sm text-muted opacity-45">{versionText}</p>
         </div>
         {}
+        {!isMac && (
         <div className="flex h-full items-center">
         <button
           onClick={() => appWindow?.minimize()}
@@ -270,6 +275,7 @@ export default function TitleBar() {
           </svg>
         </button>
         </div>
+        )}
       </div>
 
       {confirmOpen && update && (

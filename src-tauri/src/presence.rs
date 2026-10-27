@@ -170,7 +170,22 @@ fn idle_seconds() -> u64 {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+fn idle_seconds() -> u64 {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGEventSourceSecondsSinceLastEventType(state: i32, event_type: u32) -> f64;
+    }
+
+    let secs = unsafe { CGEventSourceSecondsSinceLastEventType(0, !0) };
+    if secs.is_finite() && secs > 0.0 {
+        secs as u64
+    } else {
+        0
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn idle_seconds() -> u64 {
     0
 }

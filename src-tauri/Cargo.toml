@@ -66,3 +66,9 @@ windows-sys = { version = "0.59", features = [
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
 ] }
+
+# macOS: ключ шифрования токенов лежит в Связке ключей, сами токены шифруются
+# AES-GCM (secret.rs). security-framework уже в графе через native-tls.
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+aes-gcm = "0.10"

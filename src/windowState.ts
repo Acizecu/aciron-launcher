@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isMac } from "./platform";
 
 const win = (() => {
   try {
@@ -16,7 +17,7 @@ function applyChrome(m: boolean) {
   const root = document.documentElement;
   root.classList.toggle("win-maximized", m);
 
-  const over = m
+  const over = m && !isMac
     ? Math.round((window.innerWidth - (window.screen.availWidth || window.innerWidth)) / 2)
     : 0;
   root.style.setProperty("--win-inset", `${Math.max(0, Math.min(16, over))}px`);

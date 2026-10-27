@@ -34,6 +34,12 @@ pub fn data_root() -> PathBuf {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn base_data_root() -> PathBuf {
+    launcher_root()
+}
+
+#[cfg(not(target_os = "macos"))]
 fn base_data_root() -> PathBuf {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -290,6 +296,10 @@ pub fn detect_java() -> String {
     if let Ok(path_var) = std::env::var("PATH") {
         for dir in std::env::split_paths(&path_var) {
             let p = dir.join(exe);
+
+            if cfg!(target_os = "macos") && p == Path::new("/usr/bin/java") {
+                continue;
+            }
             if is_java(&p) {
                 return p.to_string_lossy().into_owned();
             }
@@ -312,6 +322,27 @@ pub fn detect_java() -> String {
                         return p.to_string_lossy().into_owned();
                     }
                 }
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+
+        if let Ok(out) = std::process::Command::new("/usr/libexec/java_home").output() {
+            let home = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if out.status.success() && !home.is_empty() {
+                let p = PathBuf::from(home).join("bin").join(exe);
+                if is_java(&p) {
+                    return p.to_string_lossy().into_owned();
+                }
+            }
+        }
+
+        for root in ["/opt/homebrew/opt/openjdk", "/usr/local/opt/openjdk"] {
+            let p = Path::new(root).join("bin").join(exe);
+            if is_java(&p) {
+                return p.to_string_lossy().into_owned();
             }
         }
     }
@@ -433,7 +464,36 @@ fn total_ram_gb() -> f64 {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+fn total_ram_gb() -> f64 {
+    extern "C" {
+        fn sysctlbyname(
+            name: *const std::ffi::c_char,
+            oldp: *mut std::ffi::c_void,
+            oldlenp: *mut usize,
+            newp: *mut std::ffi::c_void,
+            newlen: usize,
+        ) -> i32;
+    }
+    let mut bytes: u64 = 0;
+    let mut len = std::mem::size_of::<u64>();
+    let ok = unsafe {
+        sysctlbyname(
+            c"hw.memsize".as_ptr(),
+            &mut bytes as *mut u64 as *mut std::ffi::c_void,
+            &mut len,
+            std::ptr::null_mut(),
+            0,
+        )
+    } == 0;
+    if ok && bytes > 0 {
+        bytes as f64 / 1024.0 / 1024.0 / 1024.0
+    } else {
+        8.0
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn total_ram_gb() -> f64 {
     8.0
 }

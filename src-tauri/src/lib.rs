@@ -272,6 +272,11 @@ pub fn run() {
         .expect("error while running tauri application")
         .run(|_app, event| {
 
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { has_visible_windows: false, .. } = event {
+                tray::show_main(_app);
+            }
+
             if let tauri::RunEvent::Exit = event {
                 tauri::async_runtime::block_on(async {
                     let _ = tokio::time::timeout(std::time::Duration::from_secs(2), async {

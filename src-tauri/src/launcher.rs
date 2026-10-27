@@ -78,7 +78,7 @@ const RESOURCES: &str = "https://resources.download.minecraft.net";
 const JAVA_RUNTIME_MANIFEST: &str =
     "https://piston-meta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
 
-fn java_platform() -> &'static str {
+fn java_platform(rosetta: bool) -> &'static str {
     if cfg!(target_os = "windows") {
         if cfg!(target_arch = "aarch64") {
             "windows-arm64"
@@ -86,7 +86,7 @@ fn java_platform() -> &'static str {
             "windows-x64"
         }
     } else if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") {
+        if cfg!(target_arch = "aarch64") && !rosetta {
             "mac-os-arm64"
         } else {
             "mac-os"
@@ -96,15 +96,44 @@ fn java_platform() -> &'static str {
     }
 }
 
+fn needs_rosetta(libs: &[Value]) -> bool {
+    if !(cfg!(target_os = "macos") && cfg!(target_arch = "aarch64")) {
+        return false;
+    }
+    !libs.iter().any(|lib| {
+        lib["name"].as_str().is_some_and(|n| n.ends_with(":natives-macos-arm64"))
+    })
+}
+
+fn foreign_mac_native(path: &str, rosetta: bool) -> bool {
+    if !cfg!(target_os = "macos") {
+        return false;
+    }
+    let arm_jar = path.ends_with("-natives-macos-arm64.jar");
+    let x64_jar = path.ends_with("-natives-macos.jar");
+    let arm_host = cfg!(target_arch = "aarch64") && !rosetta;
+    if arm_host { x64_jar } else { arm_jar }
+}
+
+fn runtime_java_bin(runtime_root: &Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        runtime_root.join("jre.bundle").join("Contents").join("Home").join("bin").join("java")
+    } else {
+        runtime_root.join("bin").join(if cfg!(windows) { "javaw.exe" } else { "java" })
+    }
+}
+
 async fn ensure_java_runtime(
     app: &AppHandle,
     client: &reqwest::Client,
     component: &str,
     game_dir: &Path,
+    rosetta: bool,
 ) -> Option<PathBuf> {
-    let runtime_root = game_dir.join("runtime").join(component);
-    let exe = if cfg!(windows) { "javaw.exe" } else { "java" };
-    let java_bin = runtime_root.join("bin").join(exe);
+
+    let dir_name = if rosetta { format!("{component}-x64") } else { component.to_string() };
+    let runtime_root = game_dir.join("runtime").join(dir_name);
+    let java_bin = runtime_java_bin(&runtime_root);
     let incomplete = runtime_root.join(".aciron-incomplete");
     if java_bin.exists() && !incomplete.exists() {
         return Some(java_bin);
@@ -112,7 +141,7 @@ async fn ensure_java_runtime(
 
     emit(app, "java", "Checking Java runtime", 0, 1);
     let all = get_json(client, JAVA_RUNTIME_MANIFEST).await.ok()?;
-    let manifest_url = all[java_platform()][component]
+    let manifest_url = all[java_platform(rosetta)][component]
         .as_array()
         .and_then(|a| a.first())
         .and_then(|e| e["manifest"]["url"].as_str())?
@@ -120,7 +149,9 @@ async fn ensure_java_runtime(
     let manifest = get_json(client, &manifest_url).await.ok()?;
     let files = manifest["files"].as_object()?.clone();
 
-    let mut to_dl: Vec<(String, String)> = Vec::new();
+    let mut to_dl: Vec<(String, String, bool)> = Vec::new();
+
+    let mut links: Vec<(String, String)> = Vec::new();
     for (rel, info) in files.iter() {
         match info["type"].as_str() {
             Some("directory") => {
@@ -128,7 +159,13 @@ async fn ensure_java_runtime(
             }
             Some("file") => {
                 if let Some(url) = info["downloads"]["raw"]["url"].as_str() {
-                    to_dl.push((rel.clone(), url.to_string()));
+                    let exec = info["executable"].as_bool() == Some(true) || rel.starts_with("bin/");
+                    to_dl.push((rel.clone(), url.to_string(), exec));
+                }
+            }
+            Some("link") => {
+                if let Some(target) = info["target"].as_str() {
+                    links.push((rel.clone(), target.to_string()));
                 }
             }
             _ => {}
@@ -139,7 +176,7 @@ async fn ensure_java_runtime(
     let done = Arc::new(AtomicU64::new(0));
     tokio::fs::create_dir_all(&runtime_root).await.ok()?;
     tokio::fs::write(&incomplete, b"").await.ok()?;
-    let results = stream::iter(to_dl.into_iter().map(|(rel, url)| {
+    let results = stream::iter(to_dl.into_iter().map(|(rel, url, exec)| {
         let client = client.clone();
         let root = runtime_root.clone();
         let done = done.clone();
@@ -147,8 +184,10 @@ async fn ensure_java_runtime(
         async move {
             let dest = root.join(&rel);
             let result = download_file(&client, &url, &dest).await;
+            #[cfg(not(unix))]
+            let _ = exec;
             #[cfg(unix)]
-            if rel.starts_with("bin/") {
+            if exec {
                 use std::os::unix::fs::PermissionsExt;
                 let _ = std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755));
             }
@@ -164,6 +203,17 @@ async fn ensure_java_runtime(
     .await;
 
     if results.into_iter().any(|result| result.is_err()) { return None; }
+    #[cfg(unix)]
+    for (rel, target) in &links {
+        let link = runtime_root.join(rel);
+        let _ = std::fs::remove_file(&link);
+        if let Some(parent) = link.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::os::unix::fs::symlink(target, &link);
+    }
+    #[cfg(not(unix))]
+    let _ = links;
     tokio::fs::remove_file(&incomplete).await.ok()?;
     java_bin.exists().then_some(java_bin)
 }
@@ -225,6 +275,10 @@ fn rules_allow(rules: &Value) -> bool {
                 if name != os_name() {
                     applies = false;
                 }
+            }
+
+            if os.get("version").is_some() {
+                applies = false;
             }
         }
         if applies {
@@ -858,6 +912,7 @@ async fn prepare_and_launch(
     let mut native_jars: Vec<PathBuf> = Vec::new();
 
     let mut lib_tasks: Vec<(String, PathBuf, Option<String>, Option<u64>)> = Vec::new();
+    let rosetta = needs_rosetta(libs);
     for lib in libs.iter() {
         if let Some(rules) = lib.get("rules") {
             if !rules_allow(rules) {
@@ -869,7 +924,7 @@ async fn prepare_and_launch(
 
         if let Some(artifact) = downloads.get("artifact") {
             if let (Some(path), Some(url)) = (
-                artifact["path"].as_str(),
+                artifact["path"].as_str().filter(|p| !foreign_mac_native(p, rosetta)),
                 artifact["url"].as_str().filter(|u| !u.is_empty()),
             ) {
                 let dest = libraries_dir.join(path);
@@ -957,7 +1012,7 @@ async fn prepare_and_launch(
 
     let java = if runtime == "custom" {
         PathBuf::from(java_path.unwrap_or(""))
-    } else { match ensure_java_runtime(app, &dl_client, component, &root).await {
+    } else { match ensure_java_runtime(app, &dl_client, component, &root, rosetta).await {
         Some(j) => j,
         None if !runtime.is_empty() => return Err(format!("Не удалось установить выбранную Java: {component}")),
         None => {
@@ -1138,6 +1193,12 @@ async fn prepare_and_launch(
         format!("-Djava.library.path={}", natives_dir.to_string_lossy()),
     ];
 
+    if cfg!(target_os = "macos")
+        && libs.iter().any(|l| l["name"].as_str().is_some_and(|n| n.starts_with("org.lwjgl:lwjgl:3")))
+    {
+        args.push("-XstartOnFirstThread".into());
+    }
+
     for a in settings.jvm_args.split_whitespace() {
         args.push(a.to_string());
     }
@@ -1228,9 +1289,13 @@ async fn prepare_and_launch(
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000);
     }
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("Could not start Java: {e}"))?;
+    let mut child = cmd.spawn().map_err(|e| {
+
+        if rosetta && e.raw_os_error() == Some(86) {
+            return "This Minecraft version needs Rosetta 2, install it in Terminal: softwareupdate --install-rosetta".to_string();
+        }
+        format!("Could not start Java: {e}")
+    })?;
     let pid = child.id();
 
     let game_id = match &build_id {

@@ -115,6 +115,19 @@ html.win-maximized #root {
   padding: var(--win-inset, 0px);
 }
 
+/* macOS: углы, тень и обводку окна рисует система (см. platform.ts). */
+html.native-frame #root,
+html.native-frame body {
+  border-radius: 0;
+  clip-path: none;
+}
+html.native-frame #root {
+  background: var(--color-bg);
+}
+html.native-frame #root::after {
+  display: none;
+}
+
 /* Значки lucide: линия одной толщины на экране, как в кабинете Aciron ID,
    независимо от того, 11px значок или 24px. */
 .lucide * {

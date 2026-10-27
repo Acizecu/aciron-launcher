@@ -10,6 +10,7 @@ import "./windowFocus";
 import { initUiSounds } from "./sfx";
 import { syncLangFromSettings } from "./i18n";
 import { reportUiCrash } from "./api";
+import { isMac } from "./platform";
 
 initThemeEarly();
 
@@ -18,6 +19,8 @@ initUiSounds();
 void syncLangFromSettings();
 
 const isSplash = new URLSearchParams(location.search).get("window") === "splash";
+
+if (isMac && !isSplash) document.documentElement.classList.add("native-frame");
 
 if (!import.meta.env.DEV) {
   window.addEventListener(

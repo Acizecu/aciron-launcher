@@ -2,6 +2,8 @@
 node_modules
 dist
 dist-ssr
+# Артефакт сборки macOS из GitHub Actions (для make-latest-json.mjs).
+dist-macos
 *.local
 
 # --- Rust / Tauri ---

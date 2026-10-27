@@ -305,7 +305,43 @@ fn os_name() -> String {
     s
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+fn os_name() -> String {
+    extern "C" {
+        fn sysctlbyname(
+            name: *const std::ffi::c_char,
+            oldp: *mut std::ffi::c_void,
+            oldlenp: *mut usize,
+            newp: *mut std::ffi::c_void,
+            newlen: usize,
+        ) -> i32;
+    }
+    let mut buf = [0u8; 64];
+    let mut len = buf.len();
+    let ok = unsafe {
+        sysctlbyname(
+            c"kern.osproductversion".as_ptr(),
+            buf.as_mut_ptr() as *mut std::ffi::c_void,
+            &mut len,
+            std::ptr::null_mut(),
+            0,
+        )
+    } == 0;
+    let version = if ok {
+        let end = buf[..len.min(buf.len())].iter().position(|&b| b == 0).unwrap_or(len);
+        String::from_utf8_lossy(&buf[..end]).into_owned()
+    } else {
+        String::new()
+    };
+    let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
+    if version.is_empty() {
+        format!("macOS ({arch})")
+    } else {
+        format!("macOS {version} ({arch})")
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn os_name() -> String {
     std::env::consts::OS.to_string()
 }

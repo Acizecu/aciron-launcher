@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "title": "Aciron Launcher",
+        "width": 1000,
+        "height": 600,
+        "minWidth": 1003,
+        "minHeight": 600,
+        "resizable": true,
+        "maximizable": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 14, "y": 12 },
+        "transparent": false,
+        "center": true,
+        "label": "main",
+        "visible": false
+      },
+      {
+        "label": "splash",
+        "url": "index.html?window=splash",
+        "title": "Aciron Launcher",
+        "width": 200,
+        "height": 240,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "center": true,
+        "skipTaskbar": false
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-"
+    }
+  }
+}
