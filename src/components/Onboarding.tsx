@@ -19,6 +19,7 @@ import Head from "./Head";
 import { LangFlag } from "./FlagIcons";
 import { THEME_GRID_CLS, ThemeCard } from "./settings/ThemeSettings";
 import Icon from "./Icon";
+import { isMac } from "../platform";
 
 const appWindow = (() => {
   try {
@@ -141,12 +142,13 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
       {}
       <div
         data-tauri-drag-region
-        className="relative z-10 flex h-9 items-center px-3 text-[13px]"
+        className={`relative z-10 flex h-9 items-center px-3 text-[13px] ${isMac ? "justify-center" : ""}`}
       >
         <span data-tauri-drag-region className="pointer-events-none flex gap-1">
           <span className="text-gradient font-semibold">Aciron</span>
           <span className="text-muted">Launcher</span>
         </span>
+        {!isMac && (
         <div className="ml-auto flex h-full items-center">
           <button
             onClick={() => appWindow?.minimize()}
@@ -172,6 +174,7 @@ export default function Onboarding({ onClose }: { onClose: () => void }) {
             </svg>
           </button>
         </div>
+        )}
       </div>
 
       <div className="relative z-10 flex h-[calc(100%-2.25rem)] flex-col">

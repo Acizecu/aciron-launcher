@@ -1,8 +1,8 @@
 # Сборка лаунчера под macOS (Universal: Apple Silicon + Intel).
 #
 # Запуск: руками (Actions → macOS build → Run workflow) или пушем в ветку
-# macos — так можно собрать невыпущенный код, не трогая main. Готовый .dmg лежит
-# в артефактах прогона (aciron-launcher-macos).
+# macos — так можно собрать невыпущенный код, не трогая main. Готовый .dmg и
+# архив обновления лежат в артефактах прогона (aciron-launcher-macos).
 #
 # Секреты репозитория:
 #   ACIRON_ID_URL, ACIRON_CF_PROXY_URL, ACIRON_CLIENT_KEY, ACIRON_PROXY_TOKEN,
@@ -10,8 +10,10 @@
 #   src-tauri/.cargo/config.toml у локальной сборки. Без них лаунчер соберётся,
 #   но вход, CurseForge и отчёты о сбоях работать не будут.
 #   VITE_ACIRON_ID_URL — из .env.local, обязателен.
-#   TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD — по желанию.
-#   Есть ключ — рядом с .dmg появятся .app.tar.gz и .sig для автообновления.
+#
+# Ключа подписи обновлений здесь нет намеренно: он не покидает машину, с которой
+# выпускается релиз. CI собирает архив обновления неподписанным, а подпись .sig
+# ставит tools/make-latest-json.mjs при выпуске — тем же ключом, что и у Windows.
 #
 # Сертификата Apple нет, поэтому приложение подписано ad-hoc: скачанное из
 # интернета macOS назовёт «повреждённым». После переноса в «Программы» один раз:
@@ -40,8 +42,6 @@ jobs:
       VITE_ACIRON_ID_URL: ${{ secrets.VITE_ACIRON_ID_URL }}
       ACIRON_CHANNEL: stable
       ACIRON_BUILD_CHANNEL: stable
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -60,15 +60,21 @@ jobs:
 
       - run: npm ci
 
+      # Свой архив обновления tauri собирает только вместе с подписью, а ключа
+      # тут нет — поэтому выключаем и упаковываем .app сами, ниже.
       - name: Build
         run: |
-          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            npx tauri build --target universal-apple-darwin
-          else
-            # Без ключа подписать архив обновления нечем, а tauri на этом падает.
-            npx tauri build --target universal-apple-darwin \
-              --config '{"bundle":{"createUpdaterArtifacts":false}}'
-          fi
+          npx tauri build --target universal-apple-darwin \
+            --config '{"bundle":{"createUpdaterArtifacts":false}}'
+
+      # Тот же формат, что у tauri: .app в корне tar.gz. Имя с версией — как у
+      # установщика Windows, чтобы релизы не затирали файл друг друга на зеркале.
+      # COPYFILE_DISABLE: без него macOS кладёт в архив служебные ._-файлы.
+      - name: Updater archive
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          cd src-tauri/target/universal-apple-darwin/release/bundle/macos
+          COPYFILE_DISABLE=1 tar -czf "Aciron.Launcher_${VERSION}_universal.app.tar.gz" "Aciron Launcher.app"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -77,4 +83,3 @@ jobs:
           path: |
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
